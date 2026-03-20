@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 ## Current Position
 
 Phase: 2 of 4 (Signal Pipeline) -- COMPLETE
-Plan: 4 of 4 in current phase
+Plan: 5 of 5 in current phase
 Status: Phase Complete
-Last activity: 2026-03-20 -- Completed 02-04-PLAN.md
+Last activity: 2026-03-20 -- Completed 02-05-PLAN.md (gap closure)
 
 Progress: [████████████████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 7
+- Total plans completed: 8
 - Average duration: 6min
 - Total execution time: 0.77 hours
 
@@ -34,9 +34,10 @@ Progress: [████████████████████] 100%
 | 02-signal-pipeline P02 | 2 tasks | 5min | 4 files |
 | 02-signal-pipeline P03 | 1 tasks | 4min | 2 files |
 | 02-signal-pipeline P04 | 2 tasks | 5min | 2 files |
+| 02-signal-pipeline P05 | 1 tasks | 1min | 1 files |
 
 **Recent Trend:**
-- Last 5 plans: 4min, 4min, 5min, 5min, 5min
+- Last 5 plans: 4min, 5min, 5min, 5min, 1min
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -69,6 +70,7 @@ Recent decisions affecting current work:
 - searchPostsByKeywords used as proxy for page posts (no dedicated BeReach endpoint)
 - Europe/Paris timezone via Intl.DateTimeFormat for daily lead cap DST handling
 - Cold leads never inserted -- filtered after ICP scoring, only hot/warm in Supabase
+- Anthropic beta.messages.create required for output_config json_schema (not standard messages.create)
 
 ### Pending Todos
 
@@ -81,5 +83,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-20
-Stopped at: Completed 02-04-PLAN.md -- Phase 2 Signal Pipeline complete
+Stopped at: Completed 02-05-PLAN.md -- Phase 2 Signal Pipeline complete (gap closure fix applied)
 Resume file: None
