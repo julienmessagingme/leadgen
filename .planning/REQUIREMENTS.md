@@ -1,0 +1,177 @@
+# Requirements: Pipeline Lead Gen Signal-Based MessagingMe
+
+**Defined:** 2026-03-20
+**Core Value:** Prospecter uniquement des personnes ayant montré un signal d'intérêt LinkedIn — zéro liste froide, 100% signal-based.
+
+## v1 Requirements
+
+### Infrastructure
+
+- [x] **INFRA-01**: Setup VPS avec Node.js 20+, Python 3.11+, OpenClaw dans /home/openclaw/leadgen/
+- [x] **INFRA-02**: Scheduler node-cron fonctionnel (lun-ven uniquement, 6 tâches + polling WhatsApp)
+- [x] **INFRA-03**: Supabase schema complet (8 tables, ENUMs, RLS, seed data)
+- [x] **INFRA-04**: Configuration OpenClaw avec variables d'environnement sécurisées
+
+### Signal Detection (Tache A — 07h30)
+
+- [ ] **SIG-01**: Surveiller les pages LinkedIn concurrents (likers + commenters des posts récents) via BeReach
+- [ ] **SIG-02**: Rechercher les posts LinkedIn par mots-clés ciblés (auteurs = leads potentiels)
+- [ ] **SIG-03**: Surveiller les posts d'influenceurs/personnes ciblées (likers + commenters)
+- [ ] **SIG-04**: Détecter les offres d'emploi LinkedIn par mots-clés (chercher décideurs CX/Digital)
+- [ ] **SIG-05**: Canonicaliser les URLs LinkedIn avant insertion (lowercase, strip trailing slash/params)
+- [ ] **SIG-06**: Anti-doublon Supabase (skip si linkedin_url_canonical déjà présent)
+- [ ] **SIG-07**: Anti-doublon HubSpot check 1 (par nom + société, avant enrichissement)
+- [ ] **SIG-08**: Limite max 50 nouveaux leads insérés/jour
+
+### Enrichment
+
+- [ ] **ENR-01**: Enrichir profil via BeReach /visit/linkedin/profile (nom, headline, email, société)
+- [ ] **ENR-02**: Enrichir société via BeReach /visit/linkedin/company (taille, secteur, localisation)
+- [ ] **ENR-03**: Cache 48h sur les appels BeReach profil (profile_last_fetched_at)
+- [ ] **ENR-04**: Sales Navigator via OpenClaw browser (ancienneté, séniorité, alertes)
+- [ ] **ENR-05**: Actu entreprise multi-sources avec preuves anti-hallucination (lead_news_evidence)
+- [ ] **ENR-06**: Enrichissement email/phone vérifié via Fullenrich (avant email J+7)
+
+### Scoring ICP
+
+- [x] **ICP-01**: Scoring via Claude Haiku avec prompt structuré (score 0-100, tier hot/warm/cold)
+- [x] **ICP-02**: Règles ICP éditables depuis Supabase (titres, secteurs, taille, séniorité, négatifs)
+- [x] **ICP-03**: Poids par catégorie de signal (CONCURRENT +25, INFLUENCEUR +15, SUJET +10, JOB +5)
+- [x] **ICP-04**: Freshness TTL (malus si signal > 5j, > 10j, skip si > 15j)
+- [x] **ICP-05**: Filtrage cold : seuls hot/warm sont insérés dans Supabase
+- [x] **ICP-06**: Bonus news score uniquement si preuve vérifiable dans lead_news_evidence (< 6 mois)
+
+### LinkedIn Outreach (Taches B + C — 09h00 / 11h00)
+
+- [ ] **LIN-01**: Envoyer invitations LinkedIn avec note personnalisée (max 280 car) via BeReach
+- [ ] **LIN-02**: Générer notes d'invitation via Claude Sonnet (prompt section 8.1)
+- [ ] **LIN-03**: Respecter limite 15 invitations/jour (double check : env var + comptage logs)
+- [ ] **LIN-04**: Délais aléatoires 60-120s entre chaque action LinkedIn
+- [ ] **LIN-05**: Vérifier BeReach /me/limits avant chaque batch
+- [ ] **LIN-06**: Vérifier connexions acceptées via BeReach
+- [ ] **LIN-07**: Envoyer message de suivi LinkedIn post-connexion via Claude Sonnet (prompt section 8.2)
+- [ ] **LIN-08**: Idempotence via run_id (skip leads déjà traités dans ce run)
+
+### Email Outreach (Tache D — 10h00)
+
+- [ ] **EMAIL-01**: Enrichissement email vérifié via Fullenrich (confidence high/medium uniquement)
+- [ ] **EMAIL-02**: HubSpot check 2 par email vérifié (après Fullenrich, avant envoi)
+- [ ] **EMAIL-03**: Check inbox LinkedIn avant envoi email (si réponse reçue → status replied, stop)
+- [ ] **EMAIL-04**: Vérification suppression_list RGPD avant envoi (hash email + linkedin_url)
+- [ ] **EMAIL-05**: Génération email relance J+7 via Claude Sonnet (prompt section 8.3, objet + corps)
+- [ ] **EMAIL-06**: Envoi via Gmail SMTP (julien@messagingme.fr, port 465 SSL)
+
+### WhatsApp Outreach (Tache E — 10h30)
+
+- [ ] **WA-01**: Création template WhatsApp Meta personnalisé par lead (corps Sonnet + bouton Calendly)
+- [ ] **WA-02**: Polling approbation template toutes les 15 min (lun-ven, 9h-18h)
+- [ ] **WA-03**: Envoi WhatsApp J+14 via MessagingMe API dès approbation
+- [ ] **WA-04**: Alerte Julien sur WhatsApp si template rejeté ou timeout 24h
+- [ ] **WA-05**: Génération corps message via Claude Sonnet (prompt section 8.4, 3-4 lignes)
+
+### InMail Briefing (Tache F — 08h30)
+
+- [ ] **INMAIL-01**: Sélection top 3 leads score >= 80, status prospected/invitation_sent
+- [ ] **INMAIL-02**: Génération InMail complet via Claude Sonnet (prompt section 8.5, objet + corps)
+- [ ] **INMAIL-03**: Envoi briefing WhatsApp matinal à Julien via MessagingMe API
+
+### Interface Web
+
+- [ ] **UI-01**: React + Tailwind app hébergée sur VPS (port dédié, proxy Nginx)
+- [ ] **UI-02**: Auth par token fixe
+- [ ] **UI-03**: Dashboard : signaux détectés, invitations envoyées/acceptées, emails, WhatsApp, taux acceptation, feed actions
+- [ ] **UI-04**: Paramètres surveillance : tableau watchlist (ajouter/modifier/supprimer sources, validation URL)
+- [ ] **UI-05**: Paramètres ICP & scoring : tableau éditable des règles, sliders poids par catégorie
+- [ ] **UI-06**: Paramètres messagerie : URL Calendly, signature, ton, clients de référence (tableau éditable)
+- [ ] **UI-07**: Gestion séquences : créer/pauser, limite invitations/jour, mots-clés, filtres ICP spécifiques
+- [ ] **UI-08**: Pipeline leads : tableau filtrable (nom, société, titre, score, signal, séquence, statut, date)
+- [ ] **UI-09**: Actions manuelles par lead : voir profil complet + messages générés, disqualifier, forcer étape, voir InMails
+
+### Logging & Safety
+
+- [x] **LOG-01**: Chaque action enregistrée dans table logs Supabase (avec run_id)
+- [x] **LOG-02**: Gestion d'erreurs : chaque tâche indépendante, une erreur ne crashe pas les autres
+- [x] **LOG-03**: Liste de suppression RGPD (suppression_list avec hash SHA256, vérification avant tout envoi)
+
+## Out of Scope
+
+| Feature | Reason |
+|---------|--------|
+| Application mobile | Web-first, usage desktop uniquement |
+| OAuth/SSO interface | Token fixe suffisant pour usage solo Julien |
+| Multi-utilisateur | Julien seul utilisateur |
+| Intégration CRM write | HubSpot en lecture seule (anti-doublon) |
+| Real-time chat | Hors périmètre lead gen |
+| Cold list import | Philosophie signal-based uniquement |
+
+## Traceability
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| INFRA-01 | Phase 1 | Complete |
+| INFRA-02 | Phase 1 | Complete |
+| INFRA-03 | Phase 1 | Complete |
+| INFRA-04 | Phase 1 | Complete |
+| LOG-01 | Phase 1 | Complete |
+| LOG-02 | Phase 1 | Complete |
+| LOG-03 | Phase 1 | Complete |
+| SIG-01 | Phase 2 | Pending |
+| SIG-02 | Phase 2 | Pending |
+| SIG-03 | Phase 2 | Pending |
+| SIG-04 | Phase 2 | Pending |
+| SIG-05 | Phase 2 | Pending |
+| SIG-06 | Phase 2 | Pending |
+| SIG-07 | Phase 2 | Pending |
+| SIG-08 | Phase 2 | Pending |
+| ENR-01 | Phase 2 | Pending |
+| ENR-02 | Phase 2 | Pending |
+| ENR-03 | Phase 2 | Pending |
+| ENR-04 | Phase 2 | Pending |
+| ENR-05 | Phase 2 | Pending |
+| ENR-06 | Phase 2 | Pending |
+| ICP-01 | Phase 2 | Complete |
+| ICP-02 | Phase 2 | Complete |
+| ICP-03 | Phase 2 | Complete |
+| ICP-04 | Phase 2 | Complete |
+| ICP-05 | Phase 2 | Complete |
+| ICP-06 | Phase 2 | Complete |
+| LIN-01 | Phase 3 | Pending |
+| LIN-02 | Phase 3 | Pending |
+| LIN-03 | Phase 3 | Pending |
+| LIN-04 | Phase 3 | Pending |
+| LIN-05 | Phase 3 | Pending |
+| LIN-06 | Phase 3 | Pending |
+| LIN-07 | Phase 3 | Pending |
+| LIN-08 | Phase 3 | Pending |
+| EMAIL-01 | Phase 3 | Pending |
+| EMAIL-02 | Phase 3 | Pending |
+| EMAIL-03 | Phase 3 | Pending |
+| EMAIL-04 | Phase 3 | Pending |
+| EMAIL-05 | Phase 3 | Pending |
+| EMAIL-06 | Phase 3 | Pending |
+| WA-01 | Phase 3 | Pending |
+| WA-02 | Phase 3 | Pending |
+| WA-03 | Phase 3 | Pending |
+| WA-04 | Phase 3 | Pending |
+| WA-05 | Phase 3 | Pending |
+| INMAIL-01 | Phase 3 | Pending |
+| INMAIL-02 | Phase 3 | Pending |
+| INMAIL-03 | Phase 3 | Pending |
+| UI-01 | Phase 4 | Pending |
+| UI-02 | Phase 4 | Pending |
+| UI-03 | Phase 4 | Pending |
+| UI-04 | Phase 4 | Pending |
+| UI-05 | Phase 4 | Pending |
+| UI-06 | Phase 4 | Pending |
+| UI-07 | Phase 4 | Pending |
+| UI-08 | Phase 4 | Pending |
+| UI-09 | Phase 4 | Pending |
+
+**Coverage:**
+- v1 requirements: 58 total
+- Mapped to phases: 58
+- Unmapped: 0
+
+---
+*Requirements defined: 2026-03-20*
+*Last updated: 2026-03-20 after roadmap creation*
