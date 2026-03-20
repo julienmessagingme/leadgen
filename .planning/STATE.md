@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 ## Current Position
 
 Phase: 2 of 4 (Signal Pipeline) -- IN PROGRESS
-Plan: 2 of 4 in current phase
+Plan: 3 of 4 in current phase
 Status: Executing
-Last activity: 2026-03-20 -- Completed 02-01-PLAN.md
+Last activity: 2026-03-20 -- Completed 02-02-PLAN.md
 
-Progress: [██████████████░░░░░░] 50%
+Progress: [███████████████░░░░░] 75%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 5
+- Total plans completed: 6
 - Average duration: 7min
-- Total execution time: 0.60 hours
+- Total execution time: 0.68 hours
 
 **By Phase:**
 
@@ -31,10 +31,11 @@ Progress: [██████████████░░░░░░] 50%
 | 01-foundation P02 | 2 tasks | 8min | 3 files |
 | 01-foundation P03 | 2 tasks | 4min | 13 files |
 | 02-signal-pipeline P01 | 2 tasks | 5min | 6 files |
+| 02-signal-pipeline P02 | 2 tasks | 5min | 4 files |
 | 02-signal-pipeline P03 | 1 tasks | 4min | 2 files |
 
 **Recent Trend:**
-- Last 5 plans: 15min, 8min, 4min, 4min, 5min
+- Last 5 plans: 8min, 4min, 4min, 5min, 5min
 - Trend: Accelerating
 
 *Updated after each plan completion*
@@ -60,6 +61,10 @@ Recent decisions affecting current work:
 - Fail-safe: Anthropic API errors return cold tier to prevent unscored leads as hot
 - Lazy HubSpot client init to avoid crash when HUBSPOT_TOKEN not yet configured
 - Supabase dedup fails safe (skips signal) vs HubSpot dedup fails open (returns false)
+- BeReach response mapping handles both camelCase and snake_case for resilience
+- Google News RSS parsed with regex (no xml2js dependency)
+- FullEnrich uses polling (30s x 10 = 5min max) instead of webhooks
+- OpenClaw failure returns null gracefully -- pipeline never fails on Sales Nav
 
 ### Pending Todos
 
@@ -72,5 +77,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-20
-Stopped at: Completed 02-01-PLAN.md -- Utility and API wrapper modules deployed
+Stopped at: Completed 02-02-PLAN.md -- Enrichment pipeline modules deployed
 Resume file: None

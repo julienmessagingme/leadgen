@@ -25,12 +25,12 @@
 
 ### Enrichment
 
-- [ ] **ENR-01**: Enrichir profil via BeReach /visit/linkedin/profile (nom, headline, email, société)
-- [ ] **ENR-02**: Enrichir société via BeReach /visit/linkedin/company (taille, secteur, localisation)
-- [ ] **ENR-03**: Cache 48h sur les appels BeReach profil (profile_last_fetched_at)
-- [ ] **ENR-04**: Sales Navigator via OpenClaw browser (ancienneté, séniorité, alertes)
-- [ ] **ENR-05**: Actu entreprise multi-sources avec preuves anti-hallucination (lead_news_evidence)
-- [ ] **ENR-06**: Enrichissement email/phone vérifié via Fullenrich (avant email J+7)
+- [x] **ENR-01**: Enrichir profil via BeReach /visit/linkedin/profile (nom, headline, email, société)
+- [x] **ENR-02**: Enrichir société via BeReach /visit/linkedin/company (taille, secteur, localisation)
+- [x] **ENR-03**: Cache 48h sur les appels BeReach profil (profile_last_fetched_at)
+- [x] **ENR-04**: Sales Navigator via OpenClaw browser (ancienneté, séniorité, alertes)
+- [x] **ENR-05**: Actu entreprise multi-sources avec preuves anti-hallucination (lead_news_evidence)
+- [x] **ENR-06**: Enrichissement email/phone vérifié via Fullenrich (avant email J+7)
 
 ### Scoring ICP
 
@@ -123,12 +123,12 @@
 | SIG-06 | Phase 2 | Complete |
 | SIG-07 | Phase 2 | Complete |
 | SIG-08 | Phase 2 | Pending |
-| ENR-01 | Phase 2 | Pending |
-| ENR-02 | Phase 2 | Pending |
-| ENR-03 | Phase 2 | Pending |
-| ENR-04 | Phase 2 | Pending |
-| ENR-05 | Phase 2 | Pending |
-| ENR-06 | Phase 2 | Pending |
+| ENR-01 | Phase 2 | Complete |
+| ENR-02 | Phase 2 | Complete |
+| ENR-03 | Phase 2 | Complete |
+| ENR-04 | Phase 2 | Complete |
+| ENR-05 | Phase 2 | Complete |
+| ENR-06 | Phase 2 | Complete |
 | ICP-01 | Phase 2 | Complete |
 | ICP-02 | Phase 2 | Complete |
 | ICP-03 | Phase 2 | Complete |
