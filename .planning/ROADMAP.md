@@ -44,13 +44,14 @@ Plans:
   3. Le scoring ICP via Claude Haiku attribue un tier hot/warm/cold avec poids par categorie de signal et freshness TTL, et seuls les hot/warm sont conserves
   4. Les regles ICP sont editables dans Supabase (titres, secteurs, taille, seniorite, negatifs)
   5. Maximum 50 nouveaux leads inseres par jour
-**Plans**: 4 plans
+**Plans**: 5 plans
 
 Plans:
 - [x] 02-01-PLAN.md — URL utils, BeReach wrapper, HubSpot dedup, combined dedup module
 - [ ] 02-02-PLAN.md — Enrichment (BeReach profile/company, OpenClaw Sales Nav, news evidence, FullEnrich)
 - [x] 02-03-PLAN.md — ICP scoring (Claude Haiku 4.5, signal weights, freshness TTL, news bonus)
 - [ ] 02-04-PLAN.md — Signal collector + task-a full pipeline orchestrator
+- [ ] 02-05-PLAN.md — Gap fix: Anthropic beta API path for structured JSON output (ICP-01)
 
 ### Phase 3: Outreach Engine
 **Goal**: Les sequences multi-canal s'executent automatiquement : invitation LinkedIn, message de suivi, email J+7, WhatsApp J+14, et briefing InMail matinal
