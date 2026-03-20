@@ -14,14 +14,14 @@
 
 ### Signal Detection (Tache A — 07h30)
 
-- [ ] **SIG-01**: Surveiller les pages LinkedIn concurrents (likers + commenters des posts récents) via BeReach
-- [ ] **SIG-02**: Rechercher les posts LinkedIn par mots-clés ciblés (auteurs = leads potentiels)
-- [ ] **SIG-03**: Surveiller les posts d'influenceurs/personnes ciblées (likers + commenters)
-- [ ] **SIG-04**: Détecter les offres d'emploi LinkedIn par mots-clés (chercher décideurs CX/Digital)
+- [x] **SIG-01**: Surveiller les pages LinkedIn concurrents (likers + commenters des posts récents) via BeReach
+- [x] **SIG-02**: Rechercher les posts LinkedIn par mots-clés ciblés (auteurs = leads potentiels)
+- [x] **SIG-03**: Surveiller les posts d'influenceurs/personnes ciblées (likers + commenters)
+- [x] **SIG-04**: Détecter les offres d'emploi LinkedIn par mots-clés (chercher décideurs CX/Digital)
 - [x] **SIG-05**: Canonicaliser les URLs LinkedIn avant insertion (lowercase, strip trailing slash/params)
 - [x] **SIG-06**: Anti-doublon Supabase (skip si linkedin_url_canonical déjà présent)
 - [x] **SIG-07**: Anti-doublon HubSpot check 1 (par nom + société, avant enrichissement)
-- [ ] **SIG-08**: Limite max 50 nouveaux leads insérés/jour
+- [x] **SIG-08**: Limite max 50 nouveaux leads insérés/jour
 
 ### Enrichment
 
@@ -115,14 +115,14 @@
 | LOG-01 | Phase 1 | Complete |
 | LOG-02 | Phase 1 | Complete |
 | LOG-03 | Phase 1 | Complete |
-| SIG-01 | Phase 2 | Pending |
-| SIG-02 | Phase 2 | Pending |
-| SIG-03 | Phase 2 | Pending |
-| SIG-04 | Phase 2 | Pending |
+| SIG-01 | Phase 2 | Complete |
+| SIG-02 | Phase 2 | Complete |
+| SIG-03 | Phase 2 | Complete |
+| SIG-04 | Phase 2 | Complete |
 | SIG-05 | Phase 2 | Complete |
 | SIG-06 | Phase 2 | Complete |
 | SIG-07 | Phase 2 | Complete |
-| SIG-08 | Phase 2 | Pending |
+| SIG-08 | Phase 2 | Complete |
 | ENR-01 | Phase 2 | Complete |
 | ENR-02 | Phase 2 | Complete |
 | ENR-03 | Phase 2 | Complete |

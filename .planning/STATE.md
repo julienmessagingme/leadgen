@@ -9,19 +9,19 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 
 ## Current Position
 
-Phase: 2 of 4 (Signal Pipeline) -- IN PROGRESS
-Plan: 3 of 4 in current phase
-Status: Executing
-Last activity: 2026-03-20 -- Completed 02-02-PLAN.md
+Phase: 2 of 4 (Signal Pipeline) -- COMPLETE
+Plan: 4 of 4 in current phase
+Status: Phase Complete
+Last activity: 2026-03-20 -- Completed 02-04-PLAN.md
 
-Progress: [███████████████░░░░░] 75%
+Progress: [████████████████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 6
-- Average duration: 7min
-- Total execution time: 0.68 hours
+- Total plans completed: 7
+- Average duration: 6min
+- Total execution time: 0.77 hours
 
 **By Phase:**
 
@@ -33,10 +33,11 @@ Progress: [███████████████░░░░░] 75%
 | 02-signal-pipeline P01 | 2 tasks | 5min | 6 files |
 | 02-signal-pipeline P02 | 2 tasks | 5min | 4 files |
 | 02-signal-pipeline P03 | 1 tasks | 4min | 2 files |
+| 02-signal-pipeline P04 | 2 tasks | 5min | 2 files |
 
 **Recent Trend:**
-- Last 5 plans: 8min, 4min, 4min, 5min, 5min
-- Trend: Accelerating
+- Last 5 plans: 4min, 4min, 5min, 5min, 5min
+- Trend: Stable
 
 *Updated after each plan completion*
 
@@ -65,6 +66,9 @@ Recent decisions affecting current work:
 - Google News RSS parsed with regex (no xml2js dependency)
 - FullEnrich uses polling (30s x 10 = 5min max) instead of webhooks
 - OpenClaw failure returns null gracefully -- pipeline never fails on Sales Nav
+- searchPostsByKeywords used as proxy for page posts (no dedicated BeReach endpoint)
+- Europe/Paris timezone via Intl.DateTimeFormat for daily lead cap DST handling
+- Cold leads never inserted -- filtered after ICP scoring, only hot/warm in Supabase
 
 ### Pending Todos
 
@@ -77,5 +81,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-20
-Stopped at: Completed 02-02-PLAN.md -- Enrichment pipeline modules deployed
+Stopped at: Completed 02-04-PLAN.md -- Phase 2 Signal Pipeline complete
 Resume file: None
