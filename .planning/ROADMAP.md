@@ -47,7 +47,7 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — URL utils, BeReach wrapper, HubSpot dedup, combined dedup module
+- [x] 02-01-PLAN.md — URL utils, BeReach wrapper, HubSpot dedup, combined dedup module
 - [ ] 02-02-PLAN.md — Enrichment (BeReach profile/company, OpenClaw Sales Nav, news evidence, FullEnrich)
 - [x] 02-03-PLAN.md — ICP scoring (Claude Haiku 4.5, signal weights, freshness TTL, news bonus)
 - [ ] 02-04-PLAN.md — Signal collector + task-a full pipeline orchestrator
@@ -92,6 +92,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation | 3/3 | Complete | 2026-03-20 |
-| 2. Signal Pipeline | 1/4 | In Progress | - |
+| 2. Signal Pipeline | 2/4 | In Progress | - |
 | 3. Outreach Engine | 0/? | Not started | - |
 | 4. Interface Web | 0/? | Not started | - |

@@ -18,9 +18,9 @@
 - [ ] **SIG-02**: Rechercher les posts LinkedIn par mots-clés ciblés (auteurs = leads potentiels)
 - [ ] **SIG-03**: Surveiller les posts d'influenceurs/personnes ciblées (likers + commenters)
 - [ ] **SIG-04**: Détecter les offres d'emploi LinkedIn par mots-clés (chercher décideurs CX/Digital)
-- [ ] **SIG-05**: Canonicaliser les URLs LinkedIn avant insertion (lowercase, strip trailing slash/params)
-- [ ] **SIG-06**: Anti-doublon Supabase (skip si linkedin_url_canonical déjà présent)
-- [ ] **SIG-07**: Anti-doublon HubSpot check 1 (par nom + société, avant enrichissement)
+- [x] **SIG-05**: Canonicaliser les URLs LinkedIn avant insertion (lowercase, strip trailing slash/params)
+- [x] **SIG-06**: Anti-doublon Supabase (skip si linkedin_url_canonical déjà présent)
+- [x] **SIG-07**: Anti-doublon HubSpot check 1 (par nom + société, avant enrichissement)
 - [ ] **SIG-08**: Limite max 50 nouveaux leads insérés/jour
 
 ### Enrichment
@@ -119,9 +119,9 @@
 | SIG-02 | Phase 2 | Pending |
 | SIG-03 | Phase 2 | Pending |
 | SIG-04 | Phase 2 | Pending |
-| SIG-05 | Phase 2 | Pending |
-| SIG-06 | Phase 2 | Pending |
-| SIG-07 | Phase 2 | Pending |
+| SIG-05 | Phase 2 | Complete |
+| SIG-06 | Phase 2 | Complete |
+| SIG-07 | Phase 2 | Complete |
 | SIG-08 | Phase 2 | Pending |
 | ENR-01 | Phase 2 | Pending |
 | ENR-02 | Phase 2 | Pending |

@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 ## Current Position
 
 Phase: 2 of 4 (Signal Pipeline) -- IN PROGRESS
-Plan: 3 of 4 in current phase
+Plan: 2 of 4 in current phase
 Status: Executing
-Last activity: 2026-03-20 -- Completed 02-03-PLAN.md
+Last activity: 2026-03-20 -- Completed 02-01-PLAN.md
 
-Progress: [███████████████░░░░░] 43%
+Progress: [██████████████░░░░░░] 50%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
-- Average duration: 8min
-- Total execution time: 0.52 hours
+- Total plans completed: 5
+- Average duration: 7min
+- Total execution time: 0.60 hours
 
 **By Phase:**
 
@@ -30,10 +30,11 @@ Progress: [███████████████░░░░░] 43%
 | 01-foundation P01 | 3 tasks | 15min | 5 files |
 | 01-foundation P02 | 2 tasks | 8min | 3 files |
 | 01-foundation P03 | 2 tasks | 4min | 13 files |
+| 02-signal-pipeline P01 | 2 tasks | 5min | 6 files |
 | 02-signal-pipeline P03 | 1 tasks | 4min | 2 files |
 
 **Recent Trend:**
-- Last 5 plans: 15min, 8min, 4min, 4min
+- Last 5 plans: 15min, 8min, 4min, 4min, 5min
 - Trend: Accelerating
 
 *Updated after each plan completion*
@@ -57,6 +58,8 @@ Recent decisions affecting current work:
 - Claude Haiku 4.5 with output_config json_schema for structured ICP scoring
 - Signal weight bonuses applied deterministically after Claude scoring (not in prompt)
 - Fail-safe: Anthropic API errors return cold tier to prevent unscored leads as hot
+- Lazy HubSpot client init to avoid crash when HUBSPOT_TOKEN not yet configured
+- Supabase dedup fails safe (skips signal) vs HubSpot dedup fails open (returns false)
 
 ### Pending Todos
 
@@ -69,5 +72,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-20
-Stopped at: Completed 02-03-PLAN.md -- ICP scoring module deployed
+Stopped at: Completed 02-01-PLAN.md -- Utility and API wrapper modules deployed
 Resume file: None
