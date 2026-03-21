@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-21)
 ## Current Position
 
 Phase: 5 of 7 (Dashboard KPIs)
-Plan: 0 of ? complete
-Status: Planning
-Last activity: 2026-03-21 -- Completed 04-02 (Secure Deployment + Keep-alive)
+Plan: 1 of 2 complete
+Status: Executing
+Last activity: 2026-03-21 -- Completed 05-01 (Dashboard API Endpoints)
 
-Progress: [##############░░░░░░] 14/14 v1.0 complete | v1.1: 2/8 plans (25%)
+Progress: [##############░░░░░░] 14/14 v1.0 complete | v1.1: 3/8 plans (37%)
 
 ## Performance Metrics
 
@@ -25,9 +25,10 @@ Progress: [##############░░░░░░] 14/14 v1.0 complete | v1.1: 2/8 pla
 - Timeline: 2 days (2026-03-20 -> 2026-03-21)
 
 **v1.1:**
-- Plans completed: 2
+- Plans completed: 3
 - 04-01: Express API + JWT Auth + React Login (7min)
 - 04-02: Secure Deployment + Keep-alive (5min)
+- 05-01: Dashboard API Endpoints (4min)
 
 ## Accumulated Context
 
@@ -44,6 +45,8 @@ Recent:
 - Express binds to 172.17.0.1 (Docker bridge) so Nginx Proxy Manager container can reach it
 - Domain leadgen.messagingme.app with Let's Encrypt SSL
 - Keep-alive uses direct cron.schedule (not registerTask) for utility tasks
+- Cron status detection uses message content matching with fallback to "ok" for non-standard info messages
+- Funnel conversions computed as stage-to-stage percentages
 
 ### Blockers/Concerns
 
@@ -55,5 +58,5 @@ Recent:
 ## Session Continuity
 
 Last session: 2026-03-21
-Stopped at: Completed 04-02-PLAN.md (Secure Deployment + Keep-alive) -- Phase 4 complete
+Stopped at: Completed 05-01-PLAN.md (Dashboard API Endpoints)
 Resume file: None

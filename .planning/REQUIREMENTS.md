@@ -21,13 +21,13 @@ Requirements for the web interface milestone. Each maps to roadmap phases.
 
 ### Dashboard
 
-- [ ] **DASH-01**: User sees conversion funnel counts by stage (new/invited/connected/email/whatsapp)
-- [ ] **DASH-02**: User sees leads added today and this week
-- [ ] **DASH-03**: User sees LinkedIn daily invitation limit gauge (x/15)
-- [ ] **DASH-04**: User sees last run timestamp and status for each cron task (A-F)
-- [ ] **DASH-05**: User sees signal source breakdown chart (concurrent/influenceur/sujet/job)
-- [ ] **DASH-06**: User sees ICP score distribution histogram
-- [ ] **DASH-07**: User sees 7-day rolling trend line of pipeline activity
+- [x] **DASH-01**: User sees conversion funnel counts by stage (new/invited/connected/email/whatsapp)
+- [x] **DASH-02**: User sees leads added today and this week
+- [x] **DASH-03**: User sees LinkedIn daily invitation limit gauge (x/15)
+- [x] **DASH-04**: User sees last run timestamp and status for each cron task (A-F)
+- [x] **DASH-05**: User sees signal source breakdown chart (concurrent/influenceur/sujet/job)
+- [x] **DASH-06**: User sees ICP score distribution histogram
+- [x] **DASH-07**: User sees 7-day rolling trend line of pipeline activity
 
 ### Sequences
 
@@ -105,13 +105,13 @@ Requirements for the web interface milestone. Each maps to roadmap phases.
 | AUTH-01 | Phase 4 | Complete |
 | AUTH-02 | Phase 4 | Complete |
 | AUTH-03 | Phase 4 | Complete |
-| DASH-01 | Phase 5 | Pending |
-| DASH-02 | Phase 5 | Pending |
-| DASH-03 | Phase 5 | Pending |
-| DASH-04 | Phase 5 | Pending |
-| DASH-05 | Phase 5 | Pending |
-| DASH-06 | Phase 5 | Pending |
-| DASH-07 | Phase 5 | Pending |
+| DASH-01 | Phase 5 | Complete |
+| DASH-02 | Phase 5 | Complete |
+| DASH-03 | Phase 5 | Complete |
+| DASH-04 | Phase 5 | Complete |
+| DASH-05 | Phase 5 | Complete |
+| DASH-06 | Phase 5 | Complete |
+| DASH-07 | Phase 5 | Complete |
 | SEQ-01 | Phase 6 | Pending |
 | SEQ-02 | Phase 6 | Pending |
 | SEQ-03 | Phase 6 | Pending |
