@@ -1,12 +1,27 @@
 /**
  * Claude Sonnet message generator for all outreach channels.
- * Uses anthropic.beta.messages.create with structured JSON output.
+ * Uses messages.create with JSON instruction in prompt.
  * Returns null on error to let calling tasks decide fallback behavior.
  */
 
 const { getAnthropicClient } = require("./anthropic");
 
-const MODEL = "claude-sonnet-4-6-20250514";
+const MODEL = "claude-sonnet-4-20250514";
+
+/**
+ * Helper: call Claude and parse JSON response.
+ */
+async function callClaude(systemPrompt, userPrompt, maxTokens) {
+  var response = await getAnthropicClient().messages.create({
+    model: MODEL,
+    max_tokens: maxTokens,
+    system: systemPrompt,
+    messages: [{ role: "user", content: userPrompt }],
+  });
+  return JSON.parse(response.content[0].text);
+}
+
+var SYSTEM = "Tu es Julien Poupard, DG de MessagingMe (plateforme de messaging WhatsApp/RCS pour entreprises). Reponds UNIQUEMENT en JSON valide, sans markdown, sans code block.";
 
 /**
  * Generate a personalized LinkedIn invitation note.
@@ -15,46 +30,24 @@ const MODEL = "claude-sonnet-4-6-20250514";
  */
 async function generateInvitationNote(lead) {
   try {
-    var response = await getAnthropicClient().beta.messages.create({
-      model: MODEL,
-      max_tokens: 256,
-      messages: [{
-        role: "user",
-        content: "Tu es Julien Poupard, DG de MessagingMe. Redige une invitation LinkedIn personnalisee pour ce prospect.\n\n" +
-          "Prospect: " + (lead.full_name || "inconnu") + "\n" +
-          "Titre: " + (lead.headline || "inconnu") + "\n" +
-          "Entreprise: " + (lead.company_name || "inconnue") + "\n" +
-          "Signal detecte: " + (lead.signal_type || "inconnu") + " - " + (lead.signal_detail || "") + "\n\n" +
-          "Regles:\n" +
-          "- Reference au signal detecte\n" +
-          "- Ton professionnel mais humain\n" +
-          "- Max 280 caracteres STRICT\n" +
-          "- Pas d'emojis, pas de pitch commercial\n" +
-          "- Pas de guillemets autour du texte",
-      }],
-      output_config: {
-        format: {
-          type: "json_schema",
-          schema: {
-            type: "object",
-            properties: {
-              note: { type: "string" },
-            },
-            required: ["note"],
-            additionalProperties: false,
-          },
-        },
-      },
-    });
+    var result = await callClaude(SYSTEM,
+      "Redige une invitation LinkedIn personnalisee pour ce prospect.\n\n" +
+      "Prospect: " + (lead.full_name || "inconnu") + "\n" +
+      "Titre: " + (lead.headline || "inconnu") + "\n" +
+      "Entreprise: " + (lead.company_name || "inconnue") + "\n" +
+      "Signal detecte: " + (lead.signal_type || "inconnu") + " - " + (lead.signal_detail || "") + "\n\n" +
+      "Regles:\n" +
+      "- Reference au signal detecte\n" +
+      "- Ton professionnel mais humain\n" +
+      "- Max 280 caracteres STRICT\n" +
+      "- Pas d'emojis, pas de pitch commercial\n" +
+      "- Pas de guillemets autour du texte\n\n" +
+      'Reponds en JSON: {"note": "..."}', 256);
 
-    var result = JSON.parse(response.content[0].text);
     var note = result.note || "";
-
-    // Hard limit: 280 chars
     if (note.length > 280) {
       note = note.substring(0, 277) + "...";
     }
-
     return note;
   } catch (err) {
     console.warn("generateInvitationNote failed:", err.message);
@@ -69,39 +62,20 @@ async function generateInvitationNote(lead) {
  */
 async function generateFollowUpMessage(lead) {
   try {
-    var response = await getAnthropicClient().beta.messages.create({
-      model: MODEL,
-      max_tokens: 512,
-      messages: [{
-        role: "user",
-        content: "Tu es Julien Poupard, DG de MessagingMe (plateforme de messaging WhatsApp/RCS pour entreprises). Redige un message de suivi LinkedIn post-connexion.\n\n" +
-          "Prospect: " + (lead.full_name || "inconnu") + "\n" +
-          "Titre: " + (lead.headline || "inconnu") + "\n" +
-          "Entreprise: " + (lead.company_name || "inconnue") + "\n" +
-          "Signal detecte: " + (lead.signal_type || "inconnu") + " - " + (lead.signal_detail || "") + "\n\n" +
-          "Regles:\n" +
-          "- Remercier pour la connexion\n" +
-          "- Proposer un echange sur le sujet du signal\n" +
-          "- Mentionner MessagingMe brievement\n" +
-          "- 3 a 5 phrases max\n" +
-          "- Ton naturel et direct",
-      }],
-      output_config: {
-        format: {
-          type: "json_schema",
-          schema: {
-            type: "object",
-            properties: {
-              message: { type: "string" },
-            },
-            required: ["message"],
-            additionalProperties: false,
-          },
-        },
-      },
-    });
+    var result = await callClaude(SYSTEM,
+      "Redige un message de suivi LinkedIn post-connexion.\n\n" +
+      "Prospect: " + (lead.full_name || "inconnu") + "\n" +
+      "Titre: " + (lead.headline || "inconnu") + "\n" +
+      "Entreprise: " + (lead.company_name || "inconnue") + "\n" +
+      "Signal detecte: " + (lead.signal_type || "inconnu") + " - " + (lead.signal_detail || "") + "\n\n" +
+      "Regles:\n" +
+      "- Remercier pour la connexion\n" +
+      "- Proposer un echange sur le sujet du signal\n" +
+      "- Mentionner MessagingMe brievement\n" +
+      "- 3 a 5 phrases max\n" +
+      "- Ton naturel et direct\n\n" +
+      'Reponds en JSON: {"message": "..."}', 512);
 
-    var result = JSON.parse(response.content[0].text);
     return result.message || null;
   } catch (err) {
     console.warn("generateFollowUpMessage failed:", err.message);
@@ -118,43 +92,23 @@ async function generateEmail(lead) {
   try {
     var calendlyUrl = process.env.CALENDLY_URL || "https://calendly.com/julien-messagingme";
 
-    var response = await getAnthropicClient().beta.messages.create({
-      model: MODEL,
-      max_tokens: 1024,
-      messages: [{
-        role: "user",
-        content: "Tu es Julien Poupard, DG de MessagingMe. Redige un email de relance J+7 apres connexion LinkedIn.\n\n" +
-          "Prospect: " + (lead.full_name || "inconnu") + "\n" +
-          "Titre: " + (lead.headline || "inconnu") + "\n" +
-          "Entreprise: " + (lead.company_name || "inconnue") + "\n" +
-          "Signal detecte: " + (lead.signal_type || "inconnu") + " - " + (lead.signal_detail || "") + "\n" +
-          "Email: " + (lead.email || "") + "\n\n" +
-          "Regles:\n" +
-          "- Objet accrocheur et court\n" +
-          "- Corps en HTML simple (pas de CSS inline complexe)\n" +
-          "- Reference a la connexion LinkedIn\n" +
-          "- Proposition de valeur MessagingMe pour leur secteur\n" +
-          "- CTA: lien Calendly " + calendlyUrl + "\n" +
-          "- Signature: Julien Poupard, DG MessagingMe\n" +
-          "- Ton professionnel mais personnel",
-      }],
-      output_config: {
-        format: {
-          type: "json_schema",
-          schema: {
-            type: "object",
-            properties: {
-              subject: { type: "string" },
-              body: { type: "string" },
-            },
-            required: ["subject", "body"],
-            additionalProperties: false,
-          },
-        },
-      },
-    });
+    var result = await callClaude(SYSTEM,
+      "Redige un email de relance J+7 apres connexion LinkedIn.\n\n" +
+      "Prospect: " + (lead.full_name || "inconnu") + "\n" +
+      "Titre: " + (lead.headline || "inconnu") + "\n" +
+      "Entreprise: " + (lead.company_name || "inconnue") + "\n" +
+      "Signal detecte: " + (lead.signal_type || "inconnu") + " - " + (lead.signal_detail || "") + "\n" +
+      "Email: " + (lead.email || "") + "\n\n" +
+      "Regles:\n" +
+      "- Objet accrocheur et court\n" +
+      "- Corps en HTML simple (pas de CSS inline complexe)\n" +
+      "- Reference a la connexion LinkedIn\n" +
+      "- Proposition de valeur MessagingMe pour leur secteur\n" +
+      "- CTA: lien Calendly " + calendlyUrl + "\n" +
+      "- Signature: Julien Poupard, DG MessagingMe\n" +
+      "- Ton professionnel mais personnel\n\n" +
+      'Reponds en JSON: {"subject": "...", "body": "<html>...</html>"}', 1024);
 
-    var result = JSON.parse(response.content[0].text);
     if (!result.subject || !result.body) return null;
     return { subject: result.subject, body: result.body };
   } catch (err) {
@@ -170,39 +124,20 @@ async function generateEmail(lead) {
  */
 async function generateWhatsAppBody(lead) {
   try {
-    var response = await getAnthropicClient().beta.messages.create({
-      model: MODEL,
-      max_tokens: 512,
-      messages: [{
-        role: "user",
-        content: "Tu es Julien Poupard, DG de MessagingMe. Redige un message WhatsApp pour ce prospect.\n\n" +
-          "Prospect: " + (lead.full_name || "inconnu") + "\n" +
-          "Titre: " + (lead.headline || "inconnu") + "\n" +
-          "Entreprise: " + (lead.company_name || "inconnue") + "\n" +
-          "Signal detecte: " + (lead.signal_type || "inconnu") + " - " + (lead.signal_detail || "") + "\n\n" +
-          "Regles:\n" +
-          "- 3 a 4 lignes max\n" +
-          "- Reference au signal et a l'echange LinkedIn\n" +
-          "- Proposition de RDV via Calendly\n" +
-          "- Ton direct et personnel\n" +
-          "- Pas d'emojis excessifs",
-      }],
-      output_config: {
-        format: {
-          type: "json_schema",
-          schema: {
-            type: "object",
-            properties: {
-              body: { type: "string" },
-            },
-            required: ["body"],
-            additionalProperties: false,
-          },
-        },
-      },
-    });
+    var result = await callClaude(SYSTEM,
+      "Redige un message WhatsApp pour ce prospect.\n\n" +
+      "Prospect: " + (lead.full_name || "inconnu") + "\n" +
+      "Titre: " + (lead.headline || "inconnu") + "\n" +
+      "Entreprise: " + (lead.company_name || "inconnue") + "\n" +
+      "Signal detecte: " + (lead.signal_type || "inconnu") + " - " + (lead.signal_detail || "") + "\n\n" +
+      "Regles:\n" +
+      "- 3 a 4 lignes max\n" +
+      "- Reference au signal et a l'echange LinkedIn\n" +
+      "- Proposition de RDV via Calendly\n" +
+      "- Ton direct et personnel\n" +
+      "- Pas d'emojis excessifs\n\n" +
+      'Reponds en JSON: {"body": "..."}', 512);
 
-    var result = JSON.parse(response.content[0].text);
     return result.body || null;
   } catch (err) {
     console.warn("generateWhatsAppBody failed:", err.message);
@@ -217,40 +152,20 @@ async function generateWhatsAppBody(lead) {
  */
 async function generateInMail(lead) {
   try {
-    var response = await getAnthropicClient().beta.messages.create({
-      model: MODEL,
-      max_tokens: 1024,
-      messages: [{
-        role: "user",
-        content: "Tu es Julien Poupard, DG de MessagingMe (plateforme de messaging WhatsApp/RCS pour entreprises). Redige un InMail LinkedIn.\n\n" +
-          "Prospect: " + (lead.full_name || "inconnu") + "\n" +
-          "Titre: " + (lead.headline || "inconnu") + "\n" +
-          "Entreprise: " + (lead.company_name || "inconnue") + "\n" +
-          "Secteur: " + (lead.company_sector || "inconnu") + "\n" +
-          "Signal detecte: " + (lead.signal_type || "inconnu") + " - " + (lead.signal_detail || "") + "\n\n" +
-          "Regles:\n" +
-          "- Objet percutant et court\n" +
-          "- Corps: reference au signal, valeur MessagingMe pour leur secteur, CTA clair\n" +
-          "- Ton professionnel\n" +
-          "- 5 a 8 phrases max",
-      }],
-      output_config: {
-        format: {
-          type: "json_schema",
-          schema: {
-            type: "object",
-            properties: {
-              subject: { type: "string" },
-              body: { type: "string" },
-            },
-            required: ["subject", "body"],
-            additionalProperties: false,
-          },
-        },
-      },
-    });
+    var result = await callClaude(SYSTEM,
+      "Redige un InMail LinkedIn.\n\n" +
+      "Prospect: " + (lead.full_name || "inconnu") + "\n" +
+      "Titre: " + (lead.headline || "inconnu") + "\n" +
+      "Entreprise: " + (lead.company_name || "inconnue") + "\n" +
+      "Secteur: " + (lead.company_sector || "inconnu") + "\n" +
+      "Signal detecte: " + (lead.signal_type || "inconnu") + " - " + (lead.signal_detail || "") + "\n\n" +
+      "Regles:\n" +
+      "- Objet percutant et court\n" +
+      "- Corps: reference au signal, valeur MessagingMe pour leur secteur, CTA clair\n" +
+      "- Ton professionnel\n" +
+      "- 5 a 8 phrases max\n\n" +
+      'Reponds en JSON: {"subject": "...", "body": "..."}', 1024);
 
-    var result = JSON.parse(response.content[0].text);
     if (!result.subject || !result.body) return null;
     return { subject: result.subject, body: result.body };
   } catch (err) {
