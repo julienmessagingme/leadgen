@@ -60,9 +60,9 @@ app.get("/api/auth/check", require("./api/middleware"), (req, res) => {
   res.json({ ok: true });
 });
 
-// Future protected API routes (Phase 5+):
-// app.use("/api", require("./api/middleware"), require("./api/leads"));
-// app.use("/api", require("./api/middleware"), require("./api/stats"));
+// Dashboard API routes (protected -- authMiddleware applied inside router)
+const dashboardRouter = require("./api/dashboard");
+app.use("/api/dashboard", dashboardRouter);
 
 // Serve React build
 app.use(express.static(path.join(__dirname, "..", "dist")));
