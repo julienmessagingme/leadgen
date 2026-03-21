@@ -12,7 +12,7 @@ Agent autonome de prospection B2B signal-based. Le projet se construit en 4 phas
 
 - [x] **Phase 1: Foundation** - VPS, Supabase, OpenClaw, scheduler, logging et safety RGPD
 - [ ] **Phase 2: Signal Pipeline** - Detection signaux LinkedIn, enrichissement profils/societes, scoring ICP
-- [ ] **Phase 3: Outreach Engine** - Sequences LinkedIn, email, WhatsApp et briefing InMail automatises
+- [x] **Phase 3: Outreach Engine** - Sequences LinkedIn, email, WhatsApp et briefing InMail automatises
 - [ ] **Phase 4: Interface Web** - Dashboard React, parametres, sequences et pipeline leads
 
 ## Phase Details
@@ -66,11 +66,11 @@ Plans:
 **Plans**: 5 plans
 
 Plans:
-- [ ] 03-01-PLAN.md — Shared libs: BeReach outreach endpoints, HubSpot email lookup, Gmail SMTP, MessagingMe API, Claude Sonnet message generator
-- [ ] 03-02-PLAN.md — Task B (LinkedIn invitations 09h00) + Task C (follow-up messages 11h00)
-- [ ] 03-03-PLAN.md — Task D (Email relance J+7 with 4-step verification pipeline)
-- [ ] 03-04-PLAN.md — Task E (WhatsApp J+14 template creation + polling) + Task F (InMail briefing)
-- [ ] 03-05-PLAN.md — Scheduler wiring, env validation, PM2 restart, integration verification
+- [x] 03-01-PLAN.md — Shared libs: BeReach outreach endpoints, HubSpot email lookup, Gmail SMTP, MessagingMe API, Claude Sonnet message generator
+- [x] 03-02-PLAN.md — Task B (LinkedIn invitations 09h00) + Task C (follow-up messages 11h00)
+- [x] 03-03-PLAN.md — Task D (Email relance J+7 with 4-step verification pipeline)
+- [x] 03-04-PLAN.md — Task E (WhatsApp J+14 template creation + polling) + Task F (InMail briefing)
+- [x] 03-05-PLAN.md — Scheduler wiring, env validation, PM2 restart, integration verification
 
 ### Phase 4: Interface Web
 **Goal**: Julien pilote son pipeline de prospection depuis une interface web React accessible sur le VPS
@@ -96,5 +96,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 |-------|----------------|--------|-----------|
 | 1. Foundation | 3/3 | Complete | 2026-03-20 |
 | 2. Signal Pipeline | 5/5 | Complete | 2026-03-20 |
-| 3. Outreach Engine | 0/5 | Not started | - |
+| 3. Outreach Engine | 5/5 | Complete | 2026-03-21 |
 | 4. Interface Web | 0/? | Not started | - |

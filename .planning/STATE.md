@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 ## Current Position
 
 Phase: 3 of 4 (Outreach Engine)
-Plan: 4 of 5 in current phase
-Status: In Progress
-Last activity: 2026-03-21 -- Completed 03-04-PLAN.md (WhatsApp J+14 + InMail briefing)
+Plan: 5 of 5 in current phase
+Status: Phase Complete
+Last activity: 2026-03-21 -- Completed 03-05-PLAN.md (Scheduler wiring + integration verification)
 
-Progress: [████████████████    ] 80%
+Progress: [████████████████████] 100% (Phase 3 complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 12
+- Total plans completed: 13
 - Average duration: 6min
-- Total execution time: 1.04 hours
+- Total execution time: 1.17 hours
 
 **By Phase:**
 
@@ -40,9 +40,10 @@ Progress: [████████████████    ] 80%
 | 03-outreach-engine P03 | 2 tasks | 5min | 2 files |
 | 03-outreach-engine P03 (gap) | 1 tasks | 5min | 1 files |
 | 03-outreach-engine P04 | 2 tasks | 5min | 3 files |
+| 03-outreach-engine P05 | 2 tasks | 8min | 6 files |
 
 **Recent Trend:**
-- Last 5 plans: 1min, 6min, 4min, 5min, 5min
+- Last 5 plans: 6min, 4min, 5min, 5min, 8min
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -87,6 +88,9 @@ Recent decisions affecting current work:
 - [Phase 03]: Connection detection via pending invitation absence: if lead invitation_sent but URL not in BeReach pending list, treat as connected
 - [Phase 03]: Idempotence via Supabase logs query (run_id + task + message ilike) rather than separate tracking table
 - [Phase 03]: Object.assign for metadata merge to preserve existing metadata fields
+- [Phase 03]: Task F briefing switched from WhatsApp to email self-send for reliability
+- [Phase 03]: MessagingMe API base URL fixed to uchat.com.au/api with Bearer token auth
+- [Phase 03]: RECOMMENDED_VARS pattern: log warnings for missing outreach vars, do not exit
 
 ### Pending Todos
 
@@ -99,5 +103,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-21
-Stopped at: Completed 03-04-PLAN.md -- WhatsApp J+14 template lifecycle + InMail briefing to Julien
+Stopped at: Completed 03-05-PLAN.md -- Phase 3 Outreach Engine complete, all 7 tasks running via PM2
 Resume file: None
