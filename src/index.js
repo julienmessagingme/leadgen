@@ -32,10 +32,54 @@ if (missingRecommended.length > 0) {
   console.warn("Some outreach tasks may not function until these are configured.");
 }
 
+// Check dashboard vars (warn only, do not exit -- scheduler must keep running)
+const DASHBOARD_VARS = [
+  "DASHBOARD_USER",
+  "DASHBOARD_PASSWORD_HASH",
+  "JWT_SECRET",
+];
+
+const missingDashboard = DASHBOARD_VARS.filter((v) => !process.env[v]);
+if (missingDashboard.length > 0) {
+  console.warn("WARNING: Missing dashboard environment variables: " + missingDashboard.join(", "));
+  console.warn("Dashboard login will not work until these are configured.");
+}
+
+// Express HTTP server
+const express = require("express");
+const path = require("path");
+const app = express();
+
+app.use(express.json());
+
+// Auth routes (public -- no middleware)
+app.use("/api/auth", require("./api/auth"));
+
+// Auth check (protected)
+app.get("/api/auth/check", require("./api/middleware"), (req, res) => {
+  res.json({ ok: true });
+});
+
+// Future protected API routes (Phase 5+):
+// app.use("/api", require("./api/middleware"), require("./api/leads"));
+// app.use("/api", require("./api/middleware"), require("./api/stats"));
+
+// Serve React build
+app.use(express.static(path.join(__dirname, "..", "dist")));
+
+// SPA catch-all -- MUST be after all /api routes (Express 5 requires named param)
+app.get("/{*splat}", (req, res) => {
+  res.sendFile(path.join(__dirname, "..", "dist", "index.html"));
+});
+
+app.listen(3005, "127.0.0.1", () => {
+  console.log("HTTP server listening on 127.0.0.1:3005");
+});
+
 // Load scheduler
 try {
   require("./scheduler");
 } catch (err) {
   console.error("Failed to load scheduler:", err.message);
-  process.exit(1);
+  // Don't exit -- Express must keep running even if scheduler fails
 }
