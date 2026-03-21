@@ -34,11 +34,11 @@
 
 ### Scoring ICP
 
-- [x] **ICP-01**: Scoring via Claude Haiku avec prompt structuré (score 0-100, tier hot/warm/cold)
+- [ ] **ICP-01**: Scoring via Claude Haiku avec prompt structuré (score 0-100, tier hot/warm/cold)
 - [x] **ICP-02**: Règles ICP éditables depuis Supabase (titres, secteurs, taille, séniorité, négatifs)
 - [x] **ICP-03**: Poids par catégorie de signal (CONCURRENT +25, INFLUENCEUR +15, SUJET +10, JOB +5)
 - [x] **ICP-04**: Freshness TTL (malus si signal > 5j, > 10j, skip si > 15j)
-- [x] **ICP-05**: Filtrage cold : seuls hot/warm sont insérés dans Supabase
+- [ ] **ICP-05**: Filtrage cold : seuls hot/warm sont insérés dans Supabase
 - [x] **ICP-06**: Bonus news score uniquement si preuve vérifiable dans lead_news_evidence (< 6 mois)
 
 ### LinkedIn Outreach (Taches B + C — 09h00 / 11h00)
@@ -49,7 +49,7 @@
 - [x] **LIN-04**: Délais aléatoires 60-120s entre chaque action LinkedIn
 - [x] **LIN-05**: Vérifier BeReach /me/limits avant chaque batch
 - [x] **LIN-06**: Vérifier connexions acceptées via BeReach
-- [x] **LIN-07**: Envoyer message de suivi LinkedIn post-connexion via Claude Sonnet (prompt section 8.2)
+- [ ] **LIN-07**: Envoyer message de suivi LinkedIn post-connexion via Claude Sonnet (prompt section 8.2)
 - [x] **LIN-08**: Idempotence via run_id (skip leads déjà traités dans ce run)
 
 ### Email Outreach (Tache D — 10h00)
@@ -63,7 +63,7 @@
 
 ### WhatsApp Outreach (Tache E — 10h30)
 
-- [x] **WA-01**: Création template WhatsApp Meta personnalisé par lead (corps Sonnet + bouton Calendly)
+- [ ] **WA-01**: Création template WhatsApp Meta personnalisé par lead (corps Sonnet + bouton Calendly)
 - [ ] **WA-02**: Polling approbation template toutes les 15 min (lun-ven, 9h-18h)
 - [x] **WA-03**: Envoi WhatsApp J+14 via MessagingMe API dès approbation
 - [x] **WA-04**: Alerte si template rejeté ou timeout 24h (WhatsApp si configuré, sinon fallback log Supabase)
@@ -129,11 +129,11 @@
 | ENR-04 | Phase 2 | Complete |
 | ENR-05 | Phase 2 | Complete |
 | ENR-06 | Phase 2 | Complete |
-| ICP-01 | Phase 2 | Complete |
+| ICP-01 | Phase 3.1 | Pending |
 | ICP-02 | Phase 2 | Complete |
 | ICP-03 | Phase 2 | Complete |
 | ICP-04 | Phase 2 | Complete |
-| ICP-05 | Phase 2 | Complete |
+| ICP-05 | Phase 3.1 | Pending |
 | ICP-06 | Phase 2 | Complete |
 | LIN-01 | Phase 3 | Complete |
 | LIN-02 | Phase 3 | Complete |
@@ -141,7 +141,7 @@
 | LIN-04 | Phase 3 | Complete |
 | LIN-05 | Phase 3 | Complete |
 | LIN-06 | Phase 3 | Complete |
-| LIN-07 | Phase 3 | Complete |
+| LIN-07 | Phase 3.1 | Pending |
 | LIN-08 | Phase 3 | Complete |
 | EMAIL-01 | Phase 3 | Complete |
 | EMAIL-02 | Phase 3 | Complete |
@@ -149,7 +149,7 @@
 | EMAIL-04 | Phase 3 | Complete |
 | EMAIL-05 | Phase 3 | Complete |
 | EMAIL-06 | Phase 3 | Complete |
-| WA-01 | Phase 3 | Complete |
+| WA-01 | Phase 3.1 | Pending |
 | WA-02 | Phase 3.1 | Pending |
 | WA-03 | Phase 3 | Complete |
 | WA-04 | Phase 3 | Complete |

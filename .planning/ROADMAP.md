@@ -13,7 +13,7 @@ Agent autonome de prospection B2B signal-based. Le projet se construit en 4 phas
 - [x] **Phase 1: Foundation** - VPS, Supabase, OpenClaw, scheduler, logging et safety RGPD
 - [x] **Phase 2: Signal Pipeline** - Detection signaux LinkedIn, enrichissement profils/societes, scoring ICP
 - [x] **Phase 3: Outreach Engine** - Sequences LinkedIn, email, WhatsApp et briefing InMail automatises
-- [ ] **Phase 3.1: Milestone Gap Closure (INSERTED)** - Fix cron WA-02, align INMAIL-03, verify Phase 1
+- [ ] **Phase 3.1: Milestone Gap Closure (INSERTED)** - Fix icp-scorer beta API, add missing DB columns, fix cron WA-02, align INMAIL-03, verify Phase 1
 - [ ] **Phase 4: Interface Web** - Dashboard React, parametres, sequences et pipeline leads
 
 ## Phase Details
@@ -74,14 +74,20 @@ Plans:
 - [x] 03-05-PLAN.md — Scheduler wiring, env validation, PM2 restart, integration verification
 
 ### Phase 3.1: Milestone Gap Closure (INSERTED)
-**Goal**: Fermer les gaps identifes par l'audit v1.0 avant completion du milestone
+**Goal**: Corriger les bugs critiques (ICP scoring, colonnes DB manquantes) et fermer les gaps mineurs avant completion v1.0
 **Depends on**: Phase 3
-**Requirements**: WA-02 (fix), INMAIL-03 (align), INFRA-01-04 + LOG-01-03 (verify)
-**Gap Closure:** Closes gaps from v1.0-MILESTONE-AUDIT.md
+**Requirements**: ICP-01 (P0 fix), ICP-05 (P0 fix), LIN-07 (P0 DB column), WA-01 (P0 DB column), WA-02 (P2 cron fix), INMAIL-03 (P3 align), INFRA-01-04 + LOG-01-03 (verify)
+**Gap Closure:** Closes gaps from v1.0-MILESTONE-AUDIT.md + integration checker findings
+**Success Criteria** (what must be TRUE):
+  1. icp-scorer.js utilise `beta.messages.create` sur le VPS (pas `messages.create`)
+  2. Les colonnes `follow_up_sent_at` et `whatsapp_template_created_at` existent dans la table leads Supabase
+  3. Le cron whatsapp-poll couvre 9h-18h (pas 9h-17h59)
+  4. INMAIL-03 align avec l'implementation email
+  5. Phase 1 a un VERIFICATION.md
 **Plans**: 1 plan
 
 Plans:
-- [ ] 03.1-01-PLAN.md — Fix cron WA-02, align INMAIL-03 requirement, retroactive Phase 1 verification
+- [ ] 03.1-01-PLAN.md — [P0] Fix icp-scorer beta API on VPS, add missing DB columns, [P2] fix cron WA-02, align INMAIL-03, verify Phase 1
 
 ### Phase 4: Interface Web
 **Goal**: Julien pilote son pipeline de prospection depuis une interface web React accessible sur le VPS
