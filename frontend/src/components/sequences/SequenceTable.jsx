@@ -142,7 +142,7 @@ export default function SequenceTable({
                     </td>
                     <td className="px-4 py-3">
                       <StatusBadge
-                        status={lead.lead_status}
+                        status={lead.status}
                         isPaused={isPaused}
                       />
                     </td>
