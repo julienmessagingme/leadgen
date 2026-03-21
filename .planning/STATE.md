@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 ## Current Position
 
 Phase: 3 of 4 (Outreach Engine)
-Plan: 1 of 5 in current phase
+Plan: 4 of 5 in current phase
 Status: In Progress
-Last activity: 2026-03-21 -- Completed 03-01-PLAN.md (shared outreach libraries)
+Last activity: 2026-03-21 -- Completed 03-04-PLAN.md (WhatsApp J+14 + InMail briefing)
 
-Progress: [████                ] 20%
+Progress: [████████████████    ] 80%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 9
+- Total plans completed: 12
 - Average duration: 6min
-- Total execution time: 0.87 hours
+- Total execution time: 1.04 hours
 
 **By Phase:**
 
@@ -36,9 +36,12 @@ Progress: [████                ] 20%
 | 02-signal-pipeline P04 | 2 tasks | 5min | 2 files |
 | 02-signal-pipeline P05 | 1 tasks | 1min | 1 files |
 | 03-outreach-engine P01 | 2 tasks | 6min | 6 files |
+| 03-outreach-engine P02 | 2 tasks | 4min | 2 files |
+| 03-outreach-engine P03 | 2 tasks | 5min | 2 files |
+| 03-outreach-engine P04 | 2 tasks | 5min | 3 files |
 
 **Recent Trend:**
-- Last 5 plans: 5min, 5min, 5min, 1min, 6min
+- Last 5 plans: 1min, 6min, 4min, 5min, 5min
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -76,6 +79,13 @@ Recent decisions affecting current work:
 - Lazy env var check in messagingme() helper, not at module load (same pattern as HubSpot)
 - 280-char hard limit with substring truncation for LinkedIn invitation notes
 - Message generator returns null on error, caller decides fallback behavior
+- Dual Supabase queries merged and deduped by lead ID for J+14 WhatsApp eligibility
+- Template status tracked in lead metadata as state machine: pending -> approved/rejected/timeout
+- alertJulien helper falls back to logging if phone not set or WhatsApp send fails
+- Task F briefing falls back to Supabase log entry if WhatsApp delivery fails
+- [Phase 03]: Connection detection via pending invitation absence: if lead invitation_sent but URL not in BeReach pending list, treat as connected
+- [Phase 03]: Idempotence via Supabase logs query (run_id + task + message ilike) rather than separate tracking table
+- [Phase 03]: Object.assign for metadata merge to preserve existing metadata fields
 
 ### Pending Todos
 
@@ -88,5 +98,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-21
-Stopped at: Completed 03-01-PLAN.md -- Shared outreach libraries (bereach, hubspot, gmail, messagingme, message-generator)
+Stopped at: Completed 03-04-PLAN.md -- WhatsApp J+14 template lifecycle + InMail briefing to Julien
 Resume file: None
