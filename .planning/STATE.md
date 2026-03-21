@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-03-21)
 
 ## Current Position
 
-Phase: 5 of 7 (Dashboard KPIs)
-Plan: 1 of 2 complete
-Status: Executing
-Last activity: 2026-03-21 -- Completed 05-01 (Dashboard API Endpoints)
+Phase: 5 of 7 (Dashboard KPIs) -- COMPLETE
+Plan: 2 of 2 complete
+Status: Phase complete
+Last activity: 2026-03-21 -- Completed 05-02 (Dashboard UI Widgets)
 
-Progress: [##############░░░░░░] 14/14 v1.0 complete | v1.1: 3/8 plans (37%)
+Progress: [##############░░░░░░] 14/14 v1.0 complete | v1.1: 4/8 plans (50%)
 
 ## Performance Metrics
 
@@ -25,10 +25,11 @@ Progress: [##############░░░░░░] 14/14 v1.0 complete | v1.1: 3/8 pla
 - Timeline: 2 days (2026-03-20 -> 2026-03-21)
 
 **v1.1:**
-- Plans completed: 3
+- Plans completed: 4
 - 04-01: Express API + JWT Auth + React Login (7min)
 - 04-02: Secure Deployment + Keep-alive (5min)
 - 05-01: Dashboard API Endpoints (4min)
+- 05-02: Dashboard UI Widgets (3min)
 
 ## Accumulated Context
 
@@ -47,6 +48,8 @@ Recent:
 - Keep-alive uses direct cron.schedule (not registerTask) for utility tasks
 - Cron status detection uses message content matching with fallback to "ok" for non-standard info messages
 - Funnel conversions computed as stage-to-stage percentages
+- Inline style for progress bar width (Tailwind purges dynamic classes)
+- Three separate useQuery hooks with different refresh intervals (cron 1min, stats/charts 2min)
 
 ### Blockers/Concerns
 
@@ -58,5 +61,5 @@ Recent:
 ## Session Continuity
 
 Last session: 2026-03-21
-Stopped at: Completed 05-01-PLAN.md (Dashboard API Endpoints)
+Stopped at: Completed 05-02-PLAN.md (Dashboard UI Widgets)
 Resume file: None
