@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
 import { api } from "../api/client";
+import NavBar from "../components/shared/NavBar";
 import FunnelCard from "../components/dashboard/FunnelCard";
 import ActivityCard from "../components/dashboard/ActivityCard";
 import LinkedInGauge from "../components/dashboard/LinkedInGauge";
@@ -35,8 +34,6 @@ function ErrorCard({ message, onRetry }) {
 }
 
 export default function Home() {
-  const { logout } = useAuth();
-  const navigate = useNavigate();
 
   const stats = useQuery({
     queryKey: ["dashboard", "stats"],
@@ -59,26 +56,9 @@ export default function Home() {
     refetchInterval: 60_000,
   });
 
-  const handleLogout = () => {
-    logout();
-    navigate("/login");
-  };
-
   return (
     <div className="min-h-screen bg-gray-100">
-      <header className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <h1 className="text-xl font-bold text-gray-800">
-            Lead Gen MessagingMe
-          </h1>
-          <button
-            onClick={handleLogout}
-            className="text-sm text-gray-600 hover:text-gray-900 bg-gray-100 px-3 py-1.5 rounded-md hover:bg-gray-200"
-          >
-            Se deconnecter
-          </button>
-        </div>
-      </header>
+      <NavBar />
 
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
         {/* Row 1: Funnel + Activity + LinkedIn */}

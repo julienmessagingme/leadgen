@@ -3,6 +3,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
+import Pipeline from "./pages/Pipeline";
+import Sequences from "./pages/Sequences";
 
 const queryClient = new QueryClient();
 
@@ -58,6 +60,22 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <Home />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/pipeline"
+        element={
+          <ProtectedRoute>
+            <Pipeline />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/sequences"
+        element={
+          <ProtectedRoute>
+            <Sequences />
           </ProtectedRoute>
         }
       />
