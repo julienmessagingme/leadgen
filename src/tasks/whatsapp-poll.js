@@ -7,6 +7,7 @@
 
 const { supabase } = require("../lib/supabase");
 const { listTemplates, syncTemplates, sendWhatsAppByUserId } = require("../lib/messagingme");
+const { sendEmail } = require("../lib/gmail");
 const { log } = require("../lib/logger");
 
 module.exports = async function whatsappPoll(runId) {
@@ -149,22 +150,22 @@ module.exports = async function whatsappPoll(runId) {
 };
 
 /**
- * Send an alert to Julien via WhatsApp using a pre-approved utility template.
- * Falls back to logging if the template or phone is not configured.
+ * Send an alert to Julien via email.
+ * Falls back to logging if Gmail is not configured.
  */
 async function alertJulien(runId, message) {
-  var phone = process.env.JULIEN_WHATSAPP_PHONE;
-  if (!phone) {
-    await log(runId, "whatsapp-poll", "warn", "JULIEN_WHATSAPP_PHONE not set, alert logged only: " + message);
+  var gmailUser = process.env.GMAIL_USER;
+  if (!gmailUser) {
+    await log(runId, "whatsapp-poll", "warn", "GMAIL_USER not set, alert logged only: " + message);
     return;
   }
 
   try {
-    var namespace = process.env.MESSAGINGME_TEMPLATE_NAMESPACE || "default";
-    await sendWhatsAppByUserId(phone, namespace, "daily_leadgen_briefing", "fr", { body: [message] });
-    await log(runId, "whatsapp-poll", "info", "Alert sent to Julien: " + message.substring(0, 80));
+    var subject = "⚠ Alerte WhatsApp Template - LeadGen";
+    var htmlBody = "<p>" + message.replace(/\n/g, "<br>") + "</p>";
+    await sendEmail(gmailUser, subject, htmlBody, message);
+    await log(runId, "whatsapp-poll", "info", "Alert sent to Julien via email: " + message.substring(0, 80));
   } catch (err) {
-    // Fallback: just log the alert if WhatsApp send fails
-    await log(runId, "whatsapp-poll", "warn", "Failed to send WhatsApp alert to Julien, logged instead: " + message);
+    await log(runId, "whatsapp-poll", "warn", "Failed to send email alert to Julien, logged instead: " + message);
   }
 }
