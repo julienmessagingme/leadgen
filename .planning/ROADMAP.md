@@ -27,7 +27,7 @@ Agent autonome de prospection B2B signal-based. Le projet se construit en phases
 
 ### v1.1 Interface Web
 
-- [ ] **Phase 4: API + Auth + React Shell** - Express API layer, port security fix, JWT auth, React SPA scaffold with login page
+- [x] **Phase 4: API + Auth + React Shell** - Express API layer, port security fix, JWT auth, React SPA scaffold with login page -- completed 2026-03-21
 - [ ] **Phase 5: Dashboard KPIs** - Dashboard page with conversion funnel, activity metrics, cron status, and charts
 - [ ] **Phase 6: Pipeline + Sequences + Lead Detail** - Kanban/list pipeline view, sequence management with pause/resume/exclude, lead detail page
 - [ ] **Phase 7: Settings + Export** - ICP rules CRUD, RGPD suppression list, config editing, CSV export
@@ -46,8 +46,8 @@ Agent autonome de prospection B2B signal-based. Le projet se construit en phases
 **Plans**: 2 plans
 
 Plans:
-- [ ] 04-01-PLAN.md -- Express API layer + JWT auth + React SPA scaffold with login flow
-- [ ] 04-02-PLAN.md -- Port security, Nginx HTTPS proxy, Supabase keep-alive, deployment verification
+- [x] 04-01-PLAN.md -- Express API layer + JWT auth + React SPA scaffold with login flow
+- [x] 04-02-PLAN.md -- Port security, Nginx HTTPS proxy, Supabase keep-alive, deployment verification
 
 ### Phase 5: Dashboard KPIs
 **Goal**: Julien voit en un coup d'oeil l'etat de son pipeline de prospection depuis le dashboard
@@ -103,7 +103,7 @@ Phases execute in numeric order: 4 -> 5 -> 6 -> 7
 | 2. Signal Pipeline | v1.0 | 5/5 | Complete | 2026-03-20 |
 | 3. Outreach Engine | v1.0 | 5/5 | Complete | 2026-03-21 |
 | 3.1 Gap Closure | v1.0 | 1/1 | Complete | 2026-03-21 |
-| 4. API + Auth + React Shell | v1.1 | 0/2 | Planned | - |
+| 4. API + Auth + React Shell | v1.1 | 2/2 | Complete | 2026-03-21 |
 | 5. Dashboard KPIs | v1.1 | 0/? | Not started | - |
 | 6. Pipeline + Sequences + Lead Detail | v1.1 | 0/? | Not started | - |
 | 7. Settings + Export | v1.1 | 0/? | Not started | - |

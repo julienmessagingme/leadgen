@@ -10,7 +10,7 @@ Requirements for the web interface milestone. Each maps to roadmap phases.
 ### Infrastructure
 
 - [x] **INFRA-01**: Express API layer serves React SPA and API routes from existing Node.js process
-- [ ] **INFRA-02**: Port 3005 bound to 127.0.0.1 behind Nginx Proxy Manager with HTTPS
+- [x] **INFRA-02**: Port 3005 bound to 127.0.0.1 behind Nginx Proxy Manager with HTTPS
 - [x] **INFRA-03**: Vite React SPA builds to static dist/ served by Express
 
 ### Authentification
@@ -100,7 +100,7 @@ Requirements for the web interface milestone. Each maps to roadmap phases.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | INFRA-01 | Phase 4 | Complete |
-| INFRA-02 | Phase 4 | Pending |
+| INFRA-02 | Phase 4 | Complete |
 | INFRA-03 | Phase 4 | Complete |
 | AUTH-01 | Phase 4 | Complete |
 | AUTH-02 | Phase 4 | Complete |
