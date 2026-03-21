@@ -57,10 +57,11 @@ Plans:
   1. L'utilisateur voit les compteurs du funnel de conversion par statut (new/invited/connected/email/whatsapp) et les leads ajoutes aujourd'hui/cette semaine
   2. L'utilisateur voit la jauge d'invitations LinkedIn du jour (x/15) et le timestamp + statut du dernier run de chaque tache cron (A-F)
   3. L'utilisateur voit le graphique de repartition par source de signal, l'histogramme de distribution des scores ICP, et la courbe de tendance 7 jours
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 05-01: TBD
+- [ ] 05-01-PLAN.md -- Express API endpoints for dashboard data (stats, charts, cron) + Recharts install
+- [ ] 05-02-PLAN.md -- Dashboard UI with 7 widget components (funnel, activity, gauge, cron, 3 charts)
 
 ### Phase 6: Pipeline + Sequences + Lead Detail
 **Goal**: Julien peut visualiser, filtrer et agir sur ses leads depuis les vues pipeline, sequences et fiche detail
@@ -104,6 +105,6 @@ Phases execute in numeric order: 4 -> 5 -> 6 -> 7
 | 3. Outreach Engine | v1.0 | 5/5 | Complete | 2026-03-21 |
 | 3.1 Gap Closure | v1.0 | 1/1 | Complete | 2026-03-21 |
 | 4. API + Auth + React Shell | v1.1 | 2/2 | Complete | 2026-03-21 |
-| 5. Dashboard KPIs | v1.1 | 0/? | Not started | - |
+| 5. Dashboard KPIs | v1.1 | 0/2 | Planning | - |
 | 6. Pipeline + Sequences + Lead Detail | v1.1 | 0/? | Not started | - |
 | 7. Settings + Export | v1.1 | 0/? | Not started | - |
