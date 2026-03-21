@@ -72,12 +72,13 @@ Plans:
   2. L'utilisateur voit la liste des leads avec leur etape actuelle dans la sequence d'outreach, peut filtrer par statut/tier, trier par score ICP ou date
   3. L'utilisateur peut pause/reprendre/exclure un lead individuellement ou en masse, depuis la vue sequences ou la fiche detail
   4. L'utilisateur clique sur un lead et voit sa fiche complete (profil, score ICP avec reasoning, signal source, timeline outreach) avec boutons copier email/LinkedIn
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 06-01: TBD
-- [ ] 06-02: TBD
-- [ ] 06-03: TBD
+- [ ] 06-01-PLAN.md -- Leads API backend (list/detail/action/bulk) + NavBar + routing + TanStack Query hooks
+- [ ] 06-02-PLAN.md -- Shared UI components (FilterBar, ConfirmDialog, badges) + Lead detail drawer sections
+- [ ] 06-03-PLAN.md -- Pipeline page with kanban/list toggle, filters, search, drawer integration
+- [ ] 06-04-PLAN.md -- Sequences page with table, step indicators, sort, bulk actions, drawer integration
 
 ### Phase 7: Settings + Export
 **Goal**: Julien peut configurer les regles de prospection et exporter ses leads en CSV depuis l'interface
@@ -106,5 +107,5 @@ Phases execute in numeric order: 4 -> 5 -> 6 -> 7
 | 3.1 Gap Closure | v1.0 | 1/1 | Complete | 2026-03-21 |
 | 4. API + Auth + React Shell | v1.1 | 2/2 | Complete | 2026-03-21 |
 | 5. Dashboard KPIs | v1.1 | 0/2 | Planning | - |
-| 6. Pipeline + Sequences + Lead Detail | v1.1 | 0/? | Not started | - |
+| 6. Pipeline + Sequences + Lead Detail | v1.1 | 0/4 | Planning | - |
 | 7. Settings + Export | v1.1 | 0/? | Not started | - |
