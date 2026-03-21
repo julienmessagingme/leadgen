@@ -44,10 +44,10 @@
 ### LinkedIn Outreach (Taches B + C — 09h00 / 11h00)
 
 - [ ] **LIN-01**: Envoyer invitations LinkedIn avec note personnalisée (max 280 car) via BeReach
-- [ ] **LIN-02**: Générer notes d'invitation via Claude Sonnet (prompt section 8.1)
+- [x] **LIN-02**: Générer notes d'invitation via Claude Sonnet (prompt section 8.1)
 - [ ] **LIN-03**: Respecter limite 15 invitations/jour (double check : env var + comptage logs)
 - [ ] **LIN-04**: Délais aléatoires 60-120s entre chaque action LinkedIn
-- [ ] **LIN-05**: Vérifier BeReach /me/limits avant chaque batch
+- [x] **LIN-05**: Vérifier BeReach /me/limits avant chaque batch
 - [ ] **LIN-06**: Vérifier connexions acceptées via BeReach
 - [ ] **LIN-07**: Envoyer message de suivi LinkedIn post-connexion via Claude Sonnet (prompt section 8.2)
 - [ ] **LIN-08**: Idempotence via run_id (skip leads déjà traités dans ce run)
@@ -59,7 +59,7 @@
 - [ ] **EMAIL-03**: Check inbox LinkedIn avant envoi email (si réponse reçue → status replied, stop)
 - [ ] **EMAIL-04**: Vérification suppression_list RGPD avant envoi (hash email + linkedin_url)
 - [ ] **EMAIL-05**: Génération email relance J+7 via Claude Sonnet (prompt section 8.3, objet + corps)
-- [ ] **EMAIL-06**: Envoi via Gmail SMTP (julien@messagingme.fr, port 465 SSL)
+- [x] **EMAIL-06**: Envoi via Gmail SMTP (julien@messagingme.fr, port 465 SSL)
 
 ### WhatsApp Outreach (Tache E — 10h30)
 
@@ -67,12 +67,12 @@
 - [ ] **WA-02**: Polling approbation template toutes les 15 min (lun-ven, 9h-18h)
 - [ ] **WA-03**: Envoi WhatsApp J+14 via MessagingMe API dès approbation
 - [ ] **WA-04**: Alerte Julien sur WhatsApp si template rejeté ou timeout 24h
-- [ ] **WA-05**: Génération corps message via Claude Sonnet (prompt section 8.4, 3-4 lignes)
+- [x] **WA-05**: Génération corps message via Claude Sonnet (prompt section 8.4, 3-4 lignes)
 
 ### InMail Briefing (Tache F — 08h30)
 
 - [ ] **INMAIL-01**: Sélection top 3 leads score >= 80, status prospected/invitation_sent
-- [ ] **INMAIL-02**: Génération InMail complet via Claude Sonnet (prompt section 8.5, objet + corps)
+- [x] **INMAIL-02**: Génération InMail complet via Claude Sonnet (prompt section 8.5, objet + corps)
 - [ ] **INMAIL-03**: Envoi briefing WhatsApp matinal à Julien via MessagingMe API
 
 ### Interface Web
@@ -136,10 +136,10 @@
 | ICP-05 | Phase 2 | Complete |
 | ICP-06 | Phase 2 | Complete |
 | LIN-01 | Phase 3 | Pending |
-| LIN-02 | Phase 3 | Pending |
+| LIN-02 | Phase 3 | Complete |
 | LIN-03 | Phase 3 | Pending |
 | LIN-04 | Phase 3 | Pending |
-| LIN-05 | Phase 3 | Pending |
+| LIN-05 | Phase 3 | Complete |
 | LIN-06 | Phase 3 | Pending |
 | LIN-07 | Phase 3 | Pending |
 | LIN-08 | Phase 3 | Pending |
@@ -148,14 +148,14 @@
 | EMAIL-03 | Phase 3 | Pending |
 | EMAIL-04 | Phase 3 | Pending |
 | EMAIL-05 | Phase 3 | Pending |
-| EMAIL-06 | Phase 3 | Pending |
+| EMAIL-06 | Phase 3 | Complete |
 | WA-01 | Phase 3 | Pending |
 | WA-02 | Phase 3 | Pending |
 | WA-03 | Phase 3 | Pending |
 | WA-04 | Phase 3 | Pending |
-| WA-05 | Phase 3 | Pending |
+| WA-05 | Phase 3 | Complete |
 | INMAIL-01 | Phase 3 | Pending |
-| INMAIL-02 | Phase 3 | Pending |
+| INMAIL-02 | Phase 3 | Complete |
 | INMAIL-03 | Phase 3 | Pending |
 | UI-01 | Phase 4 | Pending |
 | UI-02 | Phase 4 | Pending |

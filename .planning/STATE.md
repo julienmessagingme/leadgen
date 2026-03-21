@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-03-20)
 
 **Core value:** Prospecter uniquement des personnes ayant montre un signal d'interet LinkedIn -- zero liste froide, 100% signal-based.
-**Current focus:** Phase 2: Signal Pipeline
+**Current focus:** Phase 3: Outreach Engine
 
 ## Current Position
 
-Phase: 2 of 4 (Signal Pipeline) -- COMPLETE
-Plan: 5 of 5 in current phase
-Status: Phase Complete
-Last activity: 2026-03-20 -- Completed 02-05-PLAN.md (gap closure)
+Phase: 3 of 4 (Outreach Engine)
+Plan: 1 of 5 in current phase
+Status: In Progress
+Last activity: 2026-03-21 -- Completed 03-01-PLAN.md (shared outreach libraries)
 
-Progress: [████████████████████] 100%
+Progress: [████                ] 20%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 8
+- Total plans completed: 9
 - Average duration: 6min
-- Total execution time: 0.77 hours
+- Total execution time: 0.87 hours
 
 **By Phase:**
 
@@ -35,9 +35,10 @@ Progress: [████████████████████] 100%
 | 02-signal-pipeline P03 | 1 tasks | 4min | 2 files |
 | 02-signal-pipeline P04 | 2 tasks | 5min | 2 files |
 | 02-signal-pipeline P05 | 1 tasks | 1min | 1 files |
+| 03-outreach-engine P01 | 2 tasks | 6min | 6 files |
 
 **Recent Trend:**
-- Last 5 plans: 4min, 5min, 5min, 5min, 1min
+- Last 5 plans: 5min, 5min, 5min, 1min, 6min
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -71,6 +72,10 @@ Recent decisions affecting current work:
 - Europe/Paris timezone via Intl.DateTimeFormat for daily lead cap DST handling
 - Cold leads never inserted -- filtered after ICP scoring, only hot/warm in Supabase
 - Anthropic beta.messages.create required for output_config json_schema (not standard messages.create)
+- anthropic.beta.messages.create for message generator (consistent with plan spec for structured JSON output)
+- Lazy env var check in messagingme() helper, not at module load (same pattern as HubSpot)
+- 280-char hard limit with substring truncation for LinkedIn invitation notes
+- Message generator returns null on error, caller decides fallback behavior
 
 ### Pending Todos
 
@@ -82,6 +87,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-20
-Stopped at: Completed 02-05-PLAN.md -- Phase 2 Signal Pipeline complete (gap closure fix applied)
+Last session: 2026-03-21
+Stopped at: Completed 03-01-PLAN.md -- Shared outreach libraries (bereach, hubspot, gmail, messagingme, message-generator)
 Resume file: None
