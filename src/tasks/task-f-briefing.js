@@ -1,12 +1,12 @@
 /**
- * Task F: InMail briefing WhatsApp to Julien.
+ * Task F: InMail briefing email to Julien.
  * Runs daily at 08h30 Mon-Fri.
  * Selects top 3 leads with ICP score >= 80, generates InMail drafts
- * via Claude Sonnet, formats a briefing, and sends to Julien's WhatsApp.
+ * via Claude Sonnet, formats a briefing, and sends to Julien via Gmail SMTP.
  */
 
 const { supabase } = require("../lib/supabase");
-const { sendWhatsAppByUserId } = require("../lib/messagingme");
+const { sendEmail } = require("../lib/gmail");
 const { generateInMail } = require("../lib/message-generator");
 const { log } = require("../lib/logger");
 
@@ -14,10 +14,10 @@ module.exports = async function taskFBriefing(runId) {
   await log(runId, "task-f-briefing", "info", "Task F started: InMail briefing for Julien");
 
   try {
-    // Check JULIEN_WHATSAPP_PHONE is configured
-    var julienPhone = process.env.JULIEN_WHATSAPP_PHONE;
-    if (!julienPhone) {
-      await log(runId, "task-f-briefing", "error", "JULIEN_WHATSAPP_PHONE not set, cannot send briefing");
+    // Check GMAIL_USER is configured for self-send
+    var gmailUser = process.env.GMAIL_USER;
+    if (!gmailUser) {
+      await log(runId, "task-f-briefing", "error", "GMAIL_USER not set, cannot send briefing");
       return;
     }
 
@@ -88,15 +88,16 @@ module.exports = async function taskFBriefing(runId) {
       briefingText += "   Profil: " + (l.linkedin_url || "N/A") + "\n";
     }
 
-    // INMAIL-03: Send briefing to Julien via WhatsApp
+    // INMAIL-03: Send briefing to Julien via email (self-send)
     try {
-      var namespace = process.env.MESSAGINGME_TEMPLATE_NAMESPACE || "default";
-      await sendWhatsAppByUserId(julienPhone, namespace, "daily_leadgen_briefing", "fr", { body: [briefingText] });
-      await log(runId, "task-f-briefing", "info", "Briefing sent to Julien via WhatsApp (" + briefingEntries.length + " leads)");
+      var htmlBody = "<pre style=\"font-family: monospace; white-space: pre-wrap;\">" + briefingText.replace(/</g, "&lt;").replace(/>/g, "&gt;") + "</pre>";
+      var subject = "Briefing InMail du " + new Date().toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" }) + " (" + briefingEntries.length + " leads)";
+      await sendEmail(gmailUser, subject, htmlBody, briefingText);
+      await log(runId, "task-f-briefing", "info", "Briefing sent to Julien via email (" + briefingEntries.length + " leads)");
     } catch (sendErr) {
       // Fallback: log the full briefing to Supabase so Julien can still access it
       await log(runId, "task-f-briefing", "warn",
-        "WhatsApp send failed (" + sendErr.message + "), logging briefing as fallback");
+        "Email send failed (" + sendErr.message + "), logging briefing as fallback");
       await log(runId, "task-f-briefing", "info", "BRIEFING FALLBACK:\n" + briefingText);
     }
 
