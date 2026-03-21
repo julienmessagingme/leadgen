@@ -64,16 +64,16 @@
 ### WhatsApp Outreach (Tache E — 10h30)
 
 - [x] **WA-01**: Création template WhatsApp Meta personnalisé par lead (corps Sonnet + bouton Calendly)
-- [x] **WA-02**: Polling approbation template toutes les 15 min (lun-ven, 9h-18h)
+- [ ] **WA-02**: Polling approbation template toutes les 15 min (lun-ven, 9h-18h)
 - [x] **WA-03**: Envoi WhatsApp J+14 via MessagingMe API dès approbation
-- [x] **WA-04**: Alerte Julien sur WhatsApp si template rejeté ou timeout 24h
+- [x] **WA-04**: Alerte si template rejeté ou timeout 24h (WhatsApp si configuré, sinon fallback log Supabase)
 - [x] **WA-05**: Génération corps message via Claude Sonnet (prompt section 8.4, 3-4 lignes)
 
 ### InMail Briefing (Tache F — 08h30)
 
 - [x] **INMAIL-01**: Sélection top 3 leads score >= 80, status prospected/invitation_sent
 - [x] **INMAIL-02**: Génération InMail complet via Claude Sonnet (prompt section 8.5, objet + corps)
-- [x] **INMAIL-03**: Envoi briefing WhatsApp matinal à Julien via MessagingMe API
+- [ ] **INMAIL-03**: Envoi briefing matinal à Julien (email julien@messagingme.fr — changé de WhatsApp pour fiabilité)
 
 ### Interface Web
 
@@ -150,13 +150,13 @@
 | EMAIL-05 | Phase 3 | Complete |
 | EMAIL-06 | Phase 3 | Complete |
 | WA-01 | Phase 3 | Complete |
-| WA-02 | Phase 3 | Complete |
+| WA-02 | Phase 3.1 | Pending |
 | WA-03 | Phase 3 | Complete |
 | WA-04 | Phase 3 | Complete |
 | WA-05 | Phase 3 | Complete |
 | INMAIL-01 | Phase 3 | Complete |
 | INMAIL-02 | Phase 3 | Complete |
-| INMAIL-03 | Phase 3 | Complete |
+| INMAIL-03 | Phase 3.1 | Pending |
 | UI-01 | Phase 4 | Pending |
 | UI-02 | Phase 4 | Pending |
 | UI-03 | Phase 4 | Pending |
@@ -174,4 +174,4 @@
 
 ---
 *Requirements defined: 2026-03-20*
-*Last updated: 2026-03-20 after roadmap creation*
+*Last updated: 2026-03-21 after v1.0 milestone audit gap closure planning*

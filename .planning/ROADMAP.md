@@ -11,8 +11,9 @@ Agent autonome de prospection B2B signal-based. Le projet se construit en 4 phas
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
 - [x] **Phase 1: Foundation** - VPS, Supabase, OpenClaw, scheduler, logging et safety RGPD
-- [ ] **Phase 2: Signal Pipeline** - Detection signaux LinkedIn, enrichissement profils/societes, scoring ICP
+- [x] **Phase 2: Signal Pipeline** - Detection signaux LinkedIn, enrichissement profils/societes, scoring ICP
 - [x] **Phase 3: Outreach Engine** - Sequences LinkedIn, email, WhatsApp et briefing InMail automatises
+- [ ] **Phase 3.1: Milestone Gap Closure (INSERTED)** - Fix cron WA-02, align INMAIL-03, verify Phase 1
 - [ ] **Phase 4: Interface Web** - Dashboard React, parametres, sequences et pipeline leads
 
 ## Phase Details
@@ -48,10 +49,10 @@ Plans:
 
 Plans:
 - [x] 02-01-PLAN.md — URL utils, BeReach wrapper, HubSpot dedup, combined dedup module
-- [ ] 02-02-PLAN.md — Enrichment (BeReach profile/company, OpenClaw Sales Nav, news evidence, FullEnrich)
+- [x] 02-02-PLAN.md — Enrichment (BeReach profile/company, OpenClaw Sales Nav, news evidence, FullEnrich)
 - [x] 02-03-PLAN.md — ICP scoring (Claude Haiku 4.5, signal weights, freshness TTL, news bonus)
-- [ ] 02-04-PLAN.md — Signal collector + task-a full pipeline orchestrator
-- [ ] 02-05-PLAN.md — Gap fix: Anthropic beta API path for structured JSON output (ICP-01)
+- [x] 02-04-PLAN.md — Signal collector + task-a full pipeline orchestrator
+- [x] 02-05-PLAN.md — Gap fix: Anthropic beta API path for structured JSON output (ICP-01)
 
 ### Phase 3: Outreach Engine
 **Goal**: Les sequences multi-canal s'executent automatiquement : invitation LinkedIn, message de suivi, email J+7, WhatsApp J+14, et briefing InMail matinal
@@ -71,6 +72,16 @@ Plans:
 - [x] 03-03-PLAN.md — Task D (Email relance J+7 with 4-step verification pipeline)
 - [x] 03-04-PLAN.md — Task E (WhatsApp J+14 template creation + polling) + Task F (InMail briefing)
 - [x] 03-05-PLAN.md — Scheduler wiring, env validation, PM2 restart, integration verification
+
+### Phase 3.1: Milestone Gap Closure (INSERTED)
+**Goal**: Fermer les gaps identifes par l'audit v1.0 avant completion du milestone
+**Depends on**: Phase 3
+**Requirements**: WA-02 (fix), INMAIL-03 (align), INFRA-01-04 + LOG-01-03 (verify)
+**Gap Closure:** Closes gaps from v1.0-MILESTONE-AUDIT.md
+**Plans**: 1 plan
+
+Plans:
+- [ ] 03.1-01-PLAN.md — Fix cron WA-02, align INMAIL-03 requirement, retroactive Phase 1 verification
 
 ### Phase 4: Interface Web
 **Goal**: Julien pilote son pipeline de prospection depuis une interface web React accessible sur le VPS
@@ -97,4 +108,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 | 1. Foundation | 3/3 | Complete | 2026-03-20 |
 | 2. Signal Pipeline | 5/5 | Complete | 2026-03-20 |
 | 3. Outreach Engine | 5/5 | Complete | 2026-03-21 |
+| 3.1 Gap Closure (INSERTED) | 0/1 | Not started | - |
 | 4. Interface Web | 0/? | Not started | - |
