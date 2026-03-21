@@ -10,6 +10,7 @@ const taskDEmail = require("./tasks/task-d-email");
 const taskEWhatsapp = require("./tasks/task-e-whatsapp");
 const taskFBriefing = require("./tasks/task-f-briefing");
 const whatsappPoll = require("./tasks/whatsapp-poll");
+const { supabase } = require("./lib/supabase");
 
 /**
  * Register a task with cron scheduling and error isolation.
@@ -50,4 +51,21 @@ registerTask("task-c-followup",   "0 11 * * 1-5",      taskCFollowup);    // 11h
 // WhatsApp template approval polling (every 15 min, Mon-Fri 9h-17h)
 registerTask("whatsapp-poll",     "*/15 9-18 * * 1-5", whatsappPoll);     // every 15 min
 
-console.log("Scheduler started: 7 tasks registered (Mon-Fri, Europe/Paris)");
+// Supabase keep-alive ping (weekends only -- prevent free tier 7-day inactivity pause)
+cron.schedule(
+  "0 10 * * 0,6",
+  async () => {
+    try {
+      const { count, error } = await supabase
+        .from("leads")
+        .select("id", { count: "exact", head: true });
+      if (error) throw error;
+      console.log("Supabase keep-alive ping OK (leads count: " + count + ")");
+    } catch (err) {
+      console.error("Supabase keep-alive failed:", err.message);
+    }
+  },
+  { timezone: "Europe/Paris" }
+);
+
+console.log("Scheduler started: 7 tasks + keep-alive registered (Mon-Fri pipeline, Sat/Sun keep-alive, Europe/Paris)");
