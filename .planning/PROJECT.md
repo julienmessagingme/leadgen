@@ -23,7 +23,18 @@ Prospecter uniquement des personnes ayant deja montre un signal d'interet — ze
 
 ### Active
 
-- [ ] Interface web React 4 pages : Dashboard, Parametres, Sequences, Pipeline (UI-01-09)
+## Current Milestone: v1.1 Interface Web
+
+**Goal:** Fournir une interface web React pour piloter et monitorer le pipeline de prospection.
+
+**Target features:**
+- Dashboard KPIs pipeline
+- Sequences avec actions (pause, reprendre, exclure)
+- Pipeline double vue kanban + liste filtrable
+- Parametres config complete (ICP, cron, limites, templates, mots-cles)
+- Fiche detail lead
+- Export CSV
+- Login basique email/password
 
 ### Out of Scope
 
@@ -91,4 +102,4 @@ VPS: ubuntu@146.59.233.252 at /home/openclaw/leadgen/, PM2 process manager.
 | Lazy env var init (pas au load time) | Evite crash au demarrage si var manquante non-critique | ✓ Good |
 
 ---
-*Last updated: 2026-03-21 after v1.0 milestone*
+*Last updated: 2026-03-21 after v1.1 milestone start*
