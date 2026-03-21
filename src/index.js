@@ -64,6 +64,9 @@ app.get("/api/auth/check", require("./api/middleware"), (req, res) => {
 const dashboardRouter = require("./api/dashboard");
 app.use("/api/dashboard", dashboardRouter);
 
+// Leads API routes (protected -- authMiddleware applied inside router)
+app.use("/api/leads", require("./api/leads"));
+
 // Serve React build
 app.use(express.static(path.join(__dirname, "..", "dist")));
 
