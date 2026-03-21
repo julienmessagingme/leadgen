@@ -31,23 +31,23 @@ Requirements for the web interface milestone. Each maps to roadmap phases.
 
 ### Sequences
 
-- [ ] **SEQ-01**: User sees list of leads with current step in outreach sequence
-- [ ] **SEQ-02**: User can pause a lead (stop further outreach)
-- [ ] **SEQ-03**: User can resume a paused lead
-- [ ] **SEQ-04**: User can exclude a lead permanently (RGPD suppression)
-- [ ] **SEQ-05**: User can filter leads by status and tier
-- [ ] **SEQ-06**: User can sort leads by ICP score or date
-- [ ] **SEQ-07**: User can bulk pause/resume/exclude multiple leads
+- [x] **SEQ-01**: User sees list of leads with current step in outreach sequence
+- [x] **SEQ-02**: User can pause a lead (stop further outreach)
+- [x] **SEQ-03**: User can resume a paused lead
+- [x] **SEQ-04**: User can exclude a lead permanently (RGPD suppression)
+- [x] **SEQ-05**: User can filter leads by status and tier
+- [x] **SEQ-06**: User can sort leads by ICP score or date
+- [x] **SEQ-07**: User can bulk pause/resume/exclude multiple leads
 
 ### Pipeline
 
-- [ ] **PIPE-01**: User sees kanban view with columns per lead status
-- [ ] **PIPE-02**: Lead cards show name, company, tier badge, ICP score
-- [ ] **PIPE-03**: Each column shows lead count in header
-- [ ] **PIPE-04**: User can toggle between kanban and list view
-- [ ] **PIPE-05**: User can filter by tier and signal source
-- [ ] **PIPE-06**: User can search leads by name or company
-- [ ] **PIPE-07**: User can click a lead card to navigate to lead detail
+- [x] **PIPE-01**: User sees kanban view with columns per lead status
+- [x] **PIPE-02**: Lead cards show name, company, tier badge, ICP score
+- [x] **PIPE-03**: Each column shows lead count in header
+- [x] **PIPE-04**: User can toggle between kanban and list view
+- [x] **PIPE-05**: User can filter by tier and signal source
+- [x] **PIPE-06**: User can search leads by name or company
+- [x] **PIPE-07**: User can click a lead card to navigate to lead detail
 
 ### Fiche Lead
 
@@ -112,20 +112,20 @@ Requirements for the web interface milestone. Each maps to roadmap phases.
 | DASH-05 | Phase 5 | Complete |
 | DASH-06 | Phase 5 | Complete |
 | DASH-07 | Phase 5 | Complete |
-| SEQ-01 | Phase 6 | Pending |
-| SEQ-02 | Phase 6 | Pending |
-| SEQ-03 | Phase 6 | Pending |
-| SEQ-04 | Phase 6 | Pending |
-| SEQ-05 | Phase 6 | Pending |
-| SEQ-06 | Phase 6 | Pending |
-| SEQ-07 | Phase 6 | Pending |
-| PIPE-01 | Phase 6 | Pending |
-| PIPE-02 | Phase 6 | Pending |
-| PIPE-03 | Phase 6 | Pending |
-| PIPE-04 | Phase 6 | Pending |
-| PIPE-05 | Phase 6 | Pending |
-| PIPE-06 | Phase 6 | Pending |
-| PIPE-07 | Phase 6 | Pending |
+| SEQ-01 | Phase 6 | Complete |
+| SEQ-02 | Phase 6 | Complete |
+| SEQ-03 | Phase 6 | Complete |
+| SEQ-04 | Phase 6 | Complete |
+| SEQ-05 | Phase 6 | Complete |
+| SEQ-06 | Phase 6 | Complete |
+| SEQ-07 | Phase 6 | Complete |
+| PIPE-01 | Phase 6 | Complete |
+| PIPE-02 | Phase 6 | Complete |
+| PIPE-03 | Phase 6 | Complete |
+| PIPE-04 | Phase 6 | Complete |
+| PIPE-05 | Phase 6 | Complete |
+| PIPE-06 | Phase 6 | Complete |
+| PIPE-07 | Phase 6 | Complete |
 | LEAD-01 | Phase 6 | Complete |
 | LEAD-02 | Phase 6 | Complete |
 | LEAD-03 | Phase 6 | Complete |
