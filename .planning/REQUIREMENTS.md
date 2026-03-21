@@ -9,15 +9,15 @@ Requirements for the web interface milestone. Each maps to roadmap phases.
 
 ### Infrastructure
 
-- [ ] **INFRA-01**: Express API layer serves React SPA and API routes from existing Node.js process
+- [x] **INFRA-01**: Express API layer serves React SPA and API routes from existing Node.js process
 - [ ] **INFRA-02**: Port 3005 bound to 127.0.0.1 behind Nginx Proxy Manager with HTTPS
-- [ ] **INFRA-03**: Vite React SPA builds to static dist/ served by Express
+- [x] **INFRA-03**: Vite React SPA builds to static dist/ served by Express
 
 ### Authentification
 
-- [ ] **AUTH-01**: User can login with email/password (env var credentials)
-- [ ] **AUTH-02**: JWT session persists across browser refresh (7-day expiry)
-- [ ] **AUTH-03**: Unauthenticated requests redirect to login page
+- [x] **AUTH-01**: User can login with email/password (env var credentials)
+- [x] **AUTH-02**: JWT session persists across browser refresh (7-day expiry)
+- [x] **AUTH-03**: Unauthenticated requests redirect to login page
 
 ### Dashboard
 
@@ -99,12 +99,12 @@ Requirements for the web interface milestone. Each maps to roadmap phases.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INFRA-01 | Phase 4 | Pending |
+| INFRA-01 | Phase 4 | Complete |
 | INFRA-02 | Phase 4 | Pending |
-| INFRA-03 | Phase 4 | Pending |
-| AUTH-01 | Phase 4 | Pending |
-| AUTH-02 | Phase 4 | Pending |
-| AUTH-03 | Phase 4 | Pending |
+| INFRA-03 | Phase 4 | Complete |
+| AUTH-01 | Phase 4 | Complete |
+| AUTH-02 | Phase 4 | Complete |
+| AUTH-03 | Phase 4 | Complete |
 | DASH-01 | Phase 5 | Pending |
 | DASH-02 | Phase 5 | Pending |
 | DASH-03 | Phase 5 | Pending |
