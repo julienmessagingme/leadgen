@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-03-20)
 
 **Core value:** Prospecter uniquement des personnes ayant montre un signal d'interet LinkedIn -- zero liste froide, 100% signal-based.
-**Current focus:** Phase 3: Outreach Engine
+**Current focus:** Phase 3.1: Gap Closure (complete) -- ready for Phase 4
 
 ## Current Position
 
-Phase: 3 of 4 (Outreach Engine)
-Plan: 5 of 5 in current phase
+Phase: 3.1 of 4 (Gap Closure)
+Plan: 1 of 1 in current phase
 Status: Phase Complete
-Last activity: 2026-03-21 -- Completed 03-05-PLAN.md (Scheduler wiring + integration verification)
+Last activity: 2026-03-21 -- Completed 03.1-01-PLAN.md (Gap closure: beta API, DB columns, requirements alignment)
 
-Progress: [████████████████████] 100% (Phase 3 complete)
+Progress: [████████████████████] 100% (Phase 3.1 complete, Phases 1-3.1 done)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 13
+- Total plans completed: 14
 - Average duration: 6min
-- Total execution time: 1.17 hours
+- Total execution time: 1.24 hours
 
 **By Phase:**
 
@@ -41,9 +41,10 @@ Progress: [████████████████████] 100% (P
 | 03-outreach-engine P03 (gap) | 1 tasks | 5min | 1 files |
 | 03-outreach-engine P04 | 2 tasks | 5min | 3 files |
 | 03-outreach-engine P05 | 2 tasks | 8min | 6 files |
+| 03.1-gap-closure P01 | 2 tasks | 4min | 4 files |
 
 **Recent Trend:**
-- Last 5 plans: 6min, 4min, 5min, 5min, 8min
+- Last 5 plans: 4min, 5min, 5min, 8min, 4min
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -91,6 +92,9 @@ Recent decisions affecting current work:
 - [Phase 03]: Task F briefing switched from WhatsApp to email self-send for reliability
 - [Phase 03]: MessagingMe API base URL fixed to uchat.com.au/api with Bearer token auth
 - [Phase 03]: RECOMMENDED_VARS pattern: log warnings for missing outreach vars, do not exit
+- [Phase 3.1]: DB columns added via psql direct connection (port 5432) -- pooler (6543) fails for this Supabase project
+- [Phase 3.1]: INMAIL-03 marked complete with email delivery as accepted implementation
+- [Phase 3.1]: Retroactive verification pattern: downstream phase success proves upstream requirements
 
 ### Pending Todos
 
@@ -103,5 +107,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-21
-Stopped at: Completed 03-05-PLAN.md -- Phase 3 Outreach Engine complete, all 7 tasks running via PM2
+Stopped at: Completed 03.1-01-PLAN.md -- Phase 3.1 Gap Closure complete, all gaps resolved, v1.0 milestone closable
 Resume file: None

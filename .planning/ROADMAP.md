@@ -13,7 +13,7 @@ Agent autonome de prospection B2B signal-based. Le projet se construit en 4 phas
 - [x] **Phase 1: Foundation** - VPS, Supabase, OpenClaw, scheduler, logging et safety RGPD
 - [x] **Phase 2: Signal Pipeline** - Detection signaux LinkedIn, enrichissement profils/societes, scoring ICP
 - [x] **Phase 3: Outreach Engine** - Sequences LinkedIn, email, WhatsApp et briefing InMail automatises
-- [ ] **Phase 3.1: Milestone Gap Closure (INSERTED)** - Fix icp-scorer beta API, add missing DB columns, fix cron WA-02, align INMAIL-03, verify Phase 1
+- [x] **Phase 3.1: Milestone Gap Closure (INSERTED)** - Fix icp-scorer beta API, add missing DB columns, fix cron WA-02, align INMAIL-03, verify Phase 1
 - [ ] **Phase 4: Interface Web** - Dashboard React, parametres, sequences et pipeline leads
 
 ## Phase Details
@@ -87,7 +87,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 03.1-01-PLAN.md — [P0] Fix icp-scorer beta API on VPS, add missing DB columns, [P2] fix cron WA-02, align INMAIL-03, verify Phase 1
+- [x] 03.1-01-PLAN.md — [P0] Fix icp-scorer beta API on VPS, add missing DB columns, [P2] fix cron WA-02, align INMAIL-03, verify Phase 1
 
 ### Phase 4: Interface Web
 **Goal**: Julien pilote son pipeline de prospection depuis une interface web React accessible sur le VPS
@@ -114,5 +114,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 | 1. Foundation | 3/3 | Complete | 2026-03-20 |
 | 2. Signal Pipeline | 5/5 | Complete | 2026-03-20 |
 | 3. Outreach Engine | 5/5 | Complete | 2026-03-21 |
-| 3.1 Gap Closure (INSERTED) | 0/1 | Not started | - |
+| 3.1 Gap Closure (INSERTED) | 1/1 | Complete | 2026-03-21 |
 | 4. Interface Web | 0/? | Not started | - |
