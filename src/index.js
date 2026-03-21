@@ -73,8 +73,9 @@ app.get("/{*splat}", (req, res) => {
 });
 
 const PORT = process.env.PORT || 3006;
-app.listen(PORT, "127.0.0.1", () => {
-  console.log(`HTTP server listening on 127.0.0.1:${PORT}`);
+const BIND_HOST = process.env.BIND_HOST || "172.17.0.1";
+app.listen(PORT, BIND_HOST, () => {
+  console.log(`HTTP server listening on ${BIND_HOST}:${PORT}`);
 });
 
 // Load scheduler
