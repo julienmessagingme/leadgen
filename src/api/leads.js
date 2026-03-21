@@ -62,11 +62,11 @@ router.get("/", async (req, res) => {
       query = query.eq("signal_category", source);
     }
 
-    // Search filter
+    // Search filter (table has first_name + last_name, not full_name)
     if (search) {
       const term = sanitizeSearch(search);
       if (term) {
-        query = query.or(`full_name.ilike.%${term}%,company_name.ilike.%${term}%`);
+        query = query.or(`first_name.ilike.%${term}%,last_name.ilike.%${term}%,company_name.ilike.%${term}%`);
       }
     }
 
