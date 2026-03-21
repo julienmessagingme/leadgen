@@ -1,4 +1,4 @@
-const { anthropic } = require("./anthropic");
+const { getAnthropicClient } = require("./anthropic");
 const { supabase } = require("./supabase");
 const { log } = require("./logger");
 
@@ -124,7 +124,7 @@ async function scoreLead(lead, newsEvidence, rules, runId) {
     // Step 2: Claude Haiku scoring (ICP-01)
     var prompt = buildScoringPrompt(lead, newsEvidence, rules);
 
-    var response = await anthropic.beta.messages.create({
+    var response = await getAnthropicClient().messages.create({
       model: "claude-haiku-4-5-20250315",
       max_tokens: 512,
       messages: [{ role: "user", content: prompt }],

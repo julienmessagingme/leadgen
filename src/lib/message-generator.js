@@ -4,7 +4,7 @@
  * Returns null on error to let calling tasks decide fallback behavior.
  */
 
-const { anthropic } = require("./anthropic");
+const { getAnthropicClient } = require("./anthropic");
 
 const MODEL = "claude-sonnet-4-6-20250514";
 
@@ -15,7 +15,7 @@ const MODEL = "claude-sonnet-4-6-20250514";
  */
 async function generateInvitationNote(lead) {
   try {
-    var response = await anthropic.beta.messages.create({
+    var response = await getAnthropicClient().beta.messages.create({
       model: MODEL,
       max_tokens: 256,
       messages: [{
@@ -69,7 +69,7 @@ async function generateInvitationNote(lead) {
  */
 async function generateFollowUpMessage(lead) {
   try {
-    var response = await anthropic.beta.messages.create({
+    var response = await getAnthropicClient().beta.messages.create({
       model: MODEL,
       max_tokens: 512,
       messages: [{
@@ -118,7 +118,7 @@ async function generateEmail(lead) {
   try {
     var calendlyUrl = process.env.CALENDLY_URL || "https://calendly.com/julien-messagingme";
 
-    var response = await anthropic.beta.messages.create({
+    var response = await getAnthropicClient().beta.messages.create({
       model: MODEL,
       max_tokens: 1024,
       messages: [{
@@ -170,7 +170,7 @@ async function generateEmail(lead) {
  */
 async function generateWhatsAppBody(lead) {
   try {
-    var response = await anthropic.beta.messages.create({
+    var response = await getAnthropicClient().beta.messages.create({
       model: MODEL,
       max_tokens: 512,
       messages: [{
@@ -217,7 +217,7 @@ async function generateWhatsAppBody(lead) {
  */
 async function generateInMail(lead) {
   try {
-    var response = await anthropic.beta.messages.create({
+    var response = await getAnthropicClient().beta.messages.create({
       model: MODEL,
       max_tokens: 1024,
       messages: [{
