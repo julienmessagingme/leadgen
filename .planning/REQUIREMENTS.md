@@ -1,4 +1,4 @@
-# Requirements: Pipeline Lead Gen — Interface Web
+# Requirements: Pipeline Lead Gen -- Interface Web
 
 **Defined:** 2026-03-21
 **Core Value:** Piloter et monitorer le pipeline de prospection signal-based via une interface web React
@@ -99,54 +99,54 @@ Requirements for the web interface milestone. Each maps to roadmap phases.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INFRA-01 | — | Pending |
-| INFRA-02 | — | Pending |
-| INFRA-03 | — | Pending |
-| AUTH-01 | — | Pending |
-| AUTH-02 | — | Pending |
-| AUTH-03 | — | Pending |
-| DASH-01 | — | Pending |
-| DASH-02 | — | Pending |
-| DASH-03 | — | Pending |
-| DASH-04 | — | Pending |
-| DASH-05 | — | Pending |
-| DASH-06 | — | Pending |
-| DASH-07 | — | Pending |
-| SEQ-01 | — | Pending |
-| SEQ-02 | — | Pending |
-| SEQ-03 | — | Pending |
-| SEQ-04 | — | Pending |
-| SEQ-05 | — | Pending |
-| SEQ-06 | — | Pending |
-| SEQ-07 | — | Pending |
-| PIPE-01 | — | Pending |
-| PIPE-02 | — | Pending |
-| PIPE-03 | — | Pending |
-| PIPE-04 | — | Pending |
-| PIPE-05 | — | Pending |
-| PIPE-06 | — | Pending |
-| PIPE-07 | — | Pending |
-| LEAD-01 | — | Pending |
-| LEAD-02 | — | Pending |
-| LEAD-03 | — | Pending |
-| LEAD-04 | — | Pending |
-| LEAD-05 | — | Pending |
-| LEAD-06 | — | Pending |
-| CONF-01 | — | Pending |
-| CONF-02 | — | Pending |
-| CONF-03 | — | Pending |
-| CONF-04 | — | Pending |
-| CONF-05 | — | Pending |
-| CONF-06 | — | Pending |
-| EXP-01 | — | Pending |
-| EXP-02 | — | Pending |
-| EXP-03 | — | Pending |
+| INFRA-01 | Phase 4 | Pending |
+| INFRA-02 | Phase 4 | Pending |
+| INFRA-03 | Phase 4 | Pending |
+| AUTH-01 | Phase 4 | Pending |
+| AUTH-02 | Phase 4 | Pending |
+| AUTH-03 | Phase 4 | Pending |
+| DASH-01 | Phase 5 | Pending |
+| DASH-02 | Phase 5 | Pending |
+| DASH-03 | Phase 5 | Pending |
+| DASH-04 | Phase 5 | Pending |
+| DASH-05 | Phase 5 | Pending |
+| DASH-06 | Phase 5 | Pending |
+| DASH-07 | Phase 5 | Pending |
+| SEQ-01 | Phase 6 | Pending |
+| SEQ-02 | Phase 6 | Pending |
+| SEQ-03 | Phase 6 | Pending |
+| SEQ-04 | Phase 6 | Pending |
+| SEQ-05 | Phase 6 | Pending |
+| SEQ-06 | Phase 6 | Pending |
+| SEQ-07 | Phase 6 | Pending |
+| PIPE-01 | Phase 6 | Pending |
+| PIPE-02 | Phase 6 | Pending |
+| PIPE-03 | Phase 6 | Pending |
+| PIPE-04 | Phase 6 | Pending |
+| PIPE-05 | Phase 6 | Pending |
+| PIPE-06 | Phase 6 | Pending |
+| PIPE-07 | Phase 6 | Pending |
+| LEAD-01 | Phase 6 | Pending |
+| LEAD-02 | Phase 6 | Pending |
+| LEAD-03 | Phase 6 | Pending |
+| LEAD-04 | Phase 6 | Pending |
+| LEAD-05 | Phase 6 | Pending |
+| LEAD-06 | Phase 6 | Pending |
+| CONF-01 | Phase 7 | Pending |
+| CONF-02 | Phase 7 | Pending |
+| CONF-03 | Phase 7 | Pending |
+| CONF-04 | Phase 7 | Pending |
+| CONF-05 | Phase 7 | Pending |
+| CONF-06 | Phase 7 | Pending |
+| EXP-01 | Phase 7 | Pending |
+| EXP-02 | Phase 7 | Pending |
+| EXP-03 | Phase 7 | Pending |
 
 **Coverage:**
-- v1.1 requirements: 33 total
-- Mapped to phases: 0
-- Unmapped: 33
+- v1.1 requirements: 42 total
+- Mapped to phases: 42
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-21*
-*Last updated: 2026-03-21 after initial definition*
+*Last updated: 2026-03-21 after roadmap creation*
