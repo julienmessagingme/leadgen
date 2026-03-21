@@ -54,11 +54,11 @@
 
 ### Email Outreach (Tache D — 10h00)
 
-- [ ] **EMAIL-01**: Enrichissement email vérifié via Fullenrich (confidence high/medium uniquement)
-- [ ] **EMAIL-02**: HubSpot check 2 par email vérifié (après Fullenrich, avant envoi)
-- [ ] **EMAIL-03**: Check inbox LinkedIn avant envoi email (si réponse reçue → status replied, stop)
-- [ ] **EMAIL-04**: Vérification suppression_list RGPD avant envoi (hash email + linkedin_url)
-- [ ] **EMAIL-05**: Génération email relance J+7 via Claude Sonnet (prompt section 8.3, objet + corps)
+- [x] **EMAIL-01**: Enrichissement email vérifié via Fullenrich (confidence high/medium uniquement)
+- [x] **EMAIL-02**: HubSpot check 2 par email vérifié (après Fullenrich, avant envoi)
+- [x] **EMAIL-03**: Check inbox LinkedIn avant envoi email (si réponse reçue → status replied, stop)
+- [x] **EMAIL-04**: Vérification suppression_list RGPD avant envoi (hash email + linkedin_url)
+- [x] **EMAIL-05**: Génération email relance J+7 via Claude Sonnet (prompt section 8.3, objet + corps)
 - [x] **EMAIL-06**: Envoi via Gmail SMTP (julien@messagingme.fr, port 465 SSL)
 
 ### WhatsApp Outreach (Tache E — 10h30)
@@ -143,11 +143,11 @@
 | LIN-06 | Phase 3 | Complete |
 | LIN-07 | Phase 3 | Complete |
 | LIN-08 | Phase 3 | Complete |
-| EMAIL-01 | Phase 3 | Pending |
-| EMAIL-02 | Phase 3 | Pending |
-| EMAIL-03 | Phase 3 | Pending |
-| EMAIL-04 | Phase 3 | Pending |
-| EMAIL-05 | Phase 3 | Pending |
+| EMAIL-01 | Phase 3 | Complete |
+| EMAIL-02 | Phase 3 | Complete |
+| EMAIL-03 | Phase 3 | Complete |
+| EMAIL-04 | Phase 3 | Complete |
+| EMAIL-05 | Phase 3 | Complete |
 | EMAIL-06 | Phase 3 | Complete |
 | WA-01 | Phase 3 | Complete |
 | WA-02 | Phase 3 | Complete |
