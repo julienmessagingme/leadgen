@@ -3,7 +3,7 @@
  * Lazy-init pattern: does not throw at module load if env vars missing.
  */
 
-const MESSAGINGME_BASE = "https://ai.messagingme.app/api";
+const MESSAGINGME_BASE = "https://www.uchat.com.au/api";
 
 /**
  * Internal POST helper for MessagingMe API.
@@ -26,7 +26,7 @@ async function messagingme(endpoint, body = {}) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-API-Key": apiKey,
+      "Authorization": "Bearer " + apiKey,
       "X-Workspace-Id": workspaceId,
     },
     body: JSON.stringify(body),
