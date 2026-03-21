@@ -43,11 +43,11 @@ Agent autonome de prospection B2B signal-based. Le projet se construit en phases
   2. L'utilisateur peut se connecter avec email/mot de passe et accede a une page d'accueil protegee
   3. La session persiste apres refresh du navigateur (JWT 7 jours) et les requetes non authentifiees redirigent vers la page de login
   4. Le port 3005 est bind sur 127.0.0.1 (non accessible directement depuis l'exterieur)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 04-01: TBD
-- [ ] 04-02: TBD
+- [ ] 04-01-PLAN.md -- Express API layer + JWT auth + React SPA scaffold with login flow
+- [ ] 04-02-PLAN.md -- Port security, Nginx HTTPS proxy, Supabase keep-alive, deployment verification
 
 ### Phase 5: Dashboard KPIs
 **Goal**: Julien voit en un coup d'oeil l'etat de son pipeline de prospection depuis le dashboard
@@ -103,7 +103,7 @@ Phases execute in numeric order: 4 -> 5 -> 6 -> 7
 | 2. Signal Pipeline | v1.0 | 5/5 | Complete | 2026-03-20 |
 | 3. Outreach Engine | v1.0 | 5/5 | Complete | 2026-03-21 |
 | 3.1 Gap Closure | v1.0 | 1/1 | Complete | 2026-03-21 |
-| 4. API + Auth + React Shell | v1.1 | 0/? | Not started | - |
+| 4. API + Auth + React Shell | v1.1 | 0/2 | Planned | - |
 | 5. Dashboard KPIs | v1.1 | 0/? | Not started | - |
 | 6. Pipeline + Sequences + Lead Detail | v1.1 | 0/? | Not started | - |
 | 7. Settings + Export | v1.1 | 0/? | Not started | - |
