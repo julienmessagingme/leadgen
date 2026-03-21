@@ -72,8 +72,9 @@ app.get("/{*splat}", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "dist", "index.html"));
 });
 
-app.listen(3005, "127.0.0.1", () => {
-  console.log("HTTP server listening on 127.0.0.1:3005");
+const PORT = process.env.PORT || 3006;
+app.listen(PORT, "127.0.0.1", () => {
+  console.log(`HTTP server listening on 127.0.0.1:${PORT}`);
 });
 
 // Load scheduler
