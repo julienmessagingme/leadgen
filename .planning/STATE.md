@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-21)
 
 **Core value:** Prospecter uniquement des personnes ayant montre un signal d'interet LinkedIn -- zero liste froide, 100% signal-based.
-**Current focus:** v1.1 Interface Web -- Phase 5: Dashboard KPIs
+**Current focus:** v1.1 Interface Web -- Phase 6: Pipeline + Sequences + Lead Detail
 
 ## Current Position
 
-Phase: 5 of 7 (Dashboard KPIs) -- COMPLETE
-Plan: 2 of 2 complete
-Status: Phase complete
-Last activity: 2026-03-21 -- Completed 05-02 (Dashboard UI Widgets)
+Phase: 6 of 7 (Pipeline + Sequences + Lead Detail)
+Plan: 2 of 4 complete
+Status: In progress
+Last activity: 2026-03-21 -- Completed 06-02 (Shared UI Components & Lead Detail)
 
-Progress: [##############░░░░░░] 14/14 v1.0 complete | v1.1: 4/8 plans (50%)
+Progress: [##############░░░░░░] 14/14 v1.0 complete | v1.1: 6/8 plans (75%)
 
 ## Performance Metrics
 
@@ -25,11 +25,13 @@ Progress: [##############░░░░░░] 14/14 v1.0 complete | v1.1: 4/8 pla
 - Timeline: 2 days (2026-03-20 -> 2026-03-21)
 
 **v1.1:**
-- Plans completed: 4
+- Plans completed: 6
 - 04-01: Express API + JWT Auth + React Login (7min)
 - 04-02: Secure Deployment + Keep-alive (5min)
 - 05-01: Dashboard API Endpoints (4min)
 - 05-02: Dashboard UI Widgets (3min)
+- 06-01: Leads API Endpoints (3min)
+- 06-02: Shared UI Components & Lead Detail (3min)
 
 ## Accumulated Context
 
@@ -38,6 +40,9 @@ Progress: [##############░░░░░░] 14/14 v1.0 complete | v1.1: 4/8 pla
 See PROJECT.md Key Decisions table for full log.
 
 Recent:
+- useDeferredValue for search debounce (React 19 native)
+- Scoring reasoning collapsed by default in drawer for compactness
+- StatusBadge maps 12-value ENUM to 7 French group labels
 - Token fixe pour l'interface web (usage solo Julien)
 - Express API layer routes all Supabase access (service_role key never in browser)
 - Port changed from 3005 to 3006 (educnat Docker conflict)
@@ -61,5 +66,5 @@ Recent:
 ## Session Continuity
 
 Last session: 2026-03-21
-Stopped at: Completed 05-02-PLAN.md (Dashboard UI Widgets)
+Stopped at: Completed 06-02-PLAN.md (Shared UI Components & Lead Detail)
 Resume file: None

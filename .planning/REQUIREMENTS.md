@@ -51,12 +51,12 @@ Requirements for the web interface milestone. Each maps to roadmap phases.
 
 ### Fiche Lead
 
-- [ ] **LEAD-01**: User sees full profile (name, headline, company, sector, location, LinkedIn URL)
-- [ ] **LEAD-02**: User sees ICP score, tier, and scoring reasoning breakdown
-- [ ] **LEAD-03**: User sees signal info (type, category, source, date)
-- [ ] **LEAD-04**: User sees outreach timeline (invitation, followup, email, whatsapp dates)
-- [ ] **LEAD-05**: User can pause/exclude lead from detail page
-- [ ] **LEAD-06**: User can copy email/LinkedIn URL to clipboard
+- [x] **LEAD-01**: User sees full profile (name, headline, company, sector, location, LinkedIn URL)
+- [x] **LEAD-02**: User sees ICP score, tier, and scoring reasoning breakdown
+- [x] **LEAD-03**: User sees signal info (type, category, source, date)
+- [x] **LEAD-04**: User sees outreach timeline (invitation, followup, email, whatsapp dates)
+- [x] **LEAD-05**: User can pause/exclude lead from detail page
+- [x] **LEAD-06**: User can copy email/LinkedIn URL to clipboard
 
 ### Parametres
 
@@ -126,12 +126,12 @@ Requirements for the web interface milestone. Each maps to roadmap phases.
 | PIPE-05 | Phase 6 | Pending |
 | PIPE-06 | Phase 6 | Pending |
 | PIPE-07 | Phase 6 | Pending |
-| LEAD-01 | Phase 6 | Pending |
-| LEAD-02 | Phase 6 | Pending |
-| LEAD-03 | Phase 6 | Pending |
-| LEAD-04 | Phase 6 | Pending |
-| LEAD-05 | Phase 6 | Pending |
-| LEAD-06 | Phase 6 | Pending |
+| LEAD-01 | Phase 6 | Complete |
+| LEAD-02 | Phase 6 | Complete |
+| LEAD-03 | Phase 6 | Complete |
+| LEAD-04 | Phase 6 | Complete |
+| LEAD-05 | Phase 6 | Complete |
+| LEAD-06 | Phase 6 | Complete |
 | CONF-01 | Phase 7 | Pending |
 | CONF-02 | Phase 7 | Pending |
 | CONF-03 | Phase 7 | Pending |
