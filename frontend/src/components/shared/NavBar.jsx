@@ -5,6 +5,7 @@ const navItems = [
   { to: "/", label: "Dashboard", end: true },
   { to: "/pipeline", label: "Pipeline" },
   { to: "/sequences", label: "Sequences" },
+  { to: "/cold-outbound", label: "Cold Outbound" },
   { to: "/settings", label: "Parametres" },
 ];
 

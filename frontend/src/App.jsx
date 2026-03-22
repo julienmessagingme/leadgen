@@ -6,6 +6,7 @@ import Home from "./pages/Home";
 import Pipeline from "./pages/Pipeline";
 import Sequences from "./pages/Sequences";
 import Settings from "./pages/Settings";
+import ColdOutbound from "./pages/ColdOutbound";
 
 const queryClient = new QueryClient();
 
@@ -77,6 +78,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <Sequences />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/cold-outbound"
+        element={
+          <ProtectedRoute>
+            <ColdOutbound />
           </ProtectedRoute>
         }
       />
