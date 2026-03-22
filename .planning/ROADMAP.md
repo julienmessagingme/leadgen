@@ -50,7 +50,7 @@ Agent autonome de prospection B2B signal-based avec interface web React de pilot
 
 - [x] **Phase 11: Browser Infrastructure** - Playwright installe, cookies LinkedIn, rate limiting, delais humains (completed 2026-03-22)
 - [x] **Phase 12: Browser Signal Collector** - Collecte signaux via browser avec dedup cross-source et integration Task A (completed 2026-03-22)
-- [ ] **Phase 13: Cold Outbound** - Formulaire dashboard, recherche Sales Nav, enrichissement, injection pipeline
+- [x] **Phase 13: Cold Outbound** - Formulaire dashboard, recherche Sales Nav, enrichissement, injection pipeline (completed 2026-03-22)
 - [ ] **Phase 14: Outreach Adaptation** - Messages cold adaptes, templates configurables, integration sequence existante
 
 ## Phase Details
@@ -126,7 +126,7 @@ Phases execute in numeric order: 11 -> 12 -> 13 -> 14
 |-------|-----------|----------------|--------|-----------|
 | 11. Browser Infrastructure | 2/2 | Complete    | 2026-03-22 | - |
 | 12. Browser Signal Collector | 3/3 | Complete    | 2026-03-22 | - |
-| 13. Cold Outbound | 2/3 | In Progress|  | - |
+| 13. Cold Outbound | 3/3 | Complete   | 2026-03-22 | - |
 | 14. Outreach Adaptation | v1.3 | 0/2 | Not started | - |
 | 10. Query Optimization & Ops | v1.2 | 3/3 | Complete | 2026-03-22 |
 | 9. Supabase Indexes & Schema | v1.2 | 2/2 | Complete | 2026-03-22 |

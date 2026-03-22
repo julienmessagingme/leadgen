@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-03-22)
 
 ## Current Position
 
-Phase: 13 of 14 (Cold Outbound)
-Plan: 2 of 3 in current phase
-Status: In Progress
-Last activity: 2026-03-22 — Completed 13-02 (Sales Navigator scraper module)
+Phase: 13 of 14 (Cold Outbound) -- COMPLETE
+Plan: 3 of 3 in current phase
+Status: Phase 13 Complete
+Last activity: 2026-03-22 — Completed 13-03 (Cold outbound execution pipeline)
 
-Progress: [######░░░░] 60% (6/10 plans) | v1.0: 14 plans | v1.1: 11 plans | v1.2: 7 plans
+Progress: [#######░░░] 70% (7/10 plans) | v1.0: 14 plans | v1.1: 11 plans | v1.2: 7 plans
 
 ## Performance Metrics
 
@@ -61,6 +61,9 @@ See PROJECT.md Key Decisions table for full log.
 - 13-02: Keywords-based URL approach for Sales Nav search (most resilient vs encoded filter blobs)
 - 13-02: Inline dismissPopups in sales-nav-scraper (avoids cross-module coupling)
 - 13-02: Email alerts for CAPTCHA and session expiry via gmail.js
+- 13-03: FullEnrich only for cold lead email (skip BeReach profile visits)
+- 13-03: crypto.randomUUID instead of uuid package (no extra dependency)
+- 13-03: Fire-and-forget pipeline from API, 409 guard for concurrent searches
 
 ### Blockers/Concerns
 
@@ -70,5 +73,5 @@ See PROJECT.md Key Decisions table for full log.
 ## Session Continuity
 
 Last session: 2026-03-22
-Stopped at: Completed 13-01-PLAN.md (Cold Outbound dashboard + API)
+Stopped at: Completed 13-03-PLAN.md (Cold outbound execution pipeline)
 Resume file: None
