@@ -43,43 +43,28 @@ function toParisDateStr(date) {
   return date.toLocaleDateString("en-CA", { timeZone: "Europe/Paris" });
 }
 
-// Status -> funnel stage mapping
-const FUNNEL_MAP = {
-  new: "new",
-  enriched: "new",
-  scored: "new",
-  prospected: "new",
-  invitation_sent: "invited",
-  connected: "connected",
-  messaged: "connected",
-  email_sent: "email",
-  whatsapp_sent: "whatsapp",
-  replied: "whatsapp",
-  meeting_booked: "whatsapp",
-};
-
 /**
  * GET /stats -- Funnel counts, activity counters, LinkedIn gauge
+ * Uses dashboard_stats() RPC for single DB round-trip.
  */
 router.get("/stats", async (req, res) => {
   try {
-    const { data: leads, error } = await supabase
-      .from("leads")
-      .select("status, created_at, invitation_sent_at");
+    const todayStart = getTodayStartParis().toISOString();
+    const weekStart = getWeekStartParis().toISOString();
+
+    const { data, error } = await supabase.rpc("dashboard_stats", {
+      p_today_start: todayStart,
+      p_week_start: weekStart,
+    });
 
     if (error) {
       console.error("Dashboard supabase error:", error.message);
       return res.status(500).json({ error: "Internal server error" });
     }
 
-    // Funnel counts
-    const funnel = { new: 0, invited: 0, connected: 0, email: 0, whatsapp: 0 };
-    for (const lead of leads) {
-      const stage = FUNNEL_MAP[lead.status];
-      if (stage) {
-        funnel[stage]++;
-      }
-    }
+    const funnel = data.funnel;
+    const activity = data.activity;
+    const linkedin = data.linkedin;
 
     // Conversions (percentage of leads that reached each stage or beyond)
     const total = funnel.new + funnel.invited + funnel.connected + funnel.email + funnel.whatsapp;
@@ -94,30 +79,11 @@ router.get("/stats", async (req, res) => {
       whatsapp_pct: pastConnected > 0 ? Math.round(funnel.whatsapp / pastConnected * 100) : 0,
     };
 
-    // Activity counters
-    const todayStart = getTodayStartParis().toISOString();
-    const weekStart = getWeekStartParis().toISOString();
-
-    let today = 0;
-    let week = 0;
-    for (const lead of leads) {
-      if (lead.created_at && lead.created_at >= todayStart) today++;
-      if (lead.created_at && lead.created_at >= weekStart) week++;
-    }
-
-    // LinkedIn gauge
-    let linkedinSent = 0;
-    for (const lead of leads) {
-      if (lead.invitation_sent_at && lead.invitation_sent_at >= todayStart) {
-        linkedinSent++;
-      }
-    }
-
     res.json({
       funnel,
       conversions,
-      activity: { today, week },
-      linkedin: { sent: linkedinSent, limit: 15 },
+      activity,
+      linkedin,
     });
   } catch (err) {
     console.error("Dashboard /stats error:", err.message);
@@ -127,61 +93,29 @@ router.get("/stats", async (req, res) => {
 
 /**
  * GET /charts -- Signal sources, ICP score histogram, 7-day trend
+ * Uses dashboard_charts() RPC for single DB round-trip.
  */
 router.get("/charts", async (req, res) => {
   try {
-    const { data: leads, error } = await supabase
-      .from("leads")
-      .select("signal_category, icp_score, created_at");
+    // Compute 7 days ago from today in Paris timezone
+    const now = new Date();
+    const sevenDaysAgo = new Date(now);
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+    const startDate = toParisDateStr(sevenDaysAgo) + "T00:00:00Z";
+
+    const { data, error } = await supabase.rpc("dashboard_charts", {
+      p_start_date: startDate,
+    });
 
     if (error) {
       console.error("Dashboard supabase error:", error.message);
       return res.status(500).json({ error: "Internal server error" });
     }
 
-    // Signal source breakdown
-    const sourceCounts = {};
-    for (const lead of leads) {
-      const cat = lead.signal_category || "unknown";
-      sourceCounts[cat] = (sourceCounts[cat] || 0) + 1;
-    }
-    const sources = Object.entries(sourceCounts).map(([name, value]) => ({ name, value }));
-
-    // ICP score histogram
-    const buckets = [
-      { range: "0-20", min: 0, max: 20, count: 0 },
-      { range: "20-40", min: 20, max: 40, count: 0 },
-      { range: "40-60", min: 40, max: 60, count: 0 },
-      { range: "60-80", min: 60, max: 80, count: 0 },
-      { range: "80-100", min: 80, max: 101, count: 0 },
-    ];
-    for (const lead of leads) {
-      const score = lead.icp_score;
-      if (score == null) continue;
-      for (const bucket of buckets) {
-        if (score >= bucket.min && score < bucket.max) {
-          bucket.count++;
-          break;
-        }
-      }
-    }
-    const scores = buckets.map(({ range, count }) => ({ range, count }));
-
-    // 7-day trend
-    const trend = [];
-    const now = new Date();
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(now);
-      d.setDate(d.getDate() - i);
-      const dateStr = toParisDateStr(d);
-      trend.push({ date: dateStr, count: 0 });
-    }
-    for (const lead of leads) {
-      if (!lead.created_at) continue;
-      const dateStr = toParisDateStr(new Date(lead.created_at));
-      const entry = trend.find((t) => t.date === dateStr);
-      if (entry) entry.count++;
-    }
+    // Map RPC response to match existing frontend response shape
+    const sources = data.signalSources;
+    const scores = data.icpHistogram;
+    const trend = data.weekTrend;
 
     res.json({ sources, scores, trend });
   } catch (err) {
@@ -192,6 +126,7 @@ router.get("/charts", async (req, res) => {
 
 /**
  * GET /cron -- Cron task monitoring
+ * Uses cron_last_runs() RPC for single DB round-trip instead of 6 sequential queries.
  */
 router.get("/cron", async (req, res) => {
   try {
@@ -204,26 +139,28 @@ router.get("/cron", async (req, res) => {
       { task: "task-f-briefing", label: "F - Briefing" },
     ];
 
-    const tasks = [];
-    for (const def of taskDefs) {
-      const { data, error } = await supabase
-        .from("logs")
-        .select("task, level, message, created_at")
-        .eq("task", def.task)
-        .order("created_at", { ascending: false })
-        .limit(1);
+    const { data: lastRuns, error } = await supabase.rpc("cron_last_runs");
 
-      if (error) {
-        tasks.push({ task: def.task, label: def.label, status: "error", lastRun: null });
-        continue;
+    if (error) {
+      console.error("Dashboard supabase error:", error.message);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+
+    // Index RPC results by task name for O(1) lookup
+    const runsByTask = {};
+    if (lastRuns) {
+      for (const run of lastRuns) {
+        runsByTask[run.task] = run;
+      }
+    }
+
+    const tasks = taskDefs.map((def) => {
+      const entry = runsByTask[def.task];
+
+      if (!entry) {
+        return { task: def.task, label: def.label, status: "never", lastRun: null };
       }
 
-      if (!data || data.length === 0) {
-        tasks.push({ task: def.task, label: def.label, status: "never", lastRun: null });
-        continue;
-      }
-
-      const entry = data[0];
       let status = "unknown";
       if (entry.message && entry.message.includes("completed")) {
         status = "ok";
@@ -236,13 +173,13 @@ router.get("/cron", async (req, res) => {
         status = "ok";
       }
 
-      tasks.push({
+      return {
         task: def.task,
         label: def.label,
         status,
         lastRun: entry.created_at,
-      });
-    }
+      };
+    });
 
     res.json({ tasks });
   } catch (err) {
