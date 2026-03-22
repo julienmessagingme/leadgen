@@ -13,7 +13,7 @@
 const { supabase } = require("../lib/supabase");
 const { getSentInvitations, sendMessage, sleep } = require("../lib/bereach");
 const { isSuppressed } = require("../lib/suppression");
-const { generateFollowUpMessage, loadTemplates } = require("../lib/message-generator");
+const { generateFollowUpMessage, isColdLead, loadTemplates } = require("../lib/message-generator");
 const { log } = require("../lib/logger");
 
 /**
@@ -164,7 +164,8 @@ module.exports = async function taskCFollowup(runId) {
           })
           .eq("id", connLead.id);
 
-        await log(runId, "task-c-followup", "info", "Follow-up sent to " + (connLead.full_name || connLead.id));
+        var isCold = isColdLead(connLead);
+        await log(runId, "task-c-followup", "info", "Follow-up sent to " + (connLead.full_name || connLead.id) + (isCold ? " (cold)" : ""));
         messagesSent++;
 
         // Rate limiting: 60-120s between messages (same as Task B)

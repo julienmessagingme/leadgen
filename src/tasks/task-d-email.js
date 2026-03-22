@@ -17,7 +17,7 @@ const { enrichContactInfo } = require("../lib/fullenrich");
 const { existsInHubspotByEmail } = require("../lib/hubspot");
 const { searchInbox, sleep } = require("../lib/bereach");
 const { isSuppressed } = require("../lib/suppression");
-const { generateEmail, loadTemplates } = require("../lib/message-generator");
+const { generateEmail, isColdLead, loadTemplates } = require("../lib/message-generator");
 const { sendEmail } = require("../lib/gmail");
 const { log } = require("../lib/logger");
 
@@ -36,7 +36,7 @@ async function selectLeads(runId) {
     .eq("status", "invitation_sent")
     .lte("invitation_sent_at", cutoff)
     .is("email_sent_at", null)
-    .in("tier", ["hot", "warm"])
+    .in("tier", ["hot", "warm", "cold"])
     .order("icp_score", { ascending: false })
     .limit(50);
 
@@ -256,7 +256,8 @@ module.exports = async function taskDEmail(runId) {
         .eq("id", lead.id);
 
       sent++;
-      await log(runId, TASK_NAME, "info", "Email sent successfully",
+      var isCold = isColdLead(lead);
+      await log(runId, TASK_NAME, "info", "Email sent successfully" + (isCold ? " (cold)" : ""),
         { lead_id: lead.id, email: email, message_id: messageId });
 
       // Rate limiting: 5-10s delay between emails

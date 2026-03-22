@@ -9,7 +9,7 @@
 const { supabase } = require("../lib/supabase");
 const { createWhatsAppTemplate } = require("../lib/messagingme");
 const { isSuppressed } = require("../lib/suppression");
-const { generateWhatsAppBody, loadTemplates } = require("../lib/message-generator");
+const { generateWhatsAppBody, isColdLead, loadTemplates } = require("../lib/message-generator");
 const { log } = require("../lib/logger");
 
 module.exports = async function taskEWhatsapp(runId) {
@@ -30,7 +30,7 @@ module.exports = async function taskEWhatsapp(runId) {
       .lte("email_sent_at", sevenDaysAgo)
       .is("whatsapp_template_created_at", null)
       .not("phone", "is", null)
-      .in("tier", ["hot", "warm"])
+      .in("tier", ["hot", "warm", "cold"])
       .limit(50);
 
     var { data: invitationLeads, error: err2 } = await supabase
@@ -40,7 +40,7 @@ module.exports = async function taskEWhatsapp(runId) {
       .lte("invitation_sent_at", fourteenDaysAgo)
       .is("whatsapp_template_created_at", null)
       .not("phone", "is", null)
-      .in("tier", ["hot", "warm"])
+      .in("tier", ["hot", "warm", "cold"])
       .limit(50);
 
     if (err1) {
@@ -114,7 +114,8 @@ module.exports = async function taskEWhatsapp(runId) {
           })
           .eq("id", lead.id);
 
-        await log(runId, "task-e-whatsapp", "info", "Template created for " + lead.full_name + ": " + templateName);
+        var isCold = isColdLead(lead);
+        await log(runId, "task-e-whatsapp", "info", "Template created for " + lead.full_name + ": " + templateName + (isCold ? " (cold)" : ""));
         created++;
       } catch (err) {
         await log(runId, "task-e-whatsapp", "error", "Failed for " + lead.full_name + ": " + err.message);
