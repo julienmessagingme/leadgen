@@ -1,6 +1,7 @@
 /**
  * Browser-based signal collector using Playwright.
  * Scrapes likers/commenters from competitor_page and influencer LinkedIn pages.
+ * Collects post authors from keyword search and decision-makers from job search.
  * Collects from the reactions popup first screen only (no scrolling).
  *
  * Uses browser.js infrastructure (Playwright, cookies, rate limiting, human delays).
@@ -452,4 +453,450 @@ async function collectBrowserPageSignals(runId) {
   return allSignals;
 }
 
-module.exports = { collectBrowserPageSignals };
+/**
+ * Format a raw extracted profile into a signal object.
+ * Shared helper for keyword and job signal formatters.
+ *
+ * @param {object} profile - { name, headline, profileUrl }
+ * @param {string} signalType - e.g. "post", "job"
+ * @param {string} signalCategory - e.g. "sujet", "job"
+ * @param {string} signalSource - Human-readable source label
+ * @param {string|null} sequenceId - Sequence ID from watchlist
+ * @returns {object} Formatted signal object
+ */
+function formatBrowserSignal(profile, signalType, signalCategory, signalSource, sequenceId) {
+  var firstName = null;
+  var lastName = null;
+
+  if (profile.name) {
+    var parts = profile.name.trim().split(/\s+/);
+    firstName = parts[0] || null;
+    lastName = parts.slice(1).join(" ") || null;
+  }
+
+  return {
+    linkedin_url: profile.profileUrl || null,
+    first_name: firstName,
+    last_name: lastName,
+    headline: profile.headline || null,
+    company_name: null,
+    signal_type: signalType,
+    signal_category: signalCategory,
+    signal_source: signalSource,
+    signal_date: new Date().toISOString(),
+    sequence_id: sequenceId || null,
+    source_origin: "browser",
+  };
+}
+
+/**
+ * Collect signals from LinkedIn post search by keyword.
+ * Searches for posts matching each active keyword watchlist entry,
+ * extracts post authors (name, headline, profile URL) from the
+ * first page of search results only (conserves 100-page budget).
+ *
+ * @param {import('playwright').Page} page - Playwright page (browser already created)
+ * @param {string} runId - Current run ID for logging
+ * @returns {Promise<Array>} Formatted signal objects
+ */
+async function collectBrowserKeywordSignals(page, runId) {
+  var allSignals = [];
+
+  // Load keyword watchlist entries
+  var { data: sources, error } = await supabase
+    .from("watchlist")
+    .select("id, source_type, source_label, keywords, sequence_id")
+    .eq("source_type", "keyword")
+    .eq("is_active", true);
+
+  if (error) {
+    await log(runId, "browser-signal-collector", "error",
+      "Failed to load keyword watchlist: " + error.message);
+    return [];
+  }
+
+  if (!sources || sources.length === 0) {
+    await log(runId, "browser-signal-collector", "info",
+      "No active keyword sources in watchlist");
+    return [];
+  }
+
+  await log(runId, "browser-signal-collector", "info",
+    "Keyword post search: " + sources.length + " source(s) to process");
+
+  for (var i = 0; i < sources.length; i++) {
+    var source = sources[i];
+    try {
+      var searchUrl = "https://www.linkedin.com/search/results/content/?keywords=" +
+        encodeURIComponent(source.keywords);
+
+      await navigateWithLimits(page, searchUrl);
+      await dismissPopups(page);
+
+      // Wait for search results to load
+      await page.waitForSelector(
+        '.search-results-container, .reusable-search__entity-result-list, [data-chameleon-result-urn]',
+        { timeout: 10000 }
+      ).catch(function () {
+        // Fallback: wait a bit and continue anyway
+      });
+
+      await humanDelay(1000, 2000);
+
+      // Extract post authors from search result cards on first page only
+      // LinkedIn post search results show author name, headline, and profile link
+      // CSS selectors validated against current LinkedIn UI (March 2026):
+      //   - .reusable-search__result-container: search result card wrapper
+      //   - .update-components-actor: post author block in feed-style results
+      //   - a[href*="/in/"]: profile link for personal profiles
+      var authors = await page.evaluate(function () {
+        var results = [];
+
+        // Try multiple selector strategies for post search results
+        var cards = document.querySelectorAll(
+          '.reusable-search__result-container, .entity-result, [data-chameleon-result-urn]'
+        );
+
+        if (cards.length === 0) {
+          // Fallback: look for feed-type post containers in search
+          cards = document.querySelectorAll(
+            '.feed-shared-update-v2, .update-components-actor'
+          );
+        }
+
+        cards.forEach(function (card) {
+          try {
+            // Find author link - typically contains /in/ profile URL
+            var authorLink = card.querySelector(
+              'a[href*="/in/"], .update-components-actor__meta-link, .app-aware-link[href*="/in/"]'
+            );
+            if (!authorLink) return;
+
+            var profileUrl = authorLink.href || "";
+            // Clean URL - extract just the /in/username part
+            var match = profileUrl.match(/linkedin\.com\/in\/[^/?]+/);
+            profileUrl = match ? "https://www." + match[0] : profileUrl;
+
+            // Get name from the link or nearby element
+            var nameEl = card.querySelector(
+              '.update-components-actor__name .visually-hidden, ' +
+              '.entity-result__title-text a span[aria-hidden="true"], ' +
+              '.update-components-actor__title .visually-hidden'
+            ) || authorLink.querySelector('span[aria-hidden="true"]') || authorLink;
+            var name = (nameEl.textContent || "").trim();
+
+            // Get headline
+            var headlineEl = card.querySelector(
+              '.update-components-actor__description, ' +
+              '.entity-result__primary-subtitle, ' +
+              '.update-components-actor__subtitle'
+            );
+            var headline = headlineEl ? headlineEl.textContent.trim() : null;
+
+            // Skip company posts (no /in/ profile URL) and posts without clear author
+            if (name && profileUrl.indexOf("/in/") !== -1) {
+              results.push({
+                name: name,
+                headline: headline,
+                profileUrl: profileUrl,
+              });
+            }
+          } catch (_) {
+            // Skip this card on error
+          }
+        });
+
+        return results;
+      });
+
+      // Deduplicate by profile URL within this batch
+      var seen = {};
+      var uniqueAuthors = [];
+      for (var j = 0; j < authors.length; j++) {
+        var key = authors[j].profileUrl;
+        if (key && !seen[key]) {
+          seen[key] = true;
+          uniqueAuthors.push(authors[j]);
+        }
+      }
+
+      var signalSource = source.source_label || source.keywords;
+
+      for (var k = 0; k < uniqueAuthors.length; k++) {
+        allSignals.push(formatBrowserSignal(
+          uniqueAuthors[k], "post", "sujet", signalSource, source.sequence_id
+        ));
+      }
+
+      await log(runId, "browser-signal-collector", "info",
+        "Keyword '" + source.keywords + "': " + uniqueAuthors.length + " authors extracted");
+
+    } catch (err) {
+      if (err.message && err.message.indexOf("Daily page limit") !== -1) {
+        await log(runId, "browser-signal-collector", "warn",
+          "Rate limit reached during keyword search - stopping with partial results");
+        break;
+      }
+      await log(runId, "browser-signal-collector", "error",
+        "Keyword source '" + (source.source_label || source.keywords) + "' failed: " + err.message);
+    }
+  }
+
+  await log(runId, "browser-signal-collector", "info",
+    "Keyword post search complete: " + allSignals.length + " total signals");
+
+  return allSignals;
+}
+
+/**
+ * Collect signals from LinkedIn Jobs search by job keyword.
+ * For each active job_keyword watchlist entry:
+ *   1. Search LinkedIn Jobs for the keyword
+ *   2. Extract company names from first page of job results
+ *   3. For top 3 companies, search for CX/digital decision-makers via post search
+ *   4. Return formatted signals with signal_type:"job"
+ *
+ * Uses the post-search approach to find decision-makers,
+ * mirroring the Bereach collectJobSignals strategy in signal-collector.js.
+ *
+ * @param {import('playwright').Page} page - Playwright page (browser already created)
+ * @param {string} runId - Current run ID for logging
+ * @returns {Promise<Array>} Formatted signal objects
+ */
+async function collectBrowserJobSignals(page, runId) {
+  var allSignals = [];
+
+  // Load job_keyword watchlist entries
+  var { data: sources, error } = await supabase
+    .from("watchlist")
+    .select("id, source_type, source_label, keywords, sequence_id")
+    .eq("source_type", "job_keyword")
+    .eq("is_active", true);
+
+  if (error) {
+    await log(runId, "browser-signal-collector", "error",
+      "Failed to load job_keyword watchlist: " + error.message);
+    return [];
+  }
+
+  if (!sources || sources.length === 0) {
+    await log(runId, "browser-signal-collector", "info",
+      "No active job_keyword sources in watchlist");
+    return [];
+  }
+
+  await log(runId, "browser-signal-collector", "info",
+    "Job keyword search: " + sources.length + " source(s) to process");
+
+  for (var i = 0; i < sources.length; i++) {
+    var source = sources[i];
+    try {
+      // Step 1: Search LinkedIn Jobs
+      var jobSearchUrl = "https://www.linkedin.com/jobs/search/?keywords=" +
+        encodeURIComponent(source.keywords);
+
+      await navigateWithLimits(page, jobSearchUrl);
+      await dismissPopups(page);
+
+      // Wait for job results to load
+      await page.waitForSelector(
+        '.jobs-search-results-list, .jobs-search__results-list, .scaffold-layout__list-container',
+        { timeout: 10000 }
+      ).catch(function () {
+        // Continue anyway
+      });
+
+      await humanDelay(1000, 2000);
+
+      // Step 2: Extract company names and job titles from first page
+      // LinkedIn Jobs search: each job card shows company name and job title
+      var jobResults = await page.evaluate(function () {
+        var jobs = [];
+
+        // Job card selectors (multiple strategies)
+        var cards = document.querySelectorAll(
+          '.job-card-container, .jobs-search-results__list-item, .scaffold-layout__list-item, [data-job-id]'
+        );
+
+        if (cards.length === 0) {
+          // Fallback selectors
+          cards = document.querySelectorAll(
+            '.base-card, .result-card, li[class*="jobs-search"]'
+          );
+        }
+
+        cards.forEach(function (card) {
+          try {
+            // Company name - typically in a subtitle or secondary text element
+            var companyEl = card.querySelector(
+              '.job-card-container__primary-description, ' +
+              '.base-search-card__subtitle, ' +
+              '.artdeco-entity-lockup__subtitle, ' +
+              'a[data-tracking-control-name*="company"], ' +
+              '.job-card-container__company-name'
+            );
+            var companyName = companyEl ? companyEl.textContent.trim() : null;
+
+            // Job title
+            var titleEl = card.querySelector(
+              '.job-card-list__title, ' +
+              '.base-search-card__title, ' +
+              '.artdeco-entity-lockup__title, ' +
+              'a[class*="job-card-list__title"]'
+            );
+            var jobTitle = titleEl ? titleEl.textContent.trim() : null;
+
+            if (companyName) {
+              jobs.push({
+                companyName: companyName,
+                jobTitle: jobTitle || "unknown",
+              });
+            }
+          } catch (_) {
+            // Skip this card
+          }
+        });
+
+        return jobs;
+      });
+
+      // Deduplicate companies and take top 3 to conserve page budget
+      var seenCompanies = {};
+      var uniqueJobs = [];
+      for (var j = 0; j < jobResults.length; j++) {
+        var cn = jobResults[j].companyName.toLowerCase();
+        if (!seenCompanies[cn] && uniqueJobs.length < 3) {
+          seenCompanies[cn] = true;
+          uniqueJobs.push(jobResults[j]);
+        }
+      }
+
+      await log(runId, "browser-signal-collector", "info",
+        "Job keyword '" + source.keywords + "': " + jobResults.length +
+        " jobs found, processing top " + uniqueJobs.length + " companies");
+
+      // Step 3: For each company, search for decision-makers via post search
+      // Uses the alternative approach: search LinkedIn posts for company + decision-maker titles
+      for (var k = 0; k < uniqueJobs.length; k++) {
+        var job = uniqueJobs[k];
+        try {
+          // Decision-maker search query (mirrors Bereach strategy)
+          var dmQuery = '"' + job.companyName + '" (directeur experience client OR head of CX OR directeur digital OR chief digital officer OR VP customer experience OR responsable experience client)';
+          var dmSearchUrl = "https://www.linkedin.com/search/results/content/?keywords=" +
+            encodeURIComponent(dmQuery);
+
+          await navigateWithLimits(page, dmSearchUrl);
+          await dismissPopups(page);
+
+          await page.waitForSelector(
+            '.search-results-container, .reusable-search__entity-result-list, [data-chameleon-result-urn]',
+            { timeout: 10000 }
+          ).catch(function () {
+            // Continue anyway
+          });
+
+          await humanDelay(1000, 2000);
+
+          // Extract post authors who might be decision-makers at this company
+          var dmAuthors = await page.evaluate(function (targetCompany) {
+            var results = [];
+            var cards = document.querySelectorAll(
+              '.reusable-search__result-container, .entity-result, [data-chameleon-result-urn], .feed-shared-update-v2, .update-components-actor'
+            );
+
+            cards.forEach(function (card) {
+              try {
+                var authorLink = card.querySelector(
+                  'a[href*="/in/"], .update-components-actor__meta-link, .app-aware-link[href*="/in/"]'
+                );
+                if (!authorLink) return;
+
+                var profileUrl = authorLink.href || "";
+                var match = profileUrl.match(/linkedin\.com\/in\/[^/?]+/);
+                profileUrl = match ? "https://www." + match[0] : profileUrl;
+
+                var nameEl = card.querySelector(
+                  '.update-components-actor__name .visually-hidden, ' +
+                  '.entity-result__title-text a span[aria-hidden="true"], ' +
+                  '.update-components-actor__title .visually-hidden'
+                ) || authorLink.querySelector('span[aria-hidden="true"]') || authorLink;
+                var name = (nameEl.textContent || "").trim();
+
+                var headlineEl = card.querySelector(
+                  '.update-components-actor__description, ' +
+                  '.entity-result__primary-subtitle, ' +
+                  '.update-components-actor__subtitle'
+                );
+                var headline = headlineEl ? headlineEl.textContent.trim() : null;
+
+                // Check if headline mentions the target company
+                var headlineLower = (headline || "").toLowerCase();
+                var companyLower = targetCompany.toLowerCase();
+                var isMatch = headlineLower.indexOf(companyLower) !== -1;
+
+                if (name && profileUrl.indexOf("/in/") !== -1 && isMatch) {
+                  results.push({
+                    name: name,
+                    headline: headline,
+                    profileUrl: profileUrl,
+                  });
+                }
+              } catch (_) {
+                // Skip
+              }
+            });
+
+            return results;
+          }, job.companyName);
+
+          if (dmAuthors.length === 0) {
+            await log(runId, "browser-signal-collector", "info",
+              "No decision-maker found for " + job.companyName);
+            continue;
+          }
+
+          // Format decision-maker signals
+          var signalSource = (source.source_label || "job") + " | " + job.jobTitle + " @ " + job.companyName;
+
+          for (var m = 0; m < dmAuthors.length; m++) {
+            allSignals.push(formatBrowserSignal(
+              dmAuthors[m], "job", "job", signalSource, source.sequence_id
+            ));
+          }
+
+          await log(runId, "browser-signal-collector", "info",
+            "Company '" + job.companyName + "': " + dmAuthors.length + " decision-maker(s) found");
+
+        } catch (err) {
+          if (err.message && err.message.indexOf("Daily page limit") !== -1) {
+            await log(runId, "browser-signal-collector", "warn",
+              "Rate limit reached during job DM search - stopping with partial results");
+            return allSignals;
+          }
+          await log(runId, "browser-signal-collector", "error",
+            "Decision-maker lookup failed for " + job.companyName + ": " + err.message);
+        }
+      }
+
+    } catch (err) {
+      if (err.message && err.message.indexOf("Daily page limit") !== -1) {
+        await log(runId, "browser-signal-collector", "warn",
+          "Rate limit reached during job search - stopping with partial results");
+        break;
+      }
+      await log(runId, "browser-signal-collector", "error",
+        "Job source '" + (source.source_label || source.keywords) + "' failed: " + err.message);
+    }
+  }
+
+  await log(runId, "browser-signal-collector", "info",
+    "Job keyword search complete: " + allSignals.length + " total signals");
+
+  return allSignals;
+}
+
+module.exports = {
+  collectBrowserPageSignals,
+  collectBrowserKeywordSignals,
+  collectBrowserJobSignals,
+};
