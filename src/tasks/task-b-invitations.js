@@ -16,7 +16,7 @@
 const { supabase } = require("../lib/supabase");
 const { checkLimits, connectProfile, sleep } = require("../lib/bereach");
 const { isSuppressed } = require("../lib/suppression");
-const { generateInvitationNote } = require("../lib/message-generator");
+const { generateInvitationNote, loadTemplates } = require("../lib/message-generator");
 const { log } = require("../lib/logger");
 
 /**
@@ -90,7 +90,7 @@ module.exports = async function taskBInvitations(runId) {
   // Step 3: Select leads to invite (hot/warm, ordered by ICP score)
   var { data: leads, error: selectErr } = await supabase
     .from("leads")
-    .select("*")
+    .select("id, full_name, first_name, last_name, linkedin_url, headline, company_name, signal_type, signal_detail, metadata, email, icp_score, tier, status, last_processed_run_id")
     .in("status", ["new", "enriched", "scored"])
     .in("tier", ["hot", "warm"])
     .order("icp_score", { ascending: false })
@@ -108,22 +108,16 @@ module.exports = async function taskBInvitations(runId) {
 
   await log(runId, "task-b-invitations", "info", "Selected " + leads.length + " leads for invitation");
 
+  // Cache templates once before lead loop (PERF-08)
+  var templates = await loadTemplates();
+
   // Step 4: Process each lead
   for (var i = 0; i < leads.length; i++) {
     var lead = leads[i];
 
     try {
       // LIN-08: Idempotence check -- skip if already processed in this run
-      var { data: existingLog } = await supabase
-        .from("logs")
-        .select("id")
-        .eq("run_id", runId)
-        .eq("task", "task-b-invitations")
-        .eq("level", "info")
-        .ilike("message", "%Invitation sent%" + (lead.full_name || lead.id) + "%")
-        .limit(1);
-
-      if (existingLog && existingLog.length > 0) {
+      if (lead.last_processed_run_id === runId) {
         skipped++;
         continue;
       }
@@ -136,7 +130,7 @@ module.exports = async function taskBInvitations(runId) {
       }
 
       // LIN-02: Generate personalized invitation note
-      var note = await generateInvitationNote(lead);
+      var note = await generateInvitationNote(lead, templates);
       if (!note) {
         await log(runId, "task-b-invitations", "warn", "Failed to generate invitation note for " + (lead.full_name || lead.id));
         skipped++;
@@ -158,6 +152,7 @@ module.exports = async function taskBInvitations(runId) {
           status: "invitation_sent",
           invitation_sent_at: new Date().toISOString(),
           metadata: updatedMetadata,
+          last_processed_run_id: runId,
         })
         .eq("id", lead.id);
 

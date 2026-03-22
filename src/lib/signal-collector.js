@@ -254,7 +254,7 @@ async function collectSignals(runId) {
   // Load active watchlist entries from Supabase
   var { data: sources, error } = await supabase
     .from("watchlist")
-    .select("*")
+    .select("id, source_type, source_label, source_url, keywords, sequence_id")
     .eq("is_active", true);
 
   if (error) {

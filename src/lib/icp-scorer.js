@@ -13,7 +13,7 @@ function sanitizeForPrompt(value, maxLen = 200) {
  * @returns {Array} Array of rule objects
  */
 async function loadIcpRules() {
-  const { data, error } = await supabase.from("icp_rules").select("*");
+  const { data, error } = await supabase.from("icp_rules").select("category, value, key, numeric_value, threshold");
   if (error) {
     console.error("Failed to load ICP rules:", error.message);
     return [];

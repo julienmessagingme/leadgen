@@ -17,9 +17,10 @@ module.exports = async function whatsappPoll(runId) {
     // Query leads with pending templates
     var { data: leads, error } = await supabase
       .from("leads")
-      .select("*")
+      .select("id, full_name, phone, email, linkedin_url, metadata, whatsapp_template_created_at, status")
       .not("whatsapp_template_created_at", "is", null)
-      .filter("metadata->>template_status", "eq", "pending");
+      .filter("metadata->>template_status", "eq", "pending")
+      .limit(100);
 
     if (error) {
       await log(runId, "whatsapp-poll", "error", "Failed to query pending leads: " + error.message);

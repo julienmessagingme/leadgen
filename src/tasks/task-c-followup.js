@@ -13,7 +13,7 @@
 const { supabase } = require("../lib/supabase");
 const { getSentInvitations, sendMessage, sleep } = require("../lib/bereach");
 const { isSuppressed } = require("../lib/suppression");
-const { generateFollowUpMessage } = require("../lib/message-generator");
+const { generateFollowUpMessage, loadTemplates } = require("../lib/message-generator");
 const { log } = require("../lib/logger");
 
 /**
@@ -55,8 +55,9 @@ module.exports = async function taskCFollowup(runId) {
     // Get leads with status 'invitation_sent'
     var { data: invitedLeads, error: invitedErr } = await supabase
       .from("leads")
-      .select("*")
-      .eq("status", "invitation_sent");
+      .select("id, full_name, first_name, last_name, linkedin_url, headline, company_name, signal_type, signal_detail, metadata, email, status, last_processed_run_id")
+      .eq("status", "invitation_sent")
+      .limit(200);
 
     if (invitedErr) {
       await log(runId, "task-c-followup", "error", "Failed to query invited leads: " + invitedErr.message);
@@ -102,9 +103,10 @@ module.exports = async function taskCFollowup(runId) {
   // Query connected leads that haven't received a follow-up yet
   var { data: connectedLeads, error: connectedErr } = await supabase
     .from("leads")
-    .select("*")
+    .select("id, full_name, first_name, last_name, linkedin_url, headline, company_name, signal_type, signal_detail, metadata, email, follow_up_sent_at, last_processed_run_id")
     .eq("status", "connected")
-    .is("follow_up_sent_at", null);
+    .is("follow_up_sent_at", null)
+    .limit(50);
 
   if (connectedErr) {
     await log(runId, "task-c-followup", "error", "Failed to query connected leads: " + connectedErr.message);
@@ -116,21 +118,15 @@ module.exports = async function taskCFollowup(runId) {
   } else {
     await log(runId, "task-c-followup", "info", "Found " + connectedLeads.length + " connected leads for follow-up");
 
+    // Cache templates once before lead loop (PERF-08)
+    var templates = await loadTemplates();
+
     for (var j = 0; j < connectedLeads.length; j++) {
       var connLead = connectedLeads[j];
 
       try {
         // LIN-08: Idempotence check -- skip if already processed in this run
-        var { data: existingLog } = await supabase
-          .from("logs")
-          .select("id")
-          .eq("run_id", runId)
-          .eq("task", "task-c-followup")
-          .eq("level", "info")
-          .ilike("message", "%Follow-up sent%" + (connLead.full_name || connLead.id) + "%")
-          .limit(1);
-
-        if (existingLog && existingLog.length > 0) {
+        if (connLead.last_processed_run_id === runId) {
           skipped++;
           continue;
         }
@@ -143,7 +139,7 @@ module.exports = async function taskCFollowup(runId) {
         }
 
         // Generate follow-up message via Claude Sonnet
-        var message = await generateFollowUpMessage(connLead);
+        var message = await generateFollowUpMessage(connLead, templates);
         if (!message) {
           await log(runId, "task-c-followup", "warn", "Failed to generate follow-up message for " + (connLead.full_name || connLead.id));
           skipped++;
@@ -164,6 +160,7 @@ module.exports = async function taskCFollowup(runId) {
           .update({
             follow_up_sent_at: new Date().toISOString(),
             metadata: updatedMetadata,
+            last_processed_run_id: runId,
           })
           .eq("id", connLead.id);
 

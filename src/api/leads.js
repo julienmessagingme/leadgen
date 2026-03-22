@@ -353,10 +353,10 @@ router.post("/bulk-action", async (req, res) => {
       return res.status(400).json({ error: "Invalid action. Allowed: pause, resume, exclude" });
     }
 
-    // Fetch all leads by IDs
+    // Fetch all leads by IDs (only columns needed for bulk actions)
     const { data: leads, error: fetchErr } = await supabase
       .from("leads")
-      .select("*")
+      .select("id, email, linkedin_url, metadata")
       .in("id", ids);
 
     if (fetchErr) {

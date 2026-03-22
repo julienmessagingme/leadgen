@@ -24,7 +24,7 @@ module.exports = async function taskFBriefing(runId) {
     // INMAIL-01: Select top 3 leads with score >= 80
     var { data: leads, error } = await supabase
       .from("leads")
-      .select("*")
+      .select("id, full_name, headline, company_name, company_sector, signal_type, signal_source, signal_detail, linkedin_url, icp_score")
       .gte("icp_score", 80)
       .in("status", ["prospected", "invitation_sent", "new", "enriched", "scored"])
       .order("icp_score", { ascending: false })

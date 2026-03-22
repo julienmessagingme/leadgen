@@ -17,7 +17,7 @@ const { enrichContactInfo } = require("../lib/fullenrich");
 const { existsInHubspotByEmail } = require("../lib/hubspot");
 const { searchInbox, sleep } = require("../lib/bereach");
 const { isSuppressed } = require("../lib/suppression");
-const { generateEmail } = require("../lib/message-generator");
+const { generateEmail, loadTemplates } = require("../lib/message-generator");
 const { sendEmail } = require("../lib/gmail");
 const { log } = require("../lib/logger");
 
@@ -32,12 +32,13 @@ async function selectLeads(runId) {
 
   var { data, error } = await supabase
     .from("leads")
-    .select("*")
+    .select("id, full_name, first_name, last_name, linkedin_url, headline, company_name, signal_type, signal_detail, metadata, email, icp_score, tier")
     .eq("status", "invitation_sent")
     .lte("invitation_sent_at", cutoff)
     .is("email_sent_at", null)
     .in("tier", ["hot", "warm"])
-    .order("icp_score", { ascending: false });
+    .order("icp_score", { ascending: false })
+    .limit(50);
 
   if (error) {
     await log(runId, TASK_NAME, "error", "Lead selection query failed: " + error.message);
@@ -190,6 +191,9 @@ module.exports = async function taskDEmail(runId) {
 
   await log(runId, TASK_NAME, "info", "Found " + leads.length + " leads eligible for email relance");
 
+  // Cache templates once before lead loop (PERF-08)
+  var templates = await loadTemplates();
+
   var sent = 0;
   var skipped = { no_email: 0, hubspot: 0, replied: 0, suppressed: 0, gen_failed: 0, send_failed: 0 };
 
@@ -226,7 +230,7 @@ module.exports = async function taskDEmail(runId) {
       }
 
       // All 4 checks passed -- generate email
-      var emailContent = await generateEmail(lead);
+      var emailContent = await generateEmail(lead, templates);
       if (!emailContent) {
         skipped.gen_failed++;
         await log(runId, TASK_NAME, "warn", "Email generation failed, skipping lead",

@@ -94,10 +94,10 @@ var SYSTEM = "Tu es Julien Poupard, DG de MessagingMe (plateforme de messaging W
  * @param {object} lead - Lead data
  * @returns {Promise<string|null>} Invitation note (max 280 chars) or null on error
  */
-async function generateInvitationNote(lead) {
+async function generateInvitationNote(lead, templates) {
   try {
-    var templates = await loadTemplates();
-    var instructions = templates.template_invitation || DEFAULT_INVITATION_TEMPLATE;
+    var tpl = templates || (await loadTemplates());
+    var instructions = tpl.template_invitation || DEFAULT_INVITATION_TEMPLATE;
 
     var result = await callClaude(SYSTEM,
       instructions + "\n\n" +
@@ -123,10 +123,10 @@ async function generateInvitationNote(lead) {
  * @param {object} lead - Lead data
  * @returns {Promise<string|null>} Follow-up message or null on error
  */
-async function generateFollowUpMessage(lead) {
+async function generateFollowUpMessage(lead, templates) {
   try {
-    var templates = await loadTemplates();
-    var instructions = templates.template_followup || DEFAULT_FOLLOWUP_TEMPLATE;
+    var tpl = templates || (await loadTemplates());
+    var instructions = tpl.template_followup || DEFAULT_FOLLOWUP_TEMPLATE;
 
     var result = await callClaude(SYSTEM,
       instructions + "\n\n" +
@@ -148,11 +148,11 @@ async function generateFollowUpMessage(lead) {
  * @param {object} lead - Lead data
  * @returns {Promise<{subject: string, body: string}|null>} Email object or null on error
  */
-async function generateEmail(lead) {
+async function generateEmail(lead, templates) {
   try {
     var calendlyUrl = process.env.CALENDLY_URL || "https://calendly.com/julien-messagingme";
-    var templates = await loadTemplates();
-    var instructions = (templates.template_email || DEFAULT_EMAIL_TEMPLATE).replace("{calendlyUrl}", calendlyUrl);
+    var tpl = templates || (await loadTemplates());
+    var instructions = (tpl.template_email || DEFAULT_EMAIL_TEMPLATE).replace("{calendlyUrl}", calendlyUrl);
 
     var result = await callClaude(SYSTEM,
       instructions + "\n\n" +
@@ -176,10 +176,10 @@ async function generateEmail(lead) {
  * @param {object} lead - Lead data
  * @returns {Promise<string|null>} WhatsApp body text or null on error
  */
-async function generateWhatsAppBody(lead) {
+async function generateWhatsAppBody(lead, templates) {
   try {
-    var templates = await loadTemplates();
-    var instructions = templates.template_whatsapp || DEFAULT_WHATSAPP_TEMPLATE;
+    var tpl = templates || (await loadTemplates());
+    var instructions = tpl.template_whatsapp || DEFAULT_WHATSAPP_TEMPLATE;
 
     var result = await callClaude(SYSTEM,
       instructions + "\n\n" +
@@ -226,6 +226,7 @@ async function generateInMail(lead) {
 }
 
 module.exports = {
+  loadTemplates,
   generateInvitationNote,
   generateFollowUpMessage,
   generateEmail,

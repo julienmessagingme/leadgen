@@ -9,7 +9,7 @@
 const { supabase } = require("../lib/supabase");
 const { createWhatsAppTemplate } = require("../lib/messagingme");
 const { isSuppressed } = require("../lib/suppression");
-const { generateWhatsAppBody } = require("../lib/message-generator");
+const { generateWhatsAppBody, loadTemplates } = require("../lib/message-generator");
 const { log } = require("../lib/logger");
 
 module.exports = async function taskEWhatsapp(runId) {
@@ -25,21 +25,23 @@ module.exports = async function taskEWhatsapp(runId) {
     // Two paths: email_sent leads at J+7 after email, or invitation_sent leads at J+14
     var { data: emailLeads, error: err1 } = await supabase
       .from("leads")
-      .select("*")
+      .select("id, full_name, first_name, last_name, linkedin_url, phone, headline, company_name, signal_type, signal_detail, metadata, email, tier")
       .eq("status", "email_sent")
       .lte("email_sent_at", sevenDaysAgo)
       .is("whatsapp_template_created_at", null)
       .not("phone", "is", null)
-      .in("tier", ["hot", "warm"]);
+      .in("tier", ["hot", "warm"])
+      .limit(50);
 
     var { data: invitationLeads, error: err2 } = await supabase
       .from("leads")
-      .select("*")
+      .select("id, full_name, first_name, last_name, linkedin_url, phone, headline, company_name, signal_type, signal_detail, metadata, email, tier")
       .eq("status", "invitation_sent")
       .lte("invitation_sent_at", fourteenDaysAgo)
       .is("whatsapp_template_created_at", null)
       .not("phone", "is", null)
-      .in("tier", ["hot", "warm"]);
+      .in("tier", ["hot", "warm"])
+      .limit(50);
 
     if (err1) {
       await log(runId, "task-e-whatsapp", "error", "Failed to query email leads: " + err1.message);
@@ -66,6 +68,9 @@ module.exports = async function taskEWhatsapp(runId) {
 
     await log(runId, "task-e-whatsapp", "info", "Found " + leads.length + " leads for WhatsApp J+14");
 
+    // Cache templates once before lead loop (PERF-08)
+    var templates = await loadTemplates();
+
     var created = 0;
     var skipped = 0;
 
@@ -80,7 +85,7 @@ module.exports = async function taskEWhatsapp(runId) {
         }
 
         // WA-05: Generate WhatsApp body via Claude Sonnet
-        var body = await generateWhatsAppBody(lead);
+        var body = await generateWhatsAppBody(lead, templates);
         if (!body) {
           await log(runId, "task-e-whatsapp", "warn", "WhatsApp body generation returned null for " + lead.full_name);
           skipped++;
