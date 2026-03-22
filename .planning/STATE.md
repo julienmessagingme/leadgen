@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-03-22)
 
 ## Current Position
 
-Phase: 12 of 14 (Browser Signal Collector)
-Plan: 2 of 3 in current phase
-Status: In Progress
-Last activity: 2026-03-22 — Completed 12-02 (Keyword & Job keyword browser scrapers)
+Phase: 12 of 14 (Browser Signal Collector) -- COMPLETE
+Plan: 3 of 3 in current phase
+Status: Phase Complete
+Last activity: 2026-03-22 — Completed 12-03 (Task A integration with browser collection)
 
-Progress: [####░░░░░░] 40% (4/10 plans) | v1.0: 14 plans | v1.1: 11 plans | v1.2: 7 plans
+Progress: [#####░░░░░] 50% (5/10 plans) | v1.0: 14 plans | v1.1: 11 plans | v1.2: 7 plans
 
 ## Performance Metrics
 
@@ -51,6 +51,10 @@ See PROJECT.md Key Decisions table for full log.
 - 12-01: source_origin: "browser" field on all browser-collected signals
 - 12-02: First page only for keyword search, top 3 companies for job search (budget conservation)
 - 12-02: Decision-maker lookup via post search (mirrors Bereach approach, not company People tab)
+- 12-03: collectAllBrowserSignals creates single browser session for all 3 scrapers
+- 12-03: Cookie expiry sends email alert to Julien via gmail.js
+- 12-03: source_origin stored in leads.metadata jsonb (no schema migration)
+- 12-03: Cross-source dedup handled by existing dedup.js pipeline
 
 ### Blockers/Concerns
 
@@ -60,5 +64,5 @@ See PROJECT.md Key Decisions table for full log.
 ## Session Continuity
 
 Last session: 2026-03-22
-Stopped at: Completed 12-02-PLAN.md (Keyword & Job keyword browser scrapers)
+Stopped at: Completed 12-03-PLAN.md (Task A integration with browser collection)
 Resume file: None

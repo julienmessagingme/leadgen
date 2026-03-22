@@ -21,9 +21,9 @@ Requirements for v1.3 Browser Automation & Cold Outbound. Each maps to roadmap p
 - [x] **BSIG-02**: Collecte des likers/commenters sur posts influenceurs via browser (influencer)
 - [x] **BSIG-03**: Recherche de posts par mots-cles et extraction des auteurs via browser (keyword)
 - [x] **BSIG-04**: Recherche d'offres d'emploi et identification des decideurs via browser (job_keyword)
-- [ ] **BSIG-05**: Dedup cross-source : skip lead si deja trouve par Bereach (meme jour, meme linkedin_url)
-- [ ] **BSIG-06**: Chaque lead tagge source browser ou source bereach en metadata
-- [ ] **BSIG-07**: Task A execute Bereach ET browser en parallele ou sequentiel chaque matin
+- [x] **BSIG-05**: Dedup cross-source : skip lead si deja trouve par Bereach (meme jour, meme linkedin_url)
+- [x] **BSIG-06**: Chaque lead tagge source browser ou source bereach en metadata
+- [x] **BSIG-07**: Task A execute Bereach ET browser en parallele ou sequentiel chaque matin
 
 ### Cold Outbound
 
@@ -84,9 +84,9 @@ Deferred to future release.
 | BSIG-02 | Phase 12 | Complete |
 | BSIG-03 | Phase 12 | Complete |
 | BSIG-04 | Phase 12 | Complete |
-| BSIG-05 | Phase 12 | Pending |
-| BSIG-06 | Phase 12 | Pending |
-| BSIG-07 | Phase 12 | Pending |
+| BSIG-05 | Phase 12 | Complete |
+| BSIG-06 | Phase 12 | Complete |
+| BSIG-07 | Phase 12 | Complete |
 | COLD-01 | Phase 13 | Pending |
 | COLD-02 | Phase 13 | Pending |
 | COLD-03 | Phase 13 | Pending |
