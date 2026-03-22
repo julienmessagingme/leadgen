@@ -51,6 +51,17 @@ registerTask("task-c-followup",   "0 11 * * 1-5",      taskCFollowup);    // 11h
 // WhatsApp template approval polling (every 15 min, Mon-Fri 9h-17h)
 registerTask("whatsapp-poll",     "*/15 9-18 * * 1-5", whatsappPoll);     // every 15 min
 
+// Log cleanup -- delete logs older than 30 days (daily at 02:00, every day including weekends)
+registerTask("log-cleanup", "0 2 * * *", async (runId) => {
+  const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const { count, error } = await supabase
+    .from("logs")
+    .delete({ count: "exact" })
+    .lt("created_at", cutoff);
+  if (error) throw error;
+  console.log("Log cleanup completed: deleted " + (count || 0) + " logs older than 30 days");
+});
+
 // Supabase keep-alive ping (weekends only -- prevent free tier 7-day inactivity pause)
 cron.schedule(
   "0 10 * * 0,6",
@@ -68,4 +79,4 @@ cron.schedule(
   { timezone: "Europe/Paris" }
 );
 
-console.log("Scheduler started: 7 tasks + keep-alive registered (Mon-Fri pipeline, Sat/Sun keep-alive, Europe/Paris)");
+console.log("Scheduler started: 8 tasks + keep-alive registered (Mon-Fri pipeline, daily log-cleanup, Sat/Sun keep-alive, Europe/Paris)");
