@@ -13,6 +13,7 @@
 
 const { supabase } = require("../lib/supabase");
 const { collectSignals } = require("../lib/signal-collector");
+const { collectAllBrowserSignals } = require("../lib/browser-signal-collector");
 const { dedup } = require("../lib/dedup");
 const { enrichLead } = require("../lib/enrichment");
 const { gatherNewsEvidence } = require("../lib/news-evidence");
@@ -133,11 +134,39 @@ module.exports = async function taskASignals(runId) {
       "Daily quota: " + todayCount + "/" + dailyLeadLimit + " used, " + remaining + " remaining");
 
     // ---------------------------------------------------------------
-    // Step 3: Collect signals
+    // Step 3: Collect Bereach signals
     // ---------------------------------------------------------------
     var rawSignals = await collectSignals(runId);
     await log(runId, "task-a-signals", "info",
-      "Collected " + rawSignals.length + " raw signals");
+      "Bereach collected " + rawSignals.length + " raw signals");
+
+    // ---------------------------------------------------------------
+    // Step 3b: Collect browser signals
+    // ---------------------------------------------------------------
+    var browserStats = null;
+    try {
+      var browserResult = await collectAllBrowserSignals(runId);
+      browserStats = browserResult.stats;
+
+      if (browserResult.stats.error === "cookies_expired") {
+        await log(runId, "task-a-signals", "warn",
+          "Browser collection skipped - LinkedIn cookies expired (email alert sent)");
+      } else {
+        rawSignals = rawSignals.concat(browserResult.signals);
+        await log(runId, "task-a-signals", "info",
+          "Browser collection: " + (browserStats.competitor_page || 0) + " competitor, " +
+          (browserStats.influencer || 0) + " influencer, " +
+          (browserStats.keyword || 0) + " keyword, " +
+          (browserStats.job_keyword || 0) + " job signals. " +
+          "Pages consumed: " + (browserStats.pages_consumed || 0));
+      }
+    } catch (err) {
+      await log(runId, "task-a-signals", "error",
+        "Browser collection crashed: " + err.message + " -- continuing with Bereach-only results");
+    }
+
+    await log(runId, "task-a-signals", "info",
+      "Total raw signals (Bereach + browser): " + rawSignals.length);
 
     if (rawSignals.length === 0) {
       await log(runId, "task-a-signals", "info",
@@ -226,7 +255,9 @@ module.exports = async function taskASignals(runId) {
           tier: scoredLead.tier,
           scoring_metadata: scoredLead.scoring_metadata || null,
           seniority_years: scoredLead.seniority_years || null,
-          metadata: scoredLead.metadata || null,
+          metadata: Object.assign({}, scoredLead.metadata || {}, {
+            source_origin: scoredLead.source_origin || "bereach",
+          }),
           status: "new",
         };
 
@@ -261,6 +292,29 @@ module.exports = async function taskASignals(runId) {
     // ---------------------------------------------------------------
     // Step 8: Summary log
     // ---------------------------------------------------------------
+    var summaryMeta = {
+      raw_signals: rawSignals.length,
+      unique_signals: uniqueSignals.length,
+      processed: toProcess.length,
+      inserted: inserted,
+      skipped_cold: skippedCold,
+      errors: errors,
+    };
+
+    var browserSummary = "";
+    if (browserStats) {
+      summaryMeta.browser_stats = browserStats;
+      browserSummary = " Browser: " +
+        (browserStats.competitor_page || 0) + " competitor, " +
+        (browserStats.influencer || 0) + " influencer, " +
+        (browserStats.keyword || 0) + " keyword, " +
+        (browserStats.job_keyword || 0) + " job, " +
+        (browserStats.pages_consumed || 0) + " pages.";
+      if (browserStats.error) {
+        browserSummary += " (" + browserStats.error + ")";
+      }
+    }
+
     await log(runId, "task-a-signals", "info",
       "Pipeline complete. " +
       "Collected: " + rawSignals.length + ", " +
@@ -268,14 +322,8 @@ module.exports = async function taskASignals(runId) {
       "Processed: " + toProcess.length + ", " +
       "Inserted (hot/warm): " + inserted + ", " +
       "Skipped (cold): " + skippedCold + ", " +
-      "Errors: " + errors, {
-        raw_signals: rawSignals.length,
-        unique_signals: uniqueSignals.length,
-        processed: toProcess.length,
-        inserted: inserted,
-        skipped_cold: skippedCold,
-        errors: errors,
-      });
+      "Errors: " + errors + "." +
+      browserSummary, summaryMeta);
 
   } catch (err) {
     // Top-level catch for unexpected pipeline errors
