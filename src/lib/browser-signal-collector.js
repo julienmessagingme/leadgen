@@ -17,6 +17,7 @@ const {
   humanDelay,
   getPageCount,
 } = require("./browser");
+const { sendEmail } = require("./gmail");
 
 /**
  * Dismiss common LinkedIn popups/modals that may block interaction.
@@ -358,13 +359,14 @@ async function scrapeSourcePage(page, source, signalCategory, runId) {
 
 /**
  * Collect browser-based signals from competitor_page and influencer sources.
- * Main entry point for browser signal collection.
+ * Receives an already-created page from the orchestrator (collectAllBrowserSignals).
  *
+ * @param {import('playwright').Page} page - Playwright page (browser already created)
  * @param {string} runId - UUID for this pipeline run
  * @returns {Promise<Array>} All collected signal objects with source_origin: "browser"
  */
-async function collectBrowserPageSignals(runId) {
-  // 1. Load active watchlist entries for browser-compatible source types
+async function collectBrowserPageSignals(page, runId) {
+  // Load active watchlist entries for browser-compatible source types
   const { data: sources, error } = await supabase
     .from("watchlist")
     .select("id, source_type, source_label, source_url, keywords, sequence_id")
@@ -386,69 +388,43 @@ async function collectBrowserPageSignals(runId) {
   await log(runId, "browser-signal", "info",
     "Loaded " + sources.length + " browser-compatible watchlist sources");
 
-  // 2. Create browser context - if fails (cookies expired), return empty
-  let browser, page;
-  try {
-    const ctx = await createBrowserContext(runId);
-    browser = ctx.browser;
-    page = ctx.page;
-  } catch (err) {
-    await log(runId, "browser-signal", "error",
-      "Browser creation failed (cookies expired?): " + err.message);
-    return [];
-  }
-
   const allSignals = [];
-  const startPageCount = getPageCount().count;
 
-  try {
-    // 3. Process each source
-    for (let i = 0; i < sources.length; i++) {
-      const source = sources[i];
-      const signalCategory = source.source_type === "competitor_page"
-        ? "concurrent"
-        : "influenceur";
+  for (let i = 0; i < sources.length; i++) {
+    const source = sources[i];
+    const signalCategory = source.source_type === "competitor_page"
+      ? "concurrent"
+      : "influenceur";
 
-      try {
-        const sourceSignals = await scrapeSourcePage(page, source, signalCategory, runId);
+    try {
+      const sourceSignals = await scrapeSourcePage(page, source, signalCategory, runId);
 
-        await log(runId, "browser-signal", "info",
-          "Source '" + (source.source_label || source.source_type) +
-          "' collected " + sourceSignals.length + " signals via browser");
+      await log(runId, "browser-signal", "info",
+        "Source '" + (source.source_label || source.source_type) +
+        "' collected " + sourceSignals.length + " signals via browser");
 
-        allSignals.push(...sourceSignals);
+      allSignals.push(...sourceSignals);
 
-      } catch (err) {
-        // Check if rate limit reached
-        if (err.message && err.message.includes("Daily page limit reached")) {
-          await log(runId, "browser-signal", "warn",
-            "Daily page limit reached - keeping " + allSignals.length +
-            " partial results, stopping browser collection");
-          break;
-        }
-
-        // Error isolation: one failing source does not crash collection
-        await log(runId, "browser-signal", "error",
-          "Source '" + (source.source_label || source.source_type) +
-          "' failed: " + err.message);
+    } catch (err) {
+      // Check if rate limit reached
+      if (err.message && err.message.includes("Daily page limit reached")) {
+        await log(runId, "browser-signal", "warn",
+          "Daily page limit reached - keeping " + allSignals.length +
+          " partial results, stopping browser collection");
+        break;
       }
 
-      // Human delay between sources
-      if (i < sources.length - 1) {
-        await humanDelay(3000, 6000);
-      }
+      // Error isolation: one failing source does not crash collection
+      await log(runId, "browser-signal", "error",
+        "Source '" + (source.source_label || source.source_type) +
+        "' failed: " + err.message);
     }
-  } finally {
-    // 6. Always close browser
-    await closeBrowser(browser);
-  }
 
-  // 7. Log summary
-  const pagesConsumed = getPageCount().count - startPageCount;
-  await log(runId, "browser-signal", "info",
-    "Browser signal collection complete: " + allSignals.length +
-    " signals from " + sources.length + " sources, " +
-    pagesConsumed + " pages consumed");
+    // Human delay between sources
+    if (i < sources.length - 1) {
+      await humanDelay(3000, 6000);
+    }
+  }
 
   return allSignals;
 }
@@ -895,8 +871,128 @@ async function collectBrowserJobSignals(page, runId) {
   return allSignals;
 }
 
+/**
+ * Orchestrate all browser-based signal collection.
+ * Creates a single browser context, runs all 3 scrapers sequentially,
+ * and returns merged signals with stats.
+ *
+ * If browser creation fails (cookies expired), sends an email alert
+ * to Julien and returns empty results without throwing.
+ *
+ * @param {string} runId - UUID for this pipeline run
+ * @returns {Promise<{signals: Array, stats: object}>} Signals and collection stats
+ */
+async function collectAllBrowserSignals(runId) {
+  var stats = {
+    competitor_page: 0,
+    influencer: 0,
+    keyword: 0,
+    job_keyword: 0,
+    pages_consumed: 0,
+    errors: 0,
+  };
+
+  // Create browser context - if fails (cookies expired), send email alert
+  var browser, page;
+  var startPageCount = getPageCount().count;
+
+  try {
+    var ctx = await createBrowserContext(runId);
+    browser = ctx.browser;
+    page = ctx.page;
+  } catch (err) {
+    await log(runId, "browser-signal-collector", "error",
+      "Browser creation failed (cookies expired?): " + err.message);
+
+    // Send email alert to Julien about cookie expiry
+    try {
+      await sendEmail(
+        process.env.GMAIL_USER,
+        "LinkedIn cookies expires - browser scraping desactive",
+        "<h3>LinkedIn cookies expirees</h3>" +
+        "<p>Le browser scraping est desactive car les cookies LinkedIn ont expire.</p>" +
+        "<p><strong>Action requise :</strong></p>" +
+        "<ol>" +
+        "<li>Ouvrez LinkedIn dans Chrome en navigation privee</li>" +
+        "<li>Connectez-vous avec le compte Julien</li>" +
+        "<li>Exportez les cookies au format JSON (extension Cookie Editor)</li>" +
+        "<li>Deposez le fichier sur le VPS : /home/openclaw/leadgen/linkedin-cookies.json</li>" +
+        "</ol>" +
+        "<p>Erreur: " + err.message + "</p>",
+        "LinkedIn cookies expirees - action requise pour reactiver le browser scraping."
+      );
+      await log(runId, "browser-signal-collector", "info",
+        "Cookie expiry email alert sent to Julien");
+    } catch (emailErr) {
+      await log(runId, "browser-signal-collector", "warn",
+        "Failed to send cookie expiry email alert: " + emailErr.message);
+    }
+
+    return { signals: [], stats: { ...stats, error: "cookies_expired" } };
+  }
+
+  var allSignals = [];
+
+  try {
+    // 1. Collect competitor_page + influencer signals
+    try {
+      var pageSignals = await collectBrowserPageSignals(page, runId);
+      allSignals = allSignals.concat(pageSignals);
+      // Count by signal category
+      for (var p = 0; p < pageSignals.length; p++) {
+        if (pageSignals[p].signal_category === "concurrent") {
+          stats.competitor_page++;
+        } else {
+          stats.influencer++;
+        }
+      }
+    } catch (err) {
+      await log(runId, "browser-signal-collector", "error",
+        "Page signal collection failed: " + err.message);
+      stats.errors++;
+    }
+
+    // 2. Collect keyword signals
+    try {
+      var keywordSignals = await collectBrowserKeywordSignals(page, runId);
+      allSignals = allSignals.concat(keywordSignals);
+      stats.keyword = keywordSignals.length;
+    } catch (err) {
+      await log(runId, "browser-signal-collector", "error",
+        "Keyword signal collection failed: " + err.message);
+      stats.errors++;
+    }
+
+    // 3. Collect job_keyword signals
+    try {
+      var jobSignals = await collectBrowserJobSignals(page, runId);
+      allSignals = allSignals.concat(jobSignals);
+      stats.job_keyword = jobSignals.length;
+    } catch (err) {
+      await log(runId, "browser-signal-collector", "error",
+        "Job signal collection failed: " + err.message);
+      stats.errors++;
+    }
+
+  } finally {
+    // Always close browser
+    await closeBrowser(browser);
+  }
+
+  stats.pages_consumed = getPageCount().count - startPageCount;
+
+  await log(runId, "browser-signal-collector", "info",
+    "Browser collection complete: " + allSignals.length + " signals. " +
+    "competitor_page=" + stats.competitor_page + " influencer=" + stats.influencer +
+    " keyword=" + stats.keyword + " job_keyword=" + stats.job_keyword +
+    " pages=" + stats.pages_consumed + " errors=" + stats.errors);
+
+  return { signals: allSignals, stats: stats };
+}
+
 module.exports = {
   collectBrowserPageSignals,
   collectBrowserKeywordSignals,
   collectBrowserJobSignals,
+  collectAllBrowserSignals,
 };

@@ -68,6 +68,7 @@ function formatSignals(profiles, signalType, signalCategory, source) {
       signal_source: source.source_label || source.source_type,
       signal_date: new Date().toISOString(),
       sequence_id: source.sequence_id || null,
+      source_origin: "bereach",
     };
   });
 }
