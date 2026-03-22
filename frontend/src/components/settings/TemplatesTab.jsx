@@ -15,7 +15,7 @@ export default function TemplatesTab() {
   const [values, setValues] = useState({});
   const [savedKey, setSavedKey] = useState(null);
 
-  const configs = data ?? [];
+  const configs = data?.settings ?? [];
 
   useEffect(() => {
     if (configs.length > 0) {

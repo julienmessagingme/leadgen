@@ -34,7 +34,7 @@ export default function IcpRulesTab() {
   const [editId, setEditId] = useState(null);
   const [editData, setEditData] = useState({});
 
-  const rules = data ?? [];
+  const rules = data?.rules ?? [];
 
   const handleCreate = () => {
     createRule.mutate(newRule, {

@@ -30,7 +30,7 @@ export default function WatchlistTab() {
   const [editId, setEditId] = useState(null);
   const [editData, setEditData] = useState({});
 
-  const entries = data ?? [];
+  const entries = data?.sources ?? [];
 
   const handleCreate = () => {
     const payload = {

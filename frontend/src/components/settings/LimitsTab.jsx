@@ -9,7 +9,7 @@ export default function LimitsTab() {
   const [leadLimit, setLeadLimit] = useState("");
   const [saved, setSaved] = useState(false);
 
-  const configs = data ?? [];
+  const configs = data?.settings ?? [];
 
   // Pre-fill from config data
   useEffect(() => {

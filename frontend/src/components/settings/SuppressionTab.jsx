@@ -9,7 +9,7 @@ export default function SuppressionTab() {
   const [value, setValue] = useState("");
   const [sourceType, setSourceType] = useState("email");
 
-  const entries = data ?? [];
+  const entries = data?.entries ?? [];
 
   const handleAdd = (e) => {
     e.preventDefault();
