@@ -1,8 +1,5 @@
 const Anthropic = require("@anthropic-ai/sdk");
 
-// Ensure dotenv is loaded (no-op if already loaded by index.js)
-require("dotenv").config({ path: require("path").resolve(__dirname, "../../.env") });
-
 // Lazy-init client to avoid crash if ANTHROPIC_API_KEY is not set at import time
 let _client = null;
 
