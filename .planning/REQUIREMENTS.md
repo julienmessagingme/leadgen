@@ -7,10 +7,10 @@
 - [x] SEC-03: Body size limit on express.json() (50kb)
 - [x] SEC-04: CORS middleware restricting to leadgen.messagingme.app
 - [x] SEC-05: JWT_SECRET moved to REQUIRED_VARS (exit on missing)
-- [ ] SEC-06: Settings PATCH key allowlist validation
-- [ ] SEC-07: Supabase error messages masked (generic 500 to client)
-- [ ] SEC-08: Date params validated (ISO-8601 regex)
-- [ ] SEC-09: Search sanitization expanded (PostgREST special chars)
+- [x] SEC-06: Settings PATCH key allowlist validation
+- [x] SEC-07: Supabase error messages masked (generic 500 to client)
+- [x] SEC-08: Date params validated (ISO-8601 regex)
+- [x] SEC-09: Search sanitization expanded (PostgREST special chars)
 
 ## AUTH — Authentication Hardening
 
