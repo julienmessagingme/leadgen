@@ -8,7 +8,7 @@ RETURNS json AS $$
     'signalSources', (
       SELECT COALESCE(json_agg(row_to_json(s)), '[]'::json)
       FROM (
-        SELECT COALESCE(signal_category, 'unknown') AS name, COUNT(*)::int AS value
+        SELECT COALESCE(signal_category::text, 'unknown') AS name, COUNT(*)::int AS value
         FROM leads
         GROUP BY signal_category
         ORDER BY COUNT(*) DESC
