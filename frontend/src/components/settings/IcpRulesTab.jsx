@@ -2,26 +2,26 @@ import { useState } from "react";
 import { useIcpRules, useCreateIcpRule, useUpdateIcpRule, useDeleteIcpRule } from "../../hooks/useSettings";
 
 const CATEGORIES = [
-  "industry",
+  "title_positive",
+  "title_negative",
+  "sector",
   "company_size",
-  "job_title",
   "seniority",
-  "geography",
-  "engagement",
-  "custom",
+  "freshness",
+  "signal_weights",
 ];
 
 const CATEGORY_LABELS = {
-  industry: "Industrie",
+  title_positive: "Titre positif",
+  title_negative: "Titre negatif",
+  sector: "Secteur",
   company_size: "Taille entreprise",
-  job_title: "Poste",
   seniority: "Seniorite",
-  geography: "Geographie",
-  engagement: "Engagement",
-  custom: "Personnalise",
+  freshness: "Fraicheur",
+  signal_weights: "Poids signaux",
 };
 
-const emptyRule = { category: "industry", key: "", value: "", numeric_value: 0, threshold: 0 };
+const emptyRule = { category: "title_positive", key: "", value: "", numeric_value: 0, threshold: 0 };
 
 export default function IcpRulesTab() {
   const { data, isLoading } = useIcpRules();
