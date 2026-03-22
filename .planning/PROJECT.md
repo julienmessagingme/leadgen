@@ -27,7 +27,10 @@ Prospecter uniquement des personnes ayant deja montre un signal d'interet — ze
 
 ### Active
 
-(Aucun — en attente du prochain milestone)
+- Security hardening Express (SEC-01-09, AUTH-01-03) — v1.2
+- Supabase indexes & schema migrations (DB-01-07) — v1.2
+- RGPD PII erasure + prompt sanitization (RGPD-01-02) — v1.2
+- Query optimization & log cleanup (PERF-01-08, OPS-01-02) — v1.2
 
 ### Out of Scope
 
@@ -42,7 +45,7 @@ Prospecter uniquement des personnes ayant deja montre un signal d'interet — ze
 
 ## Context
 
-Shipped v1.0 MVP (2026-03-21) + v1.1 Interface Web (2026-03-22). Pipeline backend 100% operationnel avec 6 taches cron. Interface web React deployee avec dashboard, pipeline, sequences, settings, export CSV.
+Shipped v1.0 MVP (2026-03-21) + v1.1 Interface Web (2026-03-22). Pipeline backend 100% operationnel avec 6 taches cron. Interface web React deployee avec dashboard, pipeline, sequences, settings, export CSV. v1.2 en cours : security hardening, Supabase optimization, RGPD compliance.
 
 Tech stack: Node.js + Express + node-cron, Supabase, React 19 + Vite + Tailwind v4 + TanStack Query, Recharts, BeReach, Fullenrich, Claude Haiku/Sonnet, Gmail SMTP, MessagingMe API.
 VPS: ubuntu@146.59.233.252 at /home/openclaw/leadgen/, PM2 process manager, Nginx Proxy Manager HTTPS.
