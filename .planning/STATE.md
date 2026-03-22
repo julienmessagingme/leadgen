@@ -5,14 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** Prospecter des personnes qualifiees via signaux LinkedIn ET recherche directe Sales Nav — signal-based + cold outbound cible.
-**Current focus:** v1.3 Browser Automation & Cold Outbound — Not started (defining requirements)
+**Current focus:** v1.3 Browser Automation & Cold Outbound — Phase 11 ready to plan
 
 ## Current Position
 
-Status: Defining requirements for v1.3
-Last activity: 2026-03-22 — Milestone v1.3 started
+Phase: 11 of 14 (Browser Infrastructure)
+Plan: 0 of 2 in current phase
+Status: Ready to plan
+Last activity: 2026-03-22 — Roadmap created for v1.3
 
-Progress: [####################] v1.0 complete (14 plans) | v1.1 complete (11 plans) | v1.2 complete (7 plans) | v1.3: defining requirements
+Progress: [░░░░░░░░░░] 0% (0/10 plans) | v1.0: 14 plans | v1.1: 11 plans | v1.2: 7 plans
 
 ## Performance Metrics
 
@@ -20,12 +22,10 @@ Progress: [####################] v1.0 complete (14 plans) | v1.1 complete (11 pl
 - Total plans completed: 14
 - Average duration: 6min
 - Total execution time: ~1.25 hours
-- Timeline: 2 days (2026-03-20 -> 2026-03-21)
 
 **v1.1 Velocity:**
 - Plans completed: 11
 - Average duration: ~4min
-- Timeline: 2 days (2026-03-21 -> 2026-03-22)
 
 **v1.2 Velocity:**
 - Plans completed: 7
@@ -42,8 +42,6 @@ See PROJECT.md Key Decisions table for full log.
 - v1.3: Cookies session LinkedIn pour auth Playwright
 - v1.3: Pas de proxy pour l'instant (<100 pages/jour)
 - v1.3: A/B test Bereach vs Browser avant de couper Bereach
-- v1.3: Cold outbound via formulaire dashboard + Sales Nav search
-- v1.3: FullEnrich cle API a configurer (Julien fournit demain)
 
 ### Blockers/Concerns
 
@@ -53,5 +51,5 @@ See PROJECT.md Key Decisions table for full log.
 ## Session Continuity
 
 Last session: 2026-03-22
-Stopped at: Starting v1.3 milestone — defining requirements
+Stopped at: Roadmap created for v1.3 — ready to plan Phase 11
 Resume file: None

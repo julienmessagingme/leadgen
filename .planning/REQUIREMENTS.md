@@ -75,35 +75,35 @@ Deferred to future release.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BROW-01 | TBD | Pending |
-| BROW-02 | TBD | Pending |
-| BROW-03 | TBD | Pending |
-| BROW-04 | TBD | Pending |
-| BROW-05 | TBD | Pending |
-| BSIG-01 | TBD | Pending |
-| BSIG-02 | TBD | Pending |
-| BSIG-03 | TBD | Pending |
-| BSIG-04 | TBD | Pending |
-| BSIG-05 | TBD | Pending |
-| BSIG-06 | TBD | Pending |
-| BSIG-07 | TBD | Pending |
-| COLD-01 | TBD | Pending |
-| COLD-02 | TBD | Pending |
-| COLD-03 | TBD | Pending |
-| COLD-04 | TBD | Pending |
-| COLD-05 | TBD | Pending |
-| COLD-06 | TBD | Pending |
-| COLD-07 | TBD | Pending |
-| COLD-08 | TBD | Pending |
-| OUTR-01 | TBD | Pending |
-| OUTR-02 | TBD | Pending |
-| OUTR-03 | TBD | Pending |
+| BROW-01 | Phase 11 | Pending |
+| BROW-02 | Phase 11 | Pending |
+| BROW-03 | Phase 11 | Pending |
+| BROW-04 | Phase 11 | Pending |
+| BROW-05 | Phase 11 | Pending |
+| BSIG-01 | Phase 12 | Pending |
+| BSIG-02 | Phase 12 | Pending |
+| BSIG-03 | Phase 12 | Pending |
+| BSIG-04 | Phase 12 | Pending |
+| BSIG-05 | Phase 12 | Pending |
+| BSIG-06 | Phase 12 | Pending |
+| BSIG-07 | Phase 12 | Pending |
+| COLD-01 | Phase 13 | Pending |
+| COLD-02 | Phase 13 | Pending |
+| COLD-03 | Phase 13 | Pending |
+| COLD-04 | Phase 13 | Pending |
+| COLD-05 | Phase 13 | Pending |
+| COLD-06 | Phase 13 | Pending |
+| COLD-07 | Phase 13 | Pending |
+| COLD-08 | Phase 13 | Pending |
+| OUTR-01 | Phase 14 | Pending |
+| OUTR-02 | Phase 14 | Pending |
+| OUTR-03 | Phase 14 | Pending |
 
 **Coverage:**
 - v1.3 requirements: 23 total
-- Mapped to phases: 0
-- Unmapped: 23 (pending roadmap creation)
+- Mapped to phases: 23
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-22*
-*Last updated: 2026-03-22 after initial definition*
+*Last updated: 2026-03-22 after roadmap creation*
