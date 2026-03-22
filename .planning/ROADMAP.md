@@ -18,7 +18,7 @@ Agent autonome de prospection B2B signal-based avec interface web React de pilot
 **Plans:** 2 plans
 
 Plans:
-- [ ] 08-01-PLAN.md — Security middleware (helmet, CORS, body limit) + JWT hardening + .gitignore
+- [x] 08-01-PLAN.md — Security middleware (helmet, CORS, body limit) + JWT hardening + .gitignore
 - [ ] 08-02-PLAN.md — Input validation (settings allowlist, date validation, search sanitization) + error masking
 
 ### Phase 9: Supabase Indexes & Schema
@@ -61,7 +61,7 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 8. Express Security Hardening | v1.2 | 0/2 | Planned | - |
+| 8. Express Security Hardening | v1.2 | 1/2 | In Progress | - |
 | 9. Supabase Indexes & Schema | v1.2 | 0/2 | Pending | - |
 | 10. Query Optimization & Ops | v1.2 | 0/3 | Pending | - |
 | 1. Foundation | v1.0 | 3/3 | Complete | 2026-03-20 |

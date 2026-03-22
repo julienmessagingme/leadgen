@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** Prospecter uniquement des personnes ayant montre un signal d'interet LinkedIn -- zero liste froide, 100% signal-based.
-**Current focus:** Planning next milestone
+**Current focus:** v1.2 Security & Performance -- Phase 8 in progress
 
 ## Current Position
 
-Status: Between milestones
-Last activity: 2026-03-22 -- Completed v1.1 Interface Web milestone
+Status: v1.2 Security & Performance — Phase 8, Plan 2 next
+Last activity: 2026-03-22 -- Completed 08-01 (Express security middleware + JWT hardening)
 
-Progress: [####################] v1.0 complete (14 plans) | v1.1 complete (11 plans)
+Progress: [####################] v1.0 complete (14 plans) | v1.1 complete (11 plans) | v1.2: 1/7 plans
 
 ## Performance Metrics
 
@@ -44,6 +44,10 @@ Progress: [####################] v1.0 complete (14 plans) | v1.1 complete (11 pl
 
 See PROJECT.md Key Decisions table for full log.
 
+- 08-01: JWT_SECRET moved to REQUIRED_VARS (server exits if missing)
+- 08-01: CORS defaults to production domain, overridable via CORS_ORIGIN env var
+- 08-01: Rate limit 10 req/15min on login endpoint
+
 ### Blockers/Concerns
 
 No active blockers. All v1.0 and v1.1 blockers resolved.
@@ -51,5 +55,5 @@ No active blockers. All v1.0 and v1.1 blockers resolved.
 ## Session Continuity
 
 Last session: 2026-03-22
-Stopped at: Milestone v1.1 completion
+Stopped at: Completed 08-01-PLAN.md
 Resume file: None
