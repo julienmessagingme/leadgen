@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** Prospecter des personnes qualifiees via signaux LinkedIn ET recherche directe Sales Nav — signal-based + cold outbound cible.
-**Current focus:** v1.3 Browser Automation & Cold Outbound — Phase 12 in progress
+**Current focus:** v1.3 Browser Automation & Cold Outbound — Phase 13 in progress
 
 ## Current Position
 
-Phase: 12 of 14 (Browser Signal Collector) -- COMPLETE
-Plan: 3 of 3 in current phase
-Status: Phase Complete
-Last activity: 2026-03-22 — Completed 12-03 (Task A integration with browser collection)
+Phase: 13 of 14 (Cold Outbound)
+Plan: 2 of 3 in current phase
+Status: In Progress
+Last activity: 2026-03-22 — Completed 13-02 (Sales Navigator scraper module)
 
-Progress: [#####░░░░░] 50% (5/10 plans) | v1.0: 14 plans | v1.1: 11 plans | v1.2: 7 plans
+Progress: [######░░░░] 60% (6/10 plans) | v1.0: 14 plans | v1.1: 11 plans | v1.2: 7 plans
 
 ## Performance Metrics
 
@@ -55,6 +55,9 @@ See PROJECT.md Key Decisions table for full log.
 - 12-03: Cookie expiry sends email alert to Julien via gmail.js
 - 12-03: source_origin stored in leads.metadata jsonb (no schema migration)
 - 12-03: Cross-source dedup handled by existing dedup.js pipeline
+- 13-02: Keywords-based URL approach for Sales Nav search (most resilient vs encoded filter blobs)
+- 13-02: Inline dismissPopups in sales-nav-scraper (avoids cross-module coupling)
+- 13-02: Email alerts for CAPTCHA and session expiry via gmail.js
 
 ### Blockers/Concerns
 
@@ -64,5 +67,5 @@ See PROJECT.md Key Decisions table for full log.
 ## Session Continuity
 
 Last session: 2026-03-22
-Stopped at: Completed 12-03-PLAN.md (Task A integration with browser collection)
+Stopped at: Completed 13-02-PLAN.md (Sales Navigator scraper module)
 Resume file: None
