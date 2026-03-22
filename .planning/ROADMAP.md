@@ -33,7 +33,7 @@ Plans:
 ### Phase 10: Query Optimization & Ops
 **Goal:** Eliminate full table scans, N+1 patterns, unbounded queries. Add log cleanup.
 **Requirements:** PERF-01 to PERF-08, OPS-01, OPS-02
-**Plans:** 3 plans
+**Plans:** 3/3 plans complete
 
 Plans:
 - [ ] 10-01-PLAN.md — Dashboard RPC aggregation (stats, charts, cron status)
@@ -72,7 +72,7 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 8. Express Security Hardening | v1.2 | 2/2 | Complete | 2026-03-22 |
 | 9. Supabase Indexes & Schema | v1.2 | 2/2 | Complete | 2026-03-22 |
-| 10. Query Optimization & Ops | v1.2 | 1/3 | In Progress | - |
+| 10. Query Optimization & Ops | 3/3 | Complete   | 2026-03-22 | - |
 | 1. Foundation | v1.0 | 3/3 | Complete | 2026-03-20 |
 | 2. Signal Pipeline | v1.0 | 5/5 | Complete | 2026-03-20 |
 | 3. Outreach Engine | v1.0 | 5/5 | Complete | 2026-03-21 |

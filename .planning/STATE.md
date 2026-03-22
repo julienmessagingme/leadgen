@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** Prospecter uniquement des personnes ayant montre un signal d'interet LinkedIn -- zero liste froide, 100% signal-based.
-**Current focus:** v1.2 Security & Performance -- Phase 10 in progress
+**Current focus:** v1.2 Security & Performance -- Phase 10 complete
 
 ## Current Position
 
-Status: v1.2 Security & Performance -- Phase 10 in progress (plan 1 of 3 complete)
-Last activity: 2026-03-22 -- Completed 10-03 (Log cleanup cron + dotenv housekeeping)
+Status: v1.2 Security & Performance COMPLETE (all 7 plans done)
+Last activity: 2026-03-22 -- Completed 10-01 (Dashboard RPC aggregation)
 
-Progress: [####################] v1.0 complete (14 plans) | v1.1 complete (11 plans) | v1.2: 5/7 plans
+Progress: [####################] v1.0 complete (14 plans) | v1.1 complete (11 plans) | v1.2: 7/7 plans COMPLETE
 
 ## Performance Metrics
 
@@ -44,6 +44,8 @@ Progress: [####################] v1.0 complete (14 plans) | v1.1 complete (11 pl
 - 09-01: Supabase schema indexes & DDL export (4min)
 - 09-02: RGPD PII nullification & prompt sanitization (3min)
 - 10-03: Log cleanup cron + dotenv housekeeping (1min)
+- 10-02: Task query optimization (5min)
+- 10-01: Dashboard RPC aggregation (8min)
 
 ## Accumulated Context
 
@@ -61,6 +63,11 @@ See PROJECT.md Key Decisions table for full log.
 - [Phase 09]: DDL export via information_schema.columns (portable, no pg_dump needed)
 - [Phase 10]: Log cleanup uses Supabase delete with exact count for observability
 - [Phase 10]: Cleanup runs daily at 02:00 including weekends (no rate limit concern)
+- [Phase 10]: last_processed_run_id replaces ILIKE idempotence for O(1) duplicate detection
+- [Phase 10]: Generator functions accept optional templates param for backward compatibility
+- [Phase 10]: Limit bounds: task-c invitation_sent 200, others 50, whatsapp-poll 100
+- [Phase 10]: RPC functions use LANGUAGE sql STABLE with REVOKE/GRANT for service_role only
+- [Phase 10]: signal_category enum requires ::text cast in GROUP BY for JSON aggregation
 
 ### Blockers/Concerns
 
@@ -69,5 +76,5 @@ No active blockers. All v1.0 and v1.1 blockers resolved.
 ## Session Continuity
 
 Last session: 2026-03-22
-Stopped at: Completed 10-03-PLAN.md
+Stopped at: Completed 10-01-PLAN.md (v1.2 fully complete)
 Resume file: None
