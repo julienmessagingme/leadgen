@@ -8,7 +8,7 @@ Agent autonome de prospection B2B signal-based avec interface web React de pilot
 
 - ✅ **v1.0 MVP** -- Phases 1-3.1 (shipped 2026-03-21) -- [archive](milestones/v1.0-ROADMAP.md)
 - ✅ **v1.1 Interface Web** -- Phases 4-7 (shipped 2026-03-22) -- [archive](milestones/v1.1-ROADMAP.md)
-- 🔧 **v1.2 Security & Performance** -- Phases 8-10 (3 phases, 7 plans)
+- ✅ **v1.2 Security & Performance** -- Phases 8-10 (shipped 2026-03-22)
 
 ## v1.2 Security & Performance
 
@@ -36,8 +36,8 @@ Plans:
 **Plans:** 3/3 plans complete
 
 Plans:
-- [ ] 10-01-PLAN.md — Dashboard RPC aggregation (stats, charts, cron status)
-- [ ] 10-02-PLAN.md — Task query optimization (select columns, limits, ILIKE replacement, template caching, bulk actions)
+- [x] 10-01-PLAN.md — Dashboard RPC aggregation (stats, charts, cron status)
+- [x] 10-02-PLAN.md — Task query optimization (select columns, limits, ILIKE replacement, template caching, bulk actions)
 - [x] 10-03-PLAN.md — Log cleanup cron job + dotenv housekeeping
 
 ## Phases
@@ -72,7 +72,7 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 8. Express Security Hardening | v1.2 | 2/2 | Complete | 2026-03-22 |
 | 9. Supabase Indexes & Schema | v1.2 | 2/2 | Complete | 2026-03-22 |
-| 10. Query Optimization & Ops | 3/3 | Complete   | 2026-03-22 | - |
+| 10. Query Optimization & Ops | v1.2 | 3/3 | Complete | 2026-03-22 |
 | 1. Foundation | v1.0 | 3/3 | Complete | 2026-03-20 |
 | 2. Signal Pipeline | v1.0 | 5/5 | Complete | 2026-03-20 |
 | 3. Outreach Engine | v1.0 | 5/5 | Complete | 2026-03-21 |

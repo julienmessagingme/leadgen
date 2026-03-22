@@ -35,9 +35,9 @@
 
 ## PERF — Query Optimization
 
-- [ ] PERF-01: Dashboard stats use Supabase RPC aggregate (not full table scan)
-- [ ] PERF-02: Dashboard charts use server-side date filtering
-- [ ] PERF-03: Cron status endpoint single query (not N+1)
+- [x] PERF-01: Dashboard stats use Supabase RPC aggregate (not full table scan)
+- [x] PERF-02: Dashboard charts use server-side date filtering
+- [x] PERF-03: Cron status endpoint single query (not N+1)
 - [ ] PERF-04: Bulk action batched update (not per-lead loop)
 - [ ] PERF-05: Replace ILIKE idempotence check on logs with lead flag
 - [ ] PERF-06: select("*") replaced with specific columns in task queries (8 files)
