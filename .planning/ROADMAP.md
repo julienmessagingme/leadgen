@@ -88,11 +88,12 @@ Plans:
   1. L'utilisateur peut creer/modifier/supprimer des regles de scoring ICP et ajouter des entrees a la liste de suppression RGPD
   2. L'utilisateur peut editer les limites journalieres, les mots-cles de signaux, les templates de messages, et voir le planning cron en lecture seule
   3. L'utilisateur peut exporter les leads en CSV avec les filtres courants et un filtre par plage de dates, incluant les colonnes standard (nom, email, LinkedIn, score, tier, statut)
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 07-01: TBD
-- [ ] 07-02: TBD
+- [ ] 07-01-PLAN.md -- Settings API backend (CRUD for 6 categories) + CSV export endpoint + settings table migration
+- [ ] 07-02-PLAN.md -- Settings page frontend with 6 tabs + export UI + /settings route
+- [ ] 07-03-PLAN.md -- Wire settings table into message-generator and task limits
 
 ## Progress
 
@@ -108,4 +109,4 @@ Phases execute in numeric order: 4 -> 5 -> 6 -> 7
 | 4. API + Auth + React Shell | v1.1 | 2/2 | Complete | 2026-03-21 |
 | 5. Dashboard KPIs | v1.1 | 0/2 | Planning | - |
 | 6. Pipeline + Sequences + Lead Detail | v1.1 | 0/4 | Planning | - |
-| 7. Settings + Export | v1.1 | 0/? | Not started | - |
+| 7. Settings + Export | v1.1 | 0/3 | Planning | - |
