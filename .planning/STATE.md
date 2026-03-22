@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** Prospecter uniquement des personnes ayant montre un signal d'interet LinkedIn -- zero liste froide, 100% signal-based.
-**Current focus:** v1.2 Security & Performance -- Phase 8 in progress
+**Current focus:** v1.2 Security & Performance -- Phase 9 in progress
 
 ## Current Position
 
-Status: v1.2 Security & Performance -- Phase 8, Plan 3 next
-Last activity: 2026-03-22 -- Completed 08-02 (Input validation & error masking)
+Status: v1.2 Security & Performance -- Phase 9 complete
+Last activity: 2026-03-22 -- Completed 09-02 (RGPD PII nullification & prompt sanitization)
 
-Progress: [####################] v1.0 complete (14 plans) | v1.1 complete (11 plans) | v1.2: 2/7 plans
+Progress: [####################] v1.0 complete (14 plans) | v1.1 complete (11 plans) | v1.2: 4/7 plans
 
 ## Performance Metrics
 
@@ -41,6 +41,7 @@ Progress: [####################] v1.0 complete (14 plans) | v1.1 complete (11 pl
 **v1.2 Velocity:**
 - 08-01: Express security middleware + JWT hardening
 - 08-02: Input validation & error masking (2min)
+- 09-02: RGPD PII nullification & prompt sanitization (3min)
 
 ## Accumulated Context
 
@@ -52,6 +53,8 @@ See PROJECT.md Key Decisions table for full log.
 - 08-01: CORS defaults to production domain, overridable via CORS_ORIGIN env var
 - 08-01: Rate limit 10 req/15min on login endpoint
 - [Phase 08]: Strip all PostgREST special chars and cap search at 100 chars for safety
+- [Phase 09]: PII_NULLS constant centralizes 7 PII fields for consistent nullification on exclude
+- [Phase 09]: sanitizeForPrompt strips newlines and truncates to 200 chars to prevent prompt injection
 
 ### Blockers/Concerns
 
@@ -60,5 +63,5 @@ No active blockers. All v1.0 and v1.1 blockers resolved.
 ## Session Continuity
 
 Last session: 2026-03-22
-Stopped at: Completed 08-02-PLAN.md
+Stopped at: Completed 09-02-PLAN.md
 Resume file: None
