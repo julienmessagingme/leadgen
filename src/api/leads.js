@@ -95,6 +95,88 @@ router.get("/", async (req, res) => {
 });
 
 /**
+ * GET /export -- CSV export with filters
+ */
+router.get("/export", async (req, res) => {
+  try {
+    const { status, tier, source, search, date_from, date_to } = req.query;
+
+    let query = supabase
+      .from("leads")
+      .select("first_name, last_name, email, linkedin_url, icp_score, tier, status, company_name, created_at");
+
+    // Status filter
+    if (status) {
+      const statuses = status.split(",").map((s) => s.trim()).filter(Boolean);
+      query = query.in("status", statuses);
+    }
+
+    // Tier filter
+    if (tier) {
+      query = query.eq("tier", tier);
+    }
+
+    // Source filter (signal_category)
+    if (source) {
+      query = query.eq("signal_category", source);
+    }
+
+    // Search filter
+    if (search) {
+      const term = sanitizeSearch(search);
+      if (term) {
+        query = query.or(`first_name.ilike.%${term}%,last_name.ilike.%${term}%,company_name.ilike.%${term}%`);
+      }
+    }
+
+    // Date range filters
+    if (date_from) {
+      query = query.gte("created_at", date_from);
+    }
+    if (date_to) {
+      query = query.lte("created_at", date_to);
+    }
+
+    query = query.order("created_at", { ascending: false }).limit(10000);
+
+    const { data, error } = await query;
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    // Build CSV
+    const headers = "Nom,Prenom,Email,LinkedIn,Entreprise,Score ICP,Tier,Statut,Date";
+
+    function escapeCSV(v) {
+      if (v === null || v === undefined) return '""';
+      return '"' + String(v).replace(/"/g, '""') + '"';
+    }
+
+    const rows = (data || []).map((row) =>
+      [
+        escapeCSV(row.last_name),
+        escapeCSV(row.first_name),
+        escapeCSV(row.email),
+        escapeCSV(row.linkedin_url),
+        escapeCSV(row.company_name),
+        escapeCSV(row.icp_score),
+        escapeCSV(row.tier),
+        escapeCSV(row.status),
+        escapeCSV(row.created_at),
+      ].join(",")
+    );
+
+    const csv = "\uFEFF" + headers + "\n" + rows.join("\n");
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", 'attachment; filename="leads-export.csv"');
+    res.send(csv);
+  } catch (err) {
+    console.error("Leads GET /export error:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
  * GET /:id -- Single lead detail
  */
 router.get("/:id", async (req, res) => {

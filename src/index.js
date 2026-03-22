@@ -67,6 +67,9 @@ app.use("/api/dashboard", dashboardRouter);
 // Leads API routes (protected -- authMiddleware applied inside router)
 app.use("/api/leads", require("./api/leads"));
 
+// Settings API routes (protected -- authMiddleware applied inside router)
+app.use("/api/settings", require("./api/settings"));
+
 // Serve React build
 app.use(express.static(path.join(__dirname, "..", "dist")));
 
