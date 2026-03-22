@@ -55,6 +55,9 @@ See PROJECT.md Key Decisions table for full log.
 - 12-03: Cookie expiry sends email alert to Julien via gmail.js
 - 12-03: source_origin stored in leads.metadata jsonb (no schema migration)
 - 12-03: Cross-source dedup handled by existing dedup.js pipeline
+- 13-01: JSONB filters column for flexible cold search criteria storage
+- 13-01: Dedicated /status polling endpoint (lightweight, 3s interval)
+- 13-01: Relancer via prefill prop pattern (no URL state)
 - 13-02: Keywords-based URL approach for Sales Nav search (most resilient vs encoded filter blobs)
 - 13-02: Inline dismissPopups in sales-nav-scraper (avoids cross-module coupling)
 - 13-02: Email alerts for CAPTCHA and session expiry via gmail.js
@@ -67,5 +70,5 @@ See PROJECT.md Key Decisions table for full log.
 ## Session Continuity
 
 Last session: 2026-03-22
-Stopped at: Completed 13-02-PLAN.md (Sales Navigator scraper module)
+Stopped at: Completed 13-01-PLAN.md (Cold Outbound dashboard + API)
 Resume file: None

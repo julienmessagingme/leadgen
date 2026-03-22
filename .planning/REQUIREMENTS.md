@@ -27,14 +27,14 @@ Requirements for v1.3 Browser Automation & Cold Outbound. Each maps to roadmap p
 
 ### Cold Outbound
 
-- [ ] **COLD-01**: Formulaire dashboard avec champs : secteur, taille entreprise, titre de poste, geographie, nombre de leads
-- [ ] **COLD-02**: API endpoint pour lancer une recherche cold outbound
+- [x] **COLD-01**: Formulaire dashboard avec champs : secteur, taille entreprise, titre de poste, geographie, nombre de leads
+- [x] **COLD-02**: API endpoint pour lancer une recherche cold outbound
 - [x] **COLD-03**: Playwright navigue Sales Nav avec les filtres du formulaire
 - [x] **COLD-04**: Scraping des profils (nom, prenom, headline, entreprise, linkedin_url)
 - [ ] **COLD-05**: Enrichissement email : extraction du mail visible sur LinkedIn, sinon FullEnrich
 - [ ] **COLD-06**: Scoring ICP des leads cold
 - [ ] **COLD-07**: Injection dans le pipeline avec signal_category cold_outbound, status new
-- [ ] **COLD-08**: Historique des recherches cold dans le dashboard
+- [x] **COLD-08**: Historique des recherches cold dans le dashboard
 
 ### Outreach Adaptation
 
@@ -87,14 +87,14 @@ Deferred to future release.
 | BSIG-05 | Phase 12 | Complete |
 | BSIG-06 | Phase 12 | Complete |
 | BSIG-07 | Phase 12 | Complete |
-| COLD-01 | Phase 13 | Pending |
-| COLD-02 | Phase 13 | Pending |
+| COLD-01 | Phase 13 | Complete |
+| COLD-02 | Phase 13 | Complete |
 | COLD-03 | Phase 13 | Complete |
 | COLD-04 | Phase 13 | Complete |
 | COLD-05 | Phase 13 | Pending |
 | COLD-06 | Phase 13 | Pending |
 | COLD-07 | Phase 13 | Pending |
-| COLD-08 | Phase 13 | Pending |
+| COLD-08 | Phase 13 | Complete |
 | OUTR-01 | Phase 14 | Pending |
 | OUTR-02 | Phase 14 | Pending |
 | OUTR-03 | Phase 14 | Pending |
