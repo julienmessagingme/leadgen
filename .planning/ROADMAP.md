@@ -33,7 +33,12 @@ Plans:
 ### Phase 10: Query Optimization & Ops
 **Goal:** Eliminate full table scans, N+1 patterns, unbounded queries. Add log cleanup.
 **Requirements:** PERF-01 to PERF-08, OPS-01, OPS-02
-**Plans:** 3 (10-01: dashboard aggregation, 10-02: task query optimization, 10-03: log cleanup + housekeeping)
+**Plans:** 3 plans
+
+Plans:
+- [ ] 10-01-PLAN.md — Dashboard RPC aggregation (stats, charts, cron status)
+- [ ] 10-02-PLAN.md — Task query optimization (select columns, limits, ILIKE replacement, template caching, bulk actions)
+- [ ] 10-03-PLAN.md — Log cleanup cron job + dotenv housekeeping
 
 ## Phases
 
