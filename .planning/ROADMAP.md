@@ -27,8 +27,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 09-01-PLAN.md — Database indexes (6 indexes) + DDL export migration files
-- [ ] 09-02-PLAN.md — RGPD PII nullification on exclude + prompt sanitization
+- [x] 09-01-PLAN.md — Database indexes (6 indexes) + DDL export migration files
+- [x] 09-02-PLAN.md — RGPD PII nullification on exclude + prompt sanitization
 
 ### Phase 10: Query Optimization & Ops
 **Goal:** Eliminate full table scans, N+1 patterns, unbounded queries. Add log cleanup.
@@ -38,7 +38,7 @@ Plans:
 Plans:
 - [ ] 10-01-PLAN.md — Dashboard RPC aggregation (stats, charts, cron status)
 - [ ] 10-02-PLAN.md — Task query optimization (select columns, limits, ILIKE replacement, template caching, bulk actions)
-- [ ] 10-03-PLAN.md — Log cleanup cron job + dotenv housekeeping
+- [x] 10-03-PLAN.md — Log cleanup cron job + dotenv housekeeping
 
 ## Phases
 
@@ -70,9 +70,9 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 8. Express Security Hardening | v1.2 | 2/2 | In Progress | - |
-| 9. Supabase Indexes & Schema | v1.2 | 0/2 | Pending | - |
-| 10. Query Optimization & Ops | v1.2 | 0/3 | Pending | - |
+| 8. Express Security Hardening | v1.2 | 2/2 | Complete | 2026-03-22 |
+| 9. Supabase Indexes & Schema | v1.2 | 2/2 | Complete | 2026-03-22 |
+| 10. Query Optimization & Ops | v1.2 | 1/3 | In Progress | - |
 | 1. Foundation | v1.0 | 3/3 | Complete | 2026-03-20 |
 | 2. Signal Pipeline | v1.0 | 5/5 | Complete | 2026-03-20 |
 | 3. Outreach Engine | v1.0 | 5/5 | Complete | 2026-03-21 |

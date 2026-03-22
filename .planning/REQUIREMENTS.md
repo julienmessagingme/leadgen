@@ -46,5 +46,5 @@
 
 ## OPS — Operational Health
 
-- [ ] OPS-01: Scheduled log cleanup (delete logs > 30 days)
-- [ ] OPS-02: Remove redundant dotenv.config() from anthropic.js
+- [x] OPS-01: Scheduled log cleanup (delete logs > 30 days)
+- [x] OPS-02: Remove redundant dotenv.config() from anthropic.js

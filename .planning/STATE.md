@@ -5,12 +5,12 @@
 See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** Prospecter uniquement des personnes ayant montre un signal d'interet LinkedIn -- zero liste froide, 100% signal-based.
-**Current focus:** v1.2 Security & Performance -- Phase 9 in progress
+**Current focus:** v1.2 Security & Performance -- Phase 10 in progress
 
 ## Current Position
 
-Status: v1.2 Security & Performance -- Phase 9 in progress (plan 1 of 2 complete)
-Last activity: 2026-03-22 -- Completed 09-01 (Supabase schema indexes & DDL export)
+Status: v1.2 Security & Performance -- Phase 10 in progress (plan 1 of 3 complete)
+Last activity: 2026-03-22 -- Completed 10-03 (Log cleanup cron + dotenv housekeeping)
 
 Progress: [####################] v1.0 complete (14 plans) | v1.1 complete (11 plans) | v1.2: 5/7 plans
 
@@ -43,6 +43,7 @@ Progress: [####################] v1.0 complete (14 plans) | v1.1 complete (11 pl
 - 08-02: Input validation & error masking (2min)
 - 09-01: Supabase schema indexes & DDL export (4min)
 - 09-02: RGPD PII nullification & prompt sanitization (3min)
+- 10-03: Log cleanup cron + dotenv housekeeping (1min)
 
 ## Accumulated Context
 
@@ -58,6 +59,8 @@ See PROJECT.md Key Decisions table for full log.
 - [Phase 09]: sanitizeForPrompt strips newlines and truncates to 200 chars to prevent prompt injection
 - [Phase 09]: All indexes use IF NOT EXISTS for idempotent re-application
 - [Phase 09]: DDL export via information_schema.columns (portable, no pg_dump needed)
+- [Phase 10]: Log cleanup uses Supabase delete with exact count for observability
+- [Phase 10]: Cleanup runs daily at 02:00 including weekends (no rate limit concern)
 
 ### Blockers/Concerns
 
@@ -66,5 +69,5 @@ No active blockers. All v1.0 and v1.1 blockers resolved.
 ## Session Continuity
 
 Last session: 2026-03-22
-Stopped at: Completed 09-01-PLAN.md
+Stopped at: Completed 10-03-PLAN.md
 Resume file: None
