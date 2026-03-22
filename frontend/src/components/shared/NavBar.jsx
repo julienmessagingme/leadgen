@@ -5,6 +5,7 @@ const navItems = [
   { to: "/", label: "Dashboard", end: true },
   { to: "/pipeline", label: "Pipeline" },
   { to: "/sequences", label: "Sequences" },
+  { to: "/settings", label: "Parametres" },
 ];
 
 export default function NavBar() {

@@ -11,6 +11,7 @@ import SignalSection from "../components/lead-detail/SignalSection";
 import TimelineSection from "../components/lead-detail/TimelineSection";
 import ActionButtons from "../components/lead-detail/ActionButtons";
 import { useLeads, useLead, useLeadAction } from "../hooks/useLeads";
+import { useExportLeads } from "../hooks/useSettings";
 
 const VIEW_TABS = [
   { id: "kanban", label: "Kanban" },
@@ -23,6 +24,12 @@ export default function Pipeline() {
 
   // Filter state (no status filter -- kanban columns express status visually)
   const [filters, setFilters] = useState({ tier: "", source: "", search: "" });
+
+  // Export state
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const exportLeads = useExportLeads();
 
   // Drawer state
   const [selectedLeadId, setSelectedLeadId] = useState(null);
@@ -38,6 +45,22 @@ export default function Pipeline() {
 
   // Action mutation
   const leadAction = useLeadAction();
+
+  // Export handler
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      await exportLeads({
+        ...filters,
+        ...(dateFrom ? { date_from: dateFrom } : {}),
+        ...(dateTo ? { date_to: dateTo } : {}),
+      });
+    } catch {
+      // silent fail
+    } finally {
+      setExporting(false);
+    }
+  };
 
   // Handle lead card/row click
   const handleLeadClick = (id) => setSelectedLeadId(id);
@@ -104,6 +127,25 @@ export default function Pipeline() {
             onChange={setFilters}
             showStatus={false}
           />
+        </div>
+
+        {/* Export */}
+        <div className="mb-4 flex items-end gap-3 bg-white rounded-lg shadow px-4 py-3">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Date debut</label>
+            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="rounded border-gray-300 text-sm" />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Date fin</label>
+            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="rounded border-gray-300 text-sm" />
+          </div>
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50"
+          >
+            {exporting ? "Export..." : "Exporter CSV"}
+          </button>
         </div>
 
         {/* Loading state */}

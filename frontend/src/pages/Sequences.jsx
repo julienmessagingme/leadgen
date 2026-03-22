@@ -11,6 +11,7 @@ import SignalSection from "../components/lead-detail/SignalSection";
 import TimelineSection from "../components/lead-detail/TimelineSection";
 import ActionButtons from "../components/lead-detail/ActionButtons";
 import { useLeads, useLead, useLeadAction, useBulkAction } from "../hooks/useLeads";
+import { useExportLeads } from "../hooks/useSettings";
 
 export default function Sequences() {
   const [filters, setFilters] = useState({ status: "", tier: "", source: "", search: "" });
@@ -18,6 +19,10 @@ export default function Sequences() {
   const [selectedLeadId, setSelectedLeadId] = useState(null);
   const [selected, setSelected] = useState(new Set());
   const [confirmExclude, setConfirmExclude] = useState(false);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const exportLeads = useExportLeads();
 
   const { data, isLoading, isError, refetch } = useLeads({
     ...filters,
@@ -79,6 +84,24 @@ export default function Sequences() {
     setSelectedLeadId(null);
   };
 
+  // Export handler
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      await exportLeads({
+        ...filters,
+        sort: sort.field,
+        order: sort.order,
+        ...(dateFrom ? { date_from: dateFrom } : {}),
+        ...(dateTo ? { date_to: dateTo } : {}),
+      });
+    } catch {
+      // silent fail
+    } finally {
+      setExporting(false);
+    }
+  };
+
   // Bulk actions
   const handleBulkAction = (action) => {
     bulkAction.mutate(
@@ -103,6 +126,25 @@ export default function Sequences() {
         {/* Filters */}
         <div className="mb-4">
           <FilterBar filters={filters} onChange={setFilters} showStatus={true} />
+        </div>
+
+        {/* Export */}
+        <div className="mb-4 flex items-end gap-3 bg-white rounded-lg shadow px-4 py-3">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Date debut</label>
+            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="rounded border-gray-300 text-sm" />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Date fin</label>
+            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="rounded border-gray-300 text-sm" />
+          </div>
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50"
+          >
+            {exporting ? "Export..." : "Exporter CSV"}
+          </button>
         </div>
 
         {/* Loading */}
