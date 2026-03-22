@@ -9,9 +9,9 @@ Requirements for v1.3 Browser Automation & Cold Outbound. Each maps to roadmap p
 
 ### Browser Infrastructure
 
-- [ ] **BROW-01**: Playwright installe sur le VPS avec Chromium headless
-- [ ] **BROW-02**: Import et stockage securise des cookies de session LinkedIn
-- [ ] **BROW-03**: Mecanisme de refresh/detection de cookies expires avec alerte
+- [x] **BROW-01**: Playwright installe sur le VPS avec Chromium headless
+- [x] **BROW-02**: Import et stockage securise des cookies de session LinkedIn
+- [x] **BROW-03**: Mecanisme de refresh/detection de cookies expires avec alerte
 - [ ] **BROW-04**: Rate limiting global <100 pages vues/jour avec compteur
 - [ ] **BROW-05**: Delais aleatoires humains (3-8s) entre chaque action browser
 
@@ -75,9 +75,9 @@ Deferred to future release.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BROW-01 | Phase 11 | Pending |
-| BROW-02 | Phase 11 | Pending |
-| BROW-03 | Phase 11 | Pending |
+| BROW-01 | Phase 11 | Complete |
+| BROW-02 | Phase 11 | Complete |
+| BROW-03 | Phase 11 | Complete |
 | BROW-04 | Phase 11 | Pending |
 | BROW-05 | Phase 11 | Pending |
 | BSIG-01 | Phase 12 | Pending |
