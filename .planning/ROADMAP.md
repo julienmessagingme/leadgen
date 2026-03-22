@@ -24,7 +24,11 @@ Plans:
 ### Phase 9: Supabase Indexes & Schema
 **Goal:** Add missing indexes, export DDL migrations, fix RGPD erasure.
 **Requirements:** DB-01 to DB-07, RGPD-01, RGPD-02
-**Plans:** 2 (09-01: indexes + migrations, 09-02: RGPD fixes + prompt sanitization)
+**Plans:** 2 plans
+
+Plans:
+- [ ] 09-01-PLAN.md — Database indexes (6 indexes) + DDL export migration files
+- [ ] 09-02-PLAN.md — RGPD PII nullification on exclude + prompt sanitization
 
 ### Phase 10: Query Optimization & Ops
 **Goal:** Eliminate full table scans, N+1 patterns, unbounded queries. Add log cleanup.
