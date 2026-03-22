@@ -12,6 +12,82 @@ const path = require("path");
 
 const { log } = require("./logger");
 
+// --- Rate limiting: daily page counter (in-memory, resets on restart) ---
+let pageCount = 0;
+let pageCountDate = null;
+
+const DAILY_PAGE_LIMIT = 100;
+
+/**
+ * Reset the daily counter if the date (Europe/Paris) has changed.
+ */
+function resetDailyCounterIfNeeded() {
+  const today = new Date().toLocaleDateString("fr-FR", {
+    timeZone: "Europe/Paris",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  // Convert DD/MM/YYYY to YYYY-MM-DD for consistency
+  const parts = today.split("/");
+  const todayISO = parts[2] + "-" + parts[1] + "-" + parts[0];
+  if (pageCountDate !== todayISO) {
+    pageCount = 0;
+    pageCountDate = todayISO;
+  }
+}
+
+/**
+ * Navigate to a URL with rate limiting and human delay.
+ * Blocks navigation if daily page limit (100/day) is reached.
+ *
+ * @param {import('playwright').Page} page - Playwright page instance
+ * @param {string} url - URL to navigate to
+ * @param {object} options - Extra options passed to page.goto
+ * @returns {Promise<import('playwright').Response|null>} Navigation response
+ * @throws {Error} If daily page limit reached
+ */
+async function navigateWithLimits(page, url, options = {}) {
+  resetDailyCounterIfNeeded();
+
+  if (pageCount >= DAILY_PAGE_LIMIT) {
+    console.warn("[browser] Daily page limit reached (100/day) - navigation blocked");
+    throw new Error("Daily page limit reached (100/day) - navigation blocked");
+  }
+
+  await humanDelay();
+
+  const response = await page.goto(url, {
+    waitUntil: "domcontentloaded",
+    timeout: 30000,
+    ...options,
+  });
+
+  pageCount++;
+
+  return response;
+}
+
+/**
+ * Wait a random delay to simulate human behavior.
+ *
+ * @param {number} minMs - Minimum delay in milliseconds (default 3000)
+ * @param {number} maxMs - Maximum delay in milliseconds (default 8000)
+ */
+async function humanDelay(minMs = 3000, maxMs = 8000) {
+  const delay = Math.floor(Math.random() * (maxMs - minMs)) + minMs;
+  await new Promise((resolve) => setTimeout(resolve, delay));
+}
+
+/**
+ * Get the current page count state.
+ *
+ * @returns {{ count: number, limit: number, date: string|null }}
+ */
+function getPageCount() {
+  return { count: pageCount, limit: DAILY_PAGE_LIMIT, date: pageCountDate };
+}
+
 /** Default path to LinkedIn cookies file (relative to project root) */
 const DEFAULT_COOKIES_PATH = path.resolve(
   __dirname,
@@ -140,4 +216,7 @@ module.exports = {
   createBrowserContext,
   closeBrowser,
   validateSession,
+  navigateWithLimits,
+  humanDelay,
+  getPageCount,
 };
