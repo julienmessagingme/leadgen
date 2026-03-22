@@ -16,7 +16,7 @@
 const { supabase } = require("../lib/supabase");
 const { checkLimits, connectProfile, sleep } = require("../lib/bereach");
 const { isSuppressed } = require("../lib/suppression");
-const { generateInvitationNote, loadTemplates } = require("../lib/message-generator");
+const { generateInvitationNote, isColdLead, loadTemplates } = require("../lib/message-generator");
 const { log } = require("../lib/logger");
 
 /**
@@ -92,7 +92,7 @@ module.exports = async function taskBInvitations(runId) {
     .from("leads")
     .select("id, full_name, first_name, last_name, linkedin_url, headline, company_name, signal_type, signal_detail, metadata, email, icp_score, tier, status, last_processed_run_id")
     .in("status", ["new", "enriched", "scored"])
-    .in("tier", ["hot", "warm"])
+    .in("tier", ["hot", "warm", "cold"])
     .order("icp_score", { ascending: false })
     .limit(remaining);
 
@@ -137,6 +137,12 @@ module.exports = async function taskBInvitations(runId) {
         continue;
       }
 
+      // Cold lead: enforce 200 char limit (stricter than 280 for signal-based)
+      var isCold = isColdLead(lead);
+      if (isCold && note.length > 200) {
+        note = note.substring(0, 197) + "...";
+      }
+
       // LIN-01: Send invitation via BeReach
       await connectProfile(lead.linkedin_url, note);
 
@@ -156,7 +162,7 @@ module.exports = async function taskBInvitations(runId) {
         })
         .eq("id", lead.id);
 
-      await log(runId, "task-b-invitations", "info", "Invitation sent to " + (lead.full_name || lead.id) + " (" + note.length + " chars)");
+      await log(runId, "task-b-invitations", "info", "Invitation sent to " + (lead.full_name || lead.id) + " (" + note.length + " chars" + (isCold ? ", cold" : "") + ")");
       sent++;
 
       // LIN-04: Rate limiting -- 60-120s delay between invitations
