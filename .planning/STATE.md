@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-21)
 ## Current Position
 
 Phase: 7 of 7 (Settings & Export)
-Plan: 1 of 3 complete
+Plan: 3 of 3 complete
 Status: In progress
-Last activity: 2026-03-22 -- Completed 07-01 (Settings API & CSV Export)
+Last activity: 2026-03-22 -- Completed 07-03 (Settings Wiring)
 
-Progress: [###############░░░░░] 14/14 v1.0 complete | v1.1: 7/11 plans (64%)
+Progress: [#################░░░] 14/14 v1.0 complete | v1.1: 9/11 plans (82%)
 
 ## Performance Metrics
 
@@ -33,6 +33,7 @@ Progress: [###############░░░░░] 14/14 v1.0 complete | v1.1: 7/11 plan
 - 06-01: Leads API Endpoints (3min)
 - 06-02: Shared UI Components & Lead Detail (3min)
 - 07-01: Settings API & CSV Export (3min)
+- 07-03: Settings Wiring (3min)
 
 ## Accumulated Context
 
@@ -41,6 +42,9 @@ Progress: [###############░░░░░] 14/14 v1.0 complete | v1.1: 7/11 plan
 See PROJECT.md Key Decisions table for full log.
 
 Recent:
+- Templates loaded per-call not per-module so UI changes take effect on next task run
+- Fail-open pattern for settings queries: fallback to hardcoded defaults
+- Priority chain for limits: settings table > env var > hardcoded default
 - Settings stored as key-value JSONB in dedicated settings table (runtime-configurable)
 - CSV export uses BOM prefix for Excel UTF-8 compatibility
 - Cron schedule endpoint is static JSON (matches scheduler.js)
@@ -70,5 +74,5 @@ Recent:
 ## Session Continuity
 
 Last session: 2026-03-22
-Stopped at: Completed 07-01-PLAN.md (Settings API & CSV Export)
+Stopped at: Completed 07-03-PLAN.md (Settings Wiring)
 Resume file: None
