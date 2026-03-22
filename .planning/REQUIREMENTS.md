@@ -1,50 +1,109 @@
-# Requirements: v1.2 Security & Performance
+# Requirements: Pipeline Lead Gen — MessagingMe
 
-## SEC — Express Security Hardening
+**Defined:** 2026-03-22
+**Core Value:** Prospecter des personnes qualifiees via signaux LinkedIn ET recherche directe Sales Nav — signal-based + cold outbound cible.
 
-- [x] SEC-01: Rate limiting on /api/auth/login (10 req/15min/IP)
-- [x] SEC-02: Helmet middleware (security headers, remove X-Powered-By)
-- [x] SEC-03: Body size limit on express.json() (50kb)
-- [x] SEC-04: CORS middleware restricting to leadgen.messagingme.app
-- [x] SEC-05: JWT_SECRET moved to REQUIRED_VARS (exit on missing)
-- [x] SEC-06: Settings PATCH key allowlist validation
-- [x] SEC-07: Supabase error messages masked (generic 500 to client)
-- [x] SEC-08: Date params validated (ISO-8601 regex)
-- [x] SEC-09: Search sanitization expanded (PostgREST special chars)
+## v1.3 Requirements
 
-## AUTH — Authentication Hardening
+Requirements for v1.3 Browser Automation & Cold Outbound. Each maps to roadmap phases.
 
-- [x] AUTH-01: JWT expiry reduced to 24h
-- [x] AUTH-02: JWT sub uses "admin" instead of email
-- [x] AUTH-03: .gitignore created (node_modules, .env, dist, logs)
+### Browser Infrastructure
 
-## RGPD — Data Protection Compliance
+- [ ] **BROW-01**: Playwright installe sur le VPS avec Chromium headless
+- [ ] **BROW-02**: Import et stockage securise des cookies de session LinkedIn
+- [ ] **BROW-03**: Mecanisme de refresh/detection de cookies expires avec alerte
+- [ ] **BROW-04**: Rate limiting global <100 pages vues/jour avec compteur
+- [ ] **BROW-05**: Delais aleatoires humains (3-8s) entre chaque action browser
 
-- [x] RGPD-01: Exclude action nullifies PII fields (email, name, phone, linkedin_url, headline)
-- [x] RGPD-02: Prompt sanitization (strip newlines, truncate 200 chars) on lead data fed to Claude
+### Browser Signal Collector
 
-## DB — Supabase Schema & Indexes
+- [ ] **BSIG-01**: Collecte des likers/commenters sur posts concurrents via browser (competitor_page)
+- [ ] **BSIG-02**: Collecte des likers/commenters sur posts influenceurs via browser (influencer)
+- [ ] **BSIG-03**: Recherche de posts par mots-cles et extraction des auteurs via browser (keyword)
+- [ ] **BSIG-04**: Recherche d'offres d'emploi et identification des decideurs via browser (job_keyword)
+- [ ] **BSIG-05**: Dedup cross-source : skip lead si deja trouve par Bereach (meme jour, meme linkedin_url)
+- [ ] **BSIG-06**: Chaque lead tagge source browser ou source bereach en metadata
+- [ ] **BSIG-07**: Task A execute Bereach ET browser en parallele ou sequentiel chaque matin
 
-- [x] DB-01: Index leads(status)
-- [x] DB-02: Index leads(status, tier)
-- [x] DB-03: Index leads(icp_score DESC)
-- [x] DB-04: Index leads(invitation_sent_at)
-- [x] DB-05: Index leads(created_at)
-- [x] DB-06: Index logs(task, created_at DESC)
-- [x] DB-07: Export all table DDL as migration files
+### Cold Outbound
 
-## PERF — Query Optimization
+- [ ] **COLD-01**: Formulaire dashboard avec champs : secteur, taille entreprise, titre de poste, geographie, nombre de leads
+- [ ] **COLD-02**: API endpoint pour lancer une recherche cold outbound
+- [ ] **COLD-03**: Playwright navigue Sales Nav avec les filtres du formulaire
+- [ ] **COLD-04**: Scraping des profils (nom, prenom, headline, entreprise, linkedin_url)
+- [ ] **COLD-05**: Enrichissement email : extraction du mail visible sur LinkedIn, sinon FullEnrich
+- [ ] **COLD-06**: Scoring ICP des leads cold
+- [ ] **COLD-07**: Injection dans le pipeline avec signal_category cold_outbound, status new
+- [ ] **COLD-08**: Historique des recherches cold dans le dashboard
 
-- [x] PERF-01: Dashboard stats use Supabase RPC aggregate (not full table scan)
-- [x] PERF-02: Dashboard charts use server-side date filtering
-- [x] PERF-03: Cron status endpoint single query (not N+1)
-- [x] PERF-04: Bulk action batched update (not per-lead loop)
-- [x] PERF-05: Replace ILIKE idempotence check on logs with lead flag
-- [x] PERF-06: select("*") replaced with specific columns in task queries (8 files)
-- [x] PERF-07: Add .limit() to unbounded task queries (6 queries)
-- [x] PERF-08: Cache loadTemplates() per task run (not per lead)
+### Outreach Adaptation
 
-## OPS — Operational Health
+- [ ] **OUTR-01**: Claude genere un message d'invitation adapte pour les leads cold (sans reference signal)
+- [ ] **OUTR-02**: Template de message cold configurable dans les settings
+- [ ] **OUTR-03**: Leads cold passent dans la meme sequence outreach (invitation, message, email, WhatsApp)
 
-- [x] OPS-01: Scheduled log cleanup (delete logs > 30 days)
-- [x] OPS-02: Remove redundant dotenv.config() from anthropic.js
+## v2 Requirements
+
+Deferred to future release.
+
+### Bereach Replacement
+- **REPL-01**: Invitations LinkedIn via Playwright (remplace Bereach connectProfile)
+- **REPL-02**: Messages LinkedIn via Playwright (remplace Bereach sendMessage)
+- **REPL-03**: Check inbox LinkedIn via Playwright (remplace Bereach searchInbox)
+- **REPL-04**: Suppression complete de la dependance Bereach
+
+### Dashboard A/B
+- **DASH-AB-01**: Widget comparatif volume leads Bereach vs Browser
+- **DASH-AB-02**: Widget comparatif score ICP moyen par source
+
+### Advanced Browser
+- **ADV-01**: Proxy residentiel configurable pour Playwright
+- **ADV-02**: Rotation de cookies multi-comptes
+- **ADV-03**: Filtres Sales Nav avances dans la watchlist (secteur, taille, geo)
+
+## Out of Scope
+
+| Feature | Reason |
+|---------|--------|
+| Remplacement complet Bereach (outreach) | v2 — d'abord valider la collecte browser |
+| Compte fake LinkedIn | Decision: utiliser compte Julien Sales Nav |
+| Proxy residentiel | Volume <100 pages/jour ne le justifie pas encore |
+| Widget A/B dashboard | Comparaison manuelle via filtres existants suffisante pour v1.3 |
+| Multi-compte LinkedIn | Usage solo Julien |
+
+## Traceability
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| BROW-01 | TBD | Pending |
+| BROW-02 | TBD | Pending |
+| BROW-03 | TBD | Pending |
+| BROW-04 | TBD | Pending |
+| BROW-05 | TBD | Pending |
+| BSIG-01 | TBD | Pending |
+| BSIG-02 | TBD | Pending |
+| BSIG-03 | TBD | Pending |
+| BSIG-04 | TBD | Pending |
+| BSIG-05 | TBD | Pending |
+| BSIG-06 | TBD | Pending |
+| BSIG-07 | TBD | Pending |
+| COLD-01 | TBD | Pending |
+| COLD-02 | TBD | Pending |
+| COLD-03 | TBD | Pending |
+| COLD-04 | TBD | Pending |
+| COLD-05 | TBD | Pending |
+| COLD-06 | TBD | Pending |
+| COLD-07 | TBD | Pending |
+| COLD-08 | TBD | Pending |
+| OUTR-01 | TBD | Pending |
+| OUTR-02 | TBD | Pending |
+| OUTR-03 | TBD | Pending |
+
+**Coverage:**
+- v1.3 requirements: 23 total
+- Mapped to phases: 0
+- Unmapped: 23 (pending roadmap creation)
+
+---
+*Requirements defined: 2026-03-22*
+*Last updated: 2026-03-22 after initial definition*
