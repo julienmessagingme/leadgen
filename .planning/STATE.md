@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-22)
 ## Current Position
 
 Phase: 12 of 14 (Browser Signal Collector)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: In Progress
-Last activity: 2026-03-22 — Completed 12-01 (Browser signal collector for competitor_page/influencer)
+Last activity: 2026-03-22 — Completed 12-02 (Keyword & Job keyword browser scrapers)
 
-Progress: [###░░░░░░░] 30% (3/10 plans) | v1.0: 14 plans | v1.1: 11 plans | v1.2: 7 plans
+Progress: [####░░░░░░] 40% (4/10 plans) | v1.0: 14 plans | v1.1: 11 plans | v1.2: 7 plans
 
 ## Performance Metrics
 
@@ -49,6 +49,8 @@ See PROJECT.md Key Decisions table for full log.
 - 12-01: Multi-selector fallback strategy for LinkedIn CSS resilience
 - 12-01: dismissPopups helper for cookie consent, sign-in modals, messaging overlays
 - 12-01: source_origin: "browser" field on all browser-collected signals
+- 12-02: First page only for keyword search, top 3 companies for job search (budget conservation)
+- 12-02: Decision-maker lookup via post search (mirrors Bereach approach, not company People tab)
 
 ### Blockers/Concerns
 
@@ -58,5 +60,5 @@ See PROJECT.md Key Decisions table for full log.
 ## Session Continuity
 
 Last session: 2026-03-22
-Stopped at: Completed 12-01-PLAN.md (Browser signal collector for competitor_page/influencer)
+Stopped at: Completed 12-02-PLAN.md (Keyword & Job keyword browser scrapers)
 Resume file: None
