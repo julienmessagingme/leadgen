@@ -38,8 +38,8 @@ Requirements for v1.3 Browser Automation & Cold Outbound. Each maps to roadmap p
 
 ### Outreach Adaptation
 
-- [ ] **OUTR-01**: Claude genere un message d'invitation adapte pour les leads cold (sans reference signal)
-- [ ] **OUTR-02**: Template de message cold configurable dans les settings
+- [x] **OUTR-01**: Claude genere un message d'invitation adapte pour les leads cold (sans reference signal)
+- [x] **OUTR-02**: Template de message cold configurable dans les settings
 - [ ] **OUTR-03**: Leads cold passent dans la meme sequence outreach (invitation, message, email, WhatsApp)
 
 ## v2 Requirements
@@ -95,8 +95,8 @@ Deferred to future release.
 | COLD-06 | Phase 13 | Complete |
 | COLD-07 | Phase 13 | Complete |
 | COLD-08 | Phase 13 | Complete |
-| OUTR-01 | Phase 14 | Pending |
-| OUTR-02 | Phase 14 | Pending |
+| OUTR-01 | Phase 14 | Complete |
+| OUTR-02 | Phase 14 | Complete |
 | OUTR-03 | Phase 14 | Pending |
 
 **Coverage:**

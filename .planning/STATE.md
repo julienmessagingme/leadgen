@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-03-22)
 
 ## Current Position
 
-Phase: 13 of 14 (Cold Outbound) -- COMPLETE
-Plan: 3 of 3 in current phase
-Status: Phase 13 Complete
-Last activity: 2026-03-22 — Completed 13-03 (Cold outbound execution pipeline)
+Phase: 14 of 14 (Outreach Adaptation) -- IN PROGRESS
+Plan: 1 of 2 in current phase
+Status: Plan 14-01 Complete
+Last activity: 2026-03-22 — Completed 14-01 (Cold message generation + template settings)
 
-Progress: [#######░░░] 70% (7/10 plans) | v1.0: 14 plans | v1.1: 11 plans | v1.2: 7 plans
+Progress: [########░░] 80% (8/10 plans) | v1.0: 14 plans | v1.1: 11 plans | v1.2: 7 plans
 
 ## Performance Metrics
 
@@ -64,6 +64,9 @@ See PROJECT.md Key Decisions table for full log.
 - 13-03: FullEnrich only for cold lead email (skip BeReach profile visits)
 - 13-03: crypto.randomUUID instead of uuid package (no extra dependency)
 - 13-03: Fire-and-forget pipeline from API, 409 guard for concurrent searches
+- 14-01: Cold detection via signal_category/signal_type/metadata fields (no new DB column)
+- 14-01: Random cold template selection for message variety
+- 14-01: 200 char limit for cold invitations (vs 280 signal-based)
 
 ### Blockers/Concerns
 
@@ -73,5 +76,5 @@ See PROJECT.md Key Decisions table for full log.
 ## Session Continuity
 
 Last session: 2026-03-22
-Stopped at: Completed 13-03-PLAN.md (Cold outbound execution pipeline)
+Stopped at: Completed 14-01-PLAN.md (Cold message generation + template settings)
 Resume file: None

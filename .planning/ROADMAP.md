@@ -113,7 +113,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 14-01: Cold message generation + template settings (OUTR-01, OUTR-02)
+- [x] 14-01: Cold message generation + template settings (OUTR-01, OUTR-02)
 - [ ] 14-02: Cold leads sequence integration (OUTR-03)
 
 ## Progress
@@ -127,7 +127,7 @@ Phases execute in numeric order: 11 -> 12 -> 13 -> 14
 | 11. Browser Infrastructure | 2/2 | Complete    | 2026-03-22 | - |
 | 12. Browser Signal Collector | 3/3 | Complete    | 2026-03-22 | - |
 | 13. Cold Outbound | 3/3 | Complete    | 2026-03-22 | - |
-| 14. Outreach Adaptation | v1.3 | 0/2 | Not started | - |
+| 14. Outreach Adaptation | v1.3 | 1/2 | In progress | - |
 | 10. Query Optimization & Ops | v1.2 | 3/3 | Complete | 2026-03-22 |
 | 9. Supabase Indexes & Schema | v1.2 | 2/2 | Complete | 2026-03-22 |
 | 8. Express Security Hardening | v1.2 | 2/2 | Complete | 2026-03-22 |
