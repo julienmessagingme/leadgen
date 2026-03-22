@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** Prospecter des personnes qualifiees via signaux LinkedIn ET recherche directe Sales Nav — signal-based + cold outbound cible.
-**Current focus:** v1.3 Browser Automation & Cold Outbound — Phase 13 in progress
+**Current focus:** v1.3 Browser Automation & Cold Outbound — Phase 14 COMPLETE (milestone complete)
 
 ## Current Position
 
-Phase: 14 of 14 (Outreach Adaptation) -- IN PROGRESS
-Plan: 1 of 2 in current phase
-Status: Plan 14-01 Complete
-Last activity: 2026-03-22 — Completed 14-01 (Cold message generation + template settings)
+Phase: 14 of 14 (Outreach Adaptation) -- COMPLETE
+Plan: 2 of 2 in current phase
+Status: Phase 14 Complete -- v1.3 Milestone Complete
+Last activity: 2026-03-22 — Completed 14-02 (Cold lead outreach sequence)
 
-Progress: [########░░] 80% (8/10 plans) | v1.0: 14 plans | v1.1: 11 plans | v1.2: 7 plans
+Progress: [##########] 100% (10/10 plans) | v1.0: 14 plans | v1.1: 11 plans | v1.2: 7 plans | v1.3: 10 plans
 
 ## Performance Metrics
 
@@ -67,6 +67,8 @@ See PROJECT.md Key Decisions table for full log.
 - 14-01: Cold detection via signal_category/signal_type/metadata fields (no new DB column)
 - 14-01: Random cold template selection for message variety
 - 14-01: 200 char limit for cold invitations (vs 280 signal-based)
+- 14-02: Simple tier filter approach: add "cold" to existing .in() filters
+- 14-02: 200 char limit double-enforced in task-b as safety net
 
 ### Blockers/Concerns
 
@@ -76,5 +78,5 @@ See PROJECT.md Key Decisions table for full log.
 ## Session Continuity
 
 Last session: 2026-03-22
-Stopped at: Completed 14-01-PLAN.md (Cold message generation + template settings)
+Stopped at: Completed 14-02-PLAN.md (Cold lead outreach sequence -- v1.3 milestone complete)
 Resume file: None
