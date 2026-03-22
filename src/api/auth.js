@@ -1,9 +1,18 @@
 const { Router } = require("express");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
+const rateLimit = require("express-rate-limit");
 const router = Router();
 
-router.post("/login", async (req, res) => {
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,
+  message: { error: "Too many login attempts, please try again later" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+router.post("/login", loginLimiter, async (req, res) => {
   const { email, password } = req.body;
 
   if (email !== process.env.DASHBOARD_USER) {
@@ -18,8 +27,8 @@ router.post("/login", async (req, res) => {
     return res.status(401).json({ error: "Invalid credentials" });
   }
 
-  const token = jwt.sign({ sub: email }, process.env.JWT_SECRET, {
-    expiresIn: "7d",
+  const token = jwt.sign({ sub: "admin" }, process.env.JWT_SECRET, {
+    expiresIn: "24h",
   });
 
   res.json({ token });
