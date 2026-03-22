@@ -9,10 +9,18 @@ router.use(authMiddleware);
 const VALID_SORTS = ["icp_score", "created_at", "signal_date", "status"];
 
 /**
- * Sanitize search term: remove PostgREST operators (periods, commas).
+ * ISO-8601 date validation helper.
+ */
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d+)?Z?)?$/;
+function isValidDate(str) {
+  return ISO_DATE_RE.test(str) && !isNaN(Date.parse(str));
+}
+
+/**
+ * Sanitize search term: remove ALL PostgREST special characters.
  */
 function sanitizeSearch(term) {
-  return term.replace(/[.,]/g, "").trim();
+  return term.replace(/[.,()!<>%\\:"']/g, "").trim().slice(0, 100);
 }
 
 /**
@@ -84,7 +92,8 @@ router.get("/", async (req, res) => {
     const { data, count, error } = await query;
 
     if (error) {
-      return res.status(500).json({ error: error.message });
+      console.error("Leads GET / supabase error:", error.message);
+      return res.status(500).json({ error: "Internal server error" });
     }
 
     res.json({ leads: data, total: count });
@@ -129,6 +138,14 @@ router.get("/export", async (req, res) => {
       }
     }
 
+    // Validate date params
+    if (date_from && !isValidDate(date_from)) {
+      return res.status(400).json({ error: "Invalid date_from format" });
+    }
+    if (date_to && !isValidDate(date_to)) {
+      return res.status(400).json({ error: "Invalid date_to format" });
+    }
+
     // Date range filters
     if (date_from) {
       query = query.gte("created_at", date_from);
@@ -141,7 +158,10 @@ router.get("/export", async (req, res) => {
 
     const { data, error } = await query;
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error("Leads GET /export supabase error:", error.message);
+      return res.status(500).json({ error: "Internal server error" });
+    }
 
     // Build CSV
     const headers = "Nom,Prenom,Email,LinkedIn,Entreprise,Score ICP,Tier,Statut,Date";
@@ -193,7 +213,8 @@ router.get("/:id", async (req, res) => {
       if (error.code === "PGRST116") {
         return res.status(404).json({ error: "Lead not found" });
       }
-      return res.status(500).json({ error: error.message });
+      console.error("Leads GET /:id supabase error:", error.message);
+      return res.status(500).json({ error: "Internal server error" });
     }
 
     res.json(data);
@@ -226,7 +247,8 @@ router.patch("/:id/action", async (req, res) => {
       if (fetchErr.code === "PGRST116") {
         return res.status(404).json({ error: "Lead not found" });
       }
-      return res.status(500).json({ error: fetchErr.message });
+      console.error("Leads PATCH /:id/action fetch error:", fetchErr.message);
+      return res.status(500).json({ error: "Internal server error" });
     }
 
     const metadata = lead.metadata || {};
@@ -240,7 +262,10 @@ router.patch("/:id/action", async (req, res) => {
         .update({ metadata })
         .eq("id", id);
 
-      if (updateErr) return res.status(500).json({ error: updateErr.message });
+      if (updateErr) {
+        console.error("Leads PATCH /:id/action pause error:", updateErr.message);
+        return res.status(500).json({ error: "Internal server error" });
+      }
       return res.json({ ok: true, action: "paused" });
     }
 
@@ -253,7 +278,10 @@ router.patch("/:id/action", async (req, res) => {
         .update({ metadata })
         .eq("id", id);
 
-      if (updateErr) return res.status(500).json({ error: updateErr.message });
+      if (updateErr) {
+        console.error("Leads PATCH /:id/action resume error:", updateErr.message);
+        return res.status(500).json({ error: "Internal server error" });
+      }
       return res.json({ ok: true, action: "resumed" });
     }
 
@@ -266,7 +294,10 @@ router.patch("/:id/action", async (req, res) => {
         .update({ status: "disqualified", metadata })
         .eq("id", id);
 
-      if (updateErr) return res.status(500).json({ error: updateErr.message });
+      if (updateErr) {
+        console.error("Leads PATCH /:id/action exclude error:", updateErr.message);
+        return res.status(500).json({ error: "Internal server error" });
+      }
 
       // Insert suppression hashes
       const hashes = [];
@@ -318,7 +349,10 @@ router.post("/bulk-action", async (req, res) => {
       .select("*")
       .in("id", ids);
 
-    if (fetchErr) return res.status(500).json({ error: fetchErr.message });
+    if (fetchErr) {
+      console.error("Leads POST /bulk-action fetch error:", fetchErr.message);
+      return res.status(500).json({ error: "Internal server error" });
+    }
 
     let processed = 0;
 
