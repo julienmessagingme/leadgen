@@ -9,10 +9,10 @@ See: .planning/PROJECT.md (updated 2026-03-22)
 
 ## Current Position
 
-Status: v1.2 Security & Performance -- Phase 9 complete
-Last activity: 2026-03-22 -- Completed 09-02 (RGPD PII nullification & prompt sanitization)
+Status: v1.2 Security & Performance -- Phase 9 in progress (plan 1 of 2 complete)
+Last activity: 2026-03-22 -- Completed 09-01 (Supabase schema indexes & DDL export)
 
-Progress: [####################] v1.0 complete (14 plans) | v1.1 complete (11 plans) | v1.2: 4/7 plans
+Progress: [####################] v1.0 complete (14 plans) | v1.1 complete (11 plans) | v1.2: 5/7 plans
 
 ## Performance Metrics
 
@@ -41,6 +41,7 @@ Progress: [####################] v1.0 complete (14 plans) | v1.1 complete (11 pl
 **v1.2 Velocity:**
 - 08-01: Express security middleware + JWT hardening
 - 08-02: Input validation & error masking (2min)
+- 09-01: Supabase schema indexes & DDL export (4min)
 - 09-02: RGPD PII nullification & prompt sanitization (3min)
 
 ## Accumulated Context
@@ -55,6 +56,8 @@ See PROJECT.md Key Decisions table for full log.
 - [Phase 08]: Strip all PostgREST special chars and cap search at 100 chars for safety
 - [Phase 09]: PII_NULLS constant centralizes 7 PII fields for consistent nullification on exclude
 - [Phase 09]: sanitizeForPrompt strips newlines and truncates to 200 chars to prevent prompt injection
+- [Phase 09]: All indexes use IF NOT EXISTS for idempotent re-application
+- [Phase 09]: DDL export via information_schema.columns (portable, no pg_dump needed)
 
 ### Blockers/Concerns
 
@@ -63,5 +66,5 @@ No active blockers. All v1.0 and v1.1 blockers resolved.
 ## Session Continuity
 
 Last session: 2026-03-22
-Stopped at: Completed 09-02-PLAN.md
+Stopped at: Completed 09-01-PLAN.md
 Resume file: None
