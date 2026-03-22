@@ -36,3 +36,13 @@
 
 ---
 
+
+## v1.2 Security & Performance (Shipped: 2026-03-22)
+
+**Phases completed:** 7 phases, 21 plans, 0 tasks
+
+**Key accomplishments:**
+- (none recorded)
+
+---
+

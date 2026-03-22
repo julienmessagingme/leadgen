@@ -24,13 +24,14 @@ Prospecter uniquement des personnes ayant deja montre un signal d'interet — ze
 - ✓ Dashboard 7 widgets KPIs pipeline (DASH-01-07) — v1.1
 - ✓ Pipeline kanban/liste + sequences + fiche detail lead (PIPE-01-07, SEQ-01-07, LEAD-01-06) — v1.1
 - ✓ Parametres editables 6 categories + export CSV (CONF-01-06, EXP-01-03) — v1.1
+- ✓ Express security hardening: rate limiting, helmet, CORS, JWT, input validation (SEC-01-09, AUTH-01-03) — v1.2
+- ✓ Supabase 6 indexes + DDL migration exports (DB-01-07) — v1.2
+- ✓ RGPD PII erasure on exclude + prompt sanitization (RGPD-01-02) — v1.2
+- ✓ Dashboard RPC aggregation, query optimization, log cleanup (PERF-01-08, OPS-01-02) — v1.2
 
 ### Active
 
-- Security hardening Express (SEC-01-09, AUTH-01-03) — v1.2
-- Supabase indexes & schema migrations (DB-01-07) — v1.2
-- RGPD PII erasure + prompt sanitization (RGPD-01-02) — v1.2
-- Query optimization & log cleanup (PERF-01-08, OPS-01-02) — v1.2
+(None — next milestone not yet defined)
 
 ### Out of Scope
 
@@ -45,7 +46,7 @@ Prospecter uniquement des personnes ayant deja montre un signal d'interet — ze
 
 ## Context
 
-Shipped v1.0 MVP (2026-03-21) + v1.1 Interface Web (2026-03-22). Pipeline backend 100% operationnel avec 6 taches cron. Interface web React deployee avec dashboard, pipeline, sequences, settings, export CSV. v1.2 en cours : security hardening, Supabase optimization, RGPD compliance.
+Shipped v1.0 MVP (2026-03-21) + v1.1 Interface Web (2026-03-22) + v1.2 Security & Performance (2026-03-22). Pipeline backend 100% operationnel avec 6 taches cron. Interface web React deployee avec dashboard, pipeline, sequences, settings, export CSV. API securisee (helmet, CORS, rate limiting, JWT 24h, input validation). DB optimisee (6 indexes, 3 RPC functions, column selects, bounded queries). RGPD conforme (PII erasure, prompt sanitization). Log cleanup automatique.
 
 Tech stack: Node.js + Express + node-cron, Supabase, React 19 + Vite + Tailwind v4 + TanStack Query, Recharts, BeReach, Fullenrich, Claude Haiku/Sonnet, Gmail SMTP, MessagingMe API.
 VPS: ubuntu@146.59.233.252 at /home/openclaw/leadgen/, PM2 process manager, Nginx Proxy Manager HTTPS.
@@ -105,10 +106,13 @@ Domain: leadgen.messagingme.app
 | beta.messages.create pour structured output | Standard messages API ne supporte pas output_config | ✓ Good |
 | Lazy env var init (pas au load time) | Evite crash au demarrage si var manquante non-critique | ✓ Good |
 | Express bind 172.17.0.1 (Docker bridge) | Nginx Proxy Manager en Docker doit atteindre Express | ✓ Good |
+| PostgreSQL RPC functions for dashboard | Server-side aggregation vs JS loops, single round-trip | ✓ Good |
+| last_processed_run_id vs ILIKE logs | O(1) idempotence check vs expensive text scan | ✓ Good |
+| PERF-04 batch read only (write per-lead) | JSONB metadata merge requires per-lead update | ✓ Accepted |
 | React 19 + Vite + Tailwind v4 | Vite default, deps compatibles, CSS natif via @tailwindcss/vite | ✓ Good |
 | Settings key-value JSONB dans table dediee | Runtime-configurable sans redeploy, fallback hardcoded | ✓ Good |
 | CSV export BOM prefix pour Excel | Compatibilite UTF-8 Excel francais | ✓ Good |
 | useDeferredValue pour search debounce | React 19 natif, pas de setTimeout/lodash | ✓ Good |
 
 ---
-*Last updated: 2026-03-22 after v1.1 milestone completion*
+*Last updated: 2026-03-22 after v1.2 milestone completion*
