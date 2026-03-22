@@ -72,7 +72,7 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 8. Express Security Hardening | v1.2 | 2/2 | Complete | 2026-03-22 |
 | 9. Supabase Indexes & Schema | v1.2 | 2/2 | Complete | 2026-03-22 |
-| 10. Query Optimization & Ops | v1.2 | 3/3 | Complete | 2026-03-22 |
+| 10. Query Optimization & Ops | v1.2 | Complete    | 2026-03-22 | 2026-03-22 |
 | 1. Foundation | v1.0 | 3/3 | Complete | 2026-03-20 |
 | 2. Signal Pipeline | v1.0 | 5/5 | Complete | 2026-03-20 |
 | 3. Outreach Engine | v1.0 | 5/5 | Complete | 2026-03-21 |
