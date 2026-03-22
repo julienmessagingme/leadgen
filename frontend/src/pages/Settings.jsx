@@ -5,6 +5,7 @@ import SuppressionTab from "../components/settings/SuppressionTab";
 import LimitsTab from "../components/settings/LimitsTab";
 import WatchlistTab from "../components/settings/WatchlistTab";
 import TemplatesTab from "../components/settings/TemplatesTab";
+import ColdTemplatesTab from "../components/settings/ColdTemplatesTab";
 import CronTab from "../components/settings/CronTab";
 
 const TABS = [
@@ -13,6 +14,7 @@ const TABS = [
   { key: "limits", label: "Limites" },
   { key: "watchlist", label: "Sources & Mots-cles" },
   { key: "templates", label: "Templates" },
+  { key: "cold_templates", label: "Templates Cold" },
   { key: "cron", label: "Planning Cron" },
 ];
 
@@ -22,6 +24,7 @@ const TAB_COMPONENTS = {
   limits: LimitsTab,
   watchlist: WatchlistTab,
   templates: TemplatesTab,
+  cold_templates: ColdTemplatesTab,
   cron: CronTab,
 };
 
