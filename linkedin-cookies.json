@@ -1,0 +1,4 @@
+[
+  {"name": "li_at", "value": "REPLACE_ME", "domain": ".linkedin.com", "path": "/"},
+  {"name": "JSESSIONID", "value": "REPLACE_ME", "domain": ".linkedin.com", "path": "/"}
+]
