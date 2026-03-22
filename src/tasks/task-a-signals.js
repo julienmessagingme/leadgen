@@ -108,15 +108,29 @@ module.exports = async function taskASignals(runId) {
 
     todayCount = todayCount || 0;
 
-    if (todayCount >= 50) {
+    // Load daily lead limit from settings table (fallback: 50)
+    var dailyLeadLimit = 50;
+    try {
+      var { data: limitSetting } = await supabase
+        .from("settings")
+        .select("value")
+        .eq("key", "daily_lead_limit")
+        .single();
+      if (limitSetting && limitSetting.value) dailyLeadLimit = parseInt(limitSetting.value) || 50;
+    } catch (e) {
+      // Fallback to default
+      dailyLeadLimit = 50;
+    }
+
+    if (todayCount >= dailyLeadLimit) {
       await log(runId, "task-a-signals", "info",
-        "Daily lead limit reached (50), skipping pipeline. Today count: " + todayCount);
+        "Daily lead limit reached (" + dailyLeadLimit + "), skipping pipeline. Today count: " + todayCount);
       return;
     }
 
-    var remaining = 50 - todayCount;
+    var remaining = dailyLeadLimit - todayCount;
     await log(runId, "task-a-signals", "info",
-      "Daily quota: " + todayCount + "/50 used, " + remaining + " remaining");
+      "Daily quota: " + todayCount + "/" + dailyLeadLimit + " used, " + remaining + " remaining");
 
     // ---------------------------------------------------------------
     // Step 3: Collect signals

@@ -50,8 +50,22 @@ module.exports = async function taskBInvitations(runId) {
     return;
   }
 
-  // Step 2: Daily limit double check (LIN-03)
-  var dailyLimit = parseInt(process.env.DAILY_INVITATION_LIMIT || "15", 10);
+  // Step 2: Daily limit from settings table, env var fallback (LIN-03)
+  var dailyLimit = 15;
+  try {
+    var { data: limitSetting } = await supabase
+      .from("settings")
+      .select("value")
+      .eq("key", "daily_invitation_limit")
+      .single();
+    if (limitSetting && limitSetting.value) {
+      dailyLimit = parseInt(limitSetting.value) || 15;
+    } else {
+      dailyLimit = parseInt(process.env.DAILY_INVITATION_LIMIT) || 15;
+    }
+  } catch (e) {
+    dailyLimit = parseInt(process.env.DAILY_INVITATION_LIMIT) || 15;
+  }
 
   var todayStart = getTodayStartParis();
   var { count: todaySent, error: countErr } = await supabase
