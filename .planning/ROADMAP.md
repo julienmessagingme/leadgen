@@ -8,6 +8,28 @@ Agent autonome de prospection B2B signal-based avec interface web React de pilot
 
 - ✅ **v1.0 MVP** -- Phases 1-3.1 (shipped 2026-03-21) -- [archive](milestones/v1.0-ROADMAP.md)
 - ✅ **v1.1 Interface Web** -- Phases 4-7 (shipped 2026-03-22) -- [archive](milestones/v1.1-ROADMAP.md)
+- 🔧 **v1.2 Security & Performance** -- Phases 8-10 (3 phases, 7 plans)
+
+## v1.2 Security & Performance
+
+### Phase 8: Express Security Hardening
+**Goal:** Lock down the API layer — rate limiting, helmet, CORS, body limits, error masking, input validation.
+**Requirements:** SEC-01 to SEC-09, AUTH-01 to AUTH-03
+**Plans:** 2 plans
+
+Plans:
+- [ ] 08-01-PLAN.md — Security middleware (helmet, CORS, body limit) + JWT hardening + .gitignore
+- [ ] 08-02-PLAN.md — Input validation (settings allowlist, date validation, search sanitization) + error masking
+
+### Phase 9: Supabase Indexes & Schema
+**Goal:** Add missing indexes, export DDL migrations, fix RGPD erasure.
+**Requirements:** DB-01 to DB-07, RGPD-01, RGPD-02
+**Plans:** 2 (09-01: indexes + migrations, 09-02: RGPD fixes + prompt sanitization)
+
+### Phase 10: Query Optimization & Ops
+**Goal:** Eliminate full table scans, N+1 patterns, unbounded queries. Add log cleanup.
+**Requirements:** PERF-01 to PERF-08, OPS-01, OPS-02
+**Plans:** 3 (10-01: dashboard aggregation, 10-02: task query optimization, 10-03: log cleanup + housekeeping)
 
 ## Phases
 
@@ -39,6 +61,9 @@ Agent autonome de prospection B2B signal-based avec interface web React de pilot
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
+| 8. Express Security Hardening | v1.2 | 0/2 | Planned | - |
+| 9. Supabase Indexes & Schema | v1.2 | 0/2 | Pending | - |
+| 10. Query Optimization & Ops | v1.2 | 0/3 | Pending | - |
 | 1. Foundation | v1.0 | 3/3 | Complete | 2026-03-20 |
 | 2. Signal Pipeline | v1.0 | 5/5 | Complete | 2026-03-20 |
 | 3. Outreach Engine | v1.0 | 5/5 | Complete | 2026-03-21 |
