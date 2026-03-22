@@ -6,6 +6,20 @@ const { supabase } = require("../lib/supabase");
 const router = Router();
 router.use(authMiddleware);
 
+const ALLOWED_CONFIG_KEYS = [
+  "daily_invitation_limit",
+  "daily_email_limit",
+  "daily_whatsapp_limit",
+  "min_icp_score",
+  "email_template_subject",
+  "email_template_body",
+  "whatsapp_template",
+  "invitation_note_template",
+  "followup_delay_days",
+  "email_delay_days",
+  "whatsapp_delay_days",
+];
+
 const VALID_ICP_CATEGORIES = [
   "title_positive",
   "title_negative",
@@ -27,7 +41,10 @@ router.get("/icp-rules", async (req, res) => {
       .select("*")
       .order("category");
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error("Settings supabase error:", error.message);
+      return res.status(500).json({ error: "Internal server error" });
+    }
     res.json({ rules: data });
   } catch (err) {
     console.error("Settings GET /icp-rules error:", err.message);
@@ -51,7 +68,10 @@ router.post("/icp-rules", async (req, res) => {
       .select()
       .single();
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error("Settings supabase error:", error.message);
+      return res.status(500).json({ error: "Internal server error" });
+    }
     res.status(201).json(data);
   } catch (err) {
     console.error("Settings POST /icp-rules error:", err.message);
@@ -84,7 +104,10 @@ router.put("/icp-rules/:id", async (req, res) => {
       .select()
       .single();
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error("Settings supabase error:", error.message);
+      return res.status(500).json({ error: "Internal server error" });
+    }
     res.json(data);
   } catch (err) {
     console.error("Settings PUT /icp-rules/:id error:", err.message);
@@ -101,7 +124,10 @@ router.delete("/icp-rules/:id", async (req, res) => {
       .delete()
       .eq("id", id);
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error("Settings supabase error:", error.message);
+      return res.status(500).json({ error: "Internal server error" });
+    }
     res.json({ ok: true });
   } catch (err) {
     console.error("Settings DELETE /icp-rules/:id error:", err.message);
@@ -119,7 +145,10 @@ router.get("/suppression", async (req, res) => {
       .from("suppression_list")
       .select("*");
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error("Settings supabase error:", error.message);
+      return res.status(500).json({ error: "Internal server error" });
+    }
     res.json({ entries: data });
   } catch (err) {
     console.error("Settings GET /suppression error:", err.message);
@@ -147,7 +176,10 @@ router.post("/suppression", async (req, res) => {
       .from("suppression_list")
       .upsert({ hashed_value, source }, { onConflict: "hashed_value" });
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error("Settings supabase error:", error.message);
+      return res.status(500).json({ error: "Internal server error" });
+    }
     res.status(201).json({ ok: true });
   } catch (err) {
     console.error("Settings POST /suppression error:", err.message);
@@ -164,7 +196,10 @@ router.delete("/suppression/:hash", async (req, res) => {
       .delete()
       .eq("hashed_value", hash);
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error("Settings supabase error:", error.message);
+      return res.status(500).json({ error: "Internal server error" });
+    }
     res.json({ ok: true });
   } catch (err) {
     console.error("Settings DELETE /suppression/:hash error:", err.message);
@@ -182,7 +217,10 @@ router.get("/config", async (req, res) => {
       .from("settings")
       .select("*");
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error("Settings supabase error:", error.message);
+      return res.status(500).json({ error: "Internal server error" });
+    }
     res.json({ settings: data });
   } catch (err) {
     console.error("Settings GET /config error:", err.message);
@@ -194,6 +232,10 @@ router.patch("/config/:key", async (req, res) => {
   try {
     const { key } = req.params;
     const { value } = req.body;
+
+    if (!ALLOWED_CONFIG_KEYS.includes(key)) {
+      return res.status(400).json({ error: `Invalid config key. Allowed: ${ALLOWED_CONFIG_KEYS.join(", ")}` });
+    }
 
     if (value === undefined) {
       return res.status(400).json({ error: "value is required" });
@@ -208,7 +250,10 @@ router.patch("/config/:key", async (req, res) => {
       .select()
       .single();
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error("Settings supabase error:", error.message);
+      return res.status(500).json({ error: "Internal server error" });
+    }
     res.json(data);
   } catch (err) {
     console.error("Settings PATCH /config/:key error:", err.message);
@@ -227,7 +272,10 @@ router.get("/watchlist", async (req, res) => {
       .select("*")
       .order("source_type");
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error("Settings supabase error:", error.message);
+      return res.status(500).json({ error: "Internal server error" });
+    }
     res.json({ sources: data });
   } catch (err) {
     console.error("Settings GET /watchlist error:", err.message);
@@ -249,7 +297,10 @@ router.post("/watchlist", async (req, res) => {
       .select()
       .single();
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error("Settings supabase error:", error.message);
+      return res.status(500).json({ error: "Internal server error" });
+    }
     res.status(201).json(data);
   } catch (err) {
     console.error("Settings POST /watchlist error:", err.message);
@@ -277,7 +328,10 @@ router.put("/watchlist/:id", async (req, res) => {
       .select()
       .single();
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error("Settings supabase error:", error.message);
+      return res.status(500).json({ error: "Internal server error" });
+    }
     res.json(data);
   } catch (err) {
     console.error("Settings PUT /watchlist/:id error:", err.message);
@@ -294,7 +348,10 @@ router.delete("/watchlist/:id", async (req, res) => {
       .delete()
       .eq("id", id);
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error("Settings supabase error:", error.message);
+      return res.status(500).json({ error: "Internal server error" });
+    }
     res.json({ ok: true });
   } catch (err) {
     console.error("Settings DELETE /watchlist/:id error:", err.message);

@@ -68,7 +68,8 @@ router.get("/stats", async (req, res) => {
       .select("status, created_at, invitation_sent_at");
 
     if (error) {
-      return res.status(500).json({ error: error.message });
+      console.error("Dashboard supabase error:", error.message);
+      return res.status(500).json({ error: "Internal server error" });
     }
 
     // Funnel counts
@@ -134,7 +135,8 @@ router.get("/charts", async (req, res) => {
       .select("signal_category, icp_score, created_at");
 
     if (error) {
-      return res.status(500).json({ error: error.message });
+      console.error("Dashboard supabase error:", error.message);
+      return res.status(500).json({ error: "Internal server error" });
     }
 
     // Signal source breakdown
