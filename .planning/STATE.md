@@ -25,7 +25,7 @@ Progress: [#################░░░] 14/14 v1.0 complete | v1.1: 9/11 plans (8
 - Timeline: 2 days (2026-03-20 -> 2026-03-21)
 
 **v1.1:**
-- Plans completed: 6
+- Plans completed: 9
 - 04-01: Express API + JWT Auth + React Login (7min)
 - 04-02: Secure Deployment + Keep-alive (5min)
 - 05-01: Dashboard API Endpoints (4min)
@@ -33,6 +33,7 @@ Progress: [#################░░░] 14/14 v1.0 complete | v1.1: 9/11 plans (8
 - 06-01: Leads API Endpoints (3min)
 - 06-02: Shared UI Components & Lead Detail (3min)
 - 07-01: Settings API & CSV Export (3min)
+- 07-02: Settings UI & CSV Export Frontend (6min)
 - 07-03: Settings Wiring (3min)
 
 ## Accumulated Context
@@ -42,6 +43,9 @@ Progress: [#################░░░] 14/14 v1.0 complete | v1.1: 9/11 plans (8
 See PROJECT.md Key Decisions table for full log.
 
 Recent:
+- Tab components via lookup object (TAB_COMPONENTS map) for clean conditional rendering
+- Export uses fetch + blob + createObjectURL pattern with auth header (not window.open)
+- Added PUT method to api client for update operations
 - Templates loaded per-call not per-module so UI changes take effect on next task run
 - Fail-open pattern for settings queries: fallback to hardcoded defaults
 - Priority chain for limits: settings table > env var > hardcoded default
