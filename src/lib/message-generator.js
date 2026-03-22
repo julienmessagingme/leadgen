@@ -9,6 +9,11 @@ const { supabase } = require("./supabase");
 
 const MODEL = "claude-sonnet-4-20250514";
 
+function sanitizeForPrompt(value, maxLen = 200) {
+  if (!value) return "";
+  return String(value).replace(/[\r\n]+/g, " ").trim().slice(0, maxLen);
+}
+
 /**
  * Default template instructions (used as fallback when settings table is unavailable).
  */
@@ -96,10 +101,10 @@ async function generateInvitationNote(lead) {
 
     var result = await callClaude(SYSTEM,
       instructions + "\n\n" +
-      "Prospect: " + (lead.full_name || "inconnu") + "\n" +
-      "Titre: " + (lead.headline || "inconnu") + "\n" +
-      "Entreprise: " + (lead.company_name || "inconnue") + "\n" +
-      "Signal detecte: " + (lead.signal_type || "inconnu") + " - " + (lead.signal_detail || "") + "\n\n" +
+      "Prospect: " + (sanitizeForPrompt(lead.full_name) || "inconnu") + "\n" +
+      "Titre: " + (sanitizeForPrompt(lead.headline) || "inconnu") + "\n" +
+      "Entreprise: " + (sanitizeForPrompt(lead.company_name) || "inconnue") + "\n" +
+      "Signal detecte: " + (sanitizeForPrompt(lead.signal_type) || "inconnu") + " - " + sanitizeForPrompt(lead.signal_detail) + "\n\n" +
       'Reponds en JSON: {"note": "..."}', 256);
 
     var note = result.note || "";
@@ -125,10 +130,10 @@ async function generateFollowUpMessage(lead) {
 
     var result = await callClaude(SYSTEM,
       instructions + "\n\n" +
-      "Prospect: " + (lead.full_name || "inconnu") + "\n" +
-      "Titre: " + (lead.headline || "inconnu") + "\n" +
-      "Entreprise: " + (lead.company_name || "inconnue") + "\n" +
-      "Signal detecte: " + (lead.signal_type || "inconnu") + " - " + (lead.signal_detail || "") + "\n\n" +
+      "Prospect: " + (sanitizeForPrompt(lead.full_name) || "inconnu") + "\n" +
+      "Titre: " + (sanitizeForPrompt(lead.headline) || "inconnu") + "\n" +
+      "Entreprise: " + (sanitizeForPrompt(lead.company_name) || "inconnue") + "\n" +
+      "Signal detecte: " + (sanitizeForPrompt(lead.signal_type) || "inconnu") + " - " + sanitizeForPrompt(lead.signal_detail) + "\n\n" +
       'Reponds en JSON: {"message": "..."}', 512);
 
     return result.message || null;
@@ -151,11 +156,11 @@ async function generateEmail(lead) {
 
     var result = await callClaude(SYSTEM,
       instructions + "\n\n" +
-      "Prospect: " + (lead.full_name || "inconnu") + "\n" +
-      "Titre: " + (lead.headline || "inconnu") + "\n" +
-      "Entreprise: " + (lead.company_name || "inconnue") + "\n" +
-      "Signal detecte: " + (lead.signal_type || "inconnu") + " - " + (lead.signal_detail || "") + "\n" +
-      "Email: " + (lead.email || "") + "\n\n" +
+      "Prospect: " + (sanitizeForPrompt(lead.full_name) || "inconnu") + "\n" +
+      "Titre: " + (sanitizeForPrompt(lead.headline) || "inconnu") + "\n" +
+      "Entreprise: " + (sanitizeForPrompt(lead.company_name) || "inconnue") + "\n" +
+      "Signal detecte: " + (sanitizeForPrompt(lead.signal_type) || "inconnu") + " - " + sanitizeForPrompt(lead.signal_detail) + "\n" +
+      "Email: " + sanitizeForPrompt(lead.email) + "\n\n" +
       'Reponds en JSON: {"subject": "...", "body": "<html>...</html>"}', 1024);
 
     if (!result.subject || !result.body) return null;
@@ -178,10 +183,10 @@ async function generateWhatsAppBody(lead) {
 
     var result = await callClaude(SYSTEM,
       instructions + "\n\n" +
-      "Prospect: " + (lead.full_name || "inconnu") + "\n" +
-      "Titre: " + (lead.headline || "inconnu") + "\n" +
-      "Entreprise: " + (lead.company_name || "inconnue") + "\n" +
-      "Signal detecte: " + (lead.signal_type || "inconnu") + " - " + (lead.signal_detail || "") + "\n\n" +
+      "Prospect: " + (sanitizeForPrompt(lead.full_name) || "inconnu") + "\n" +
+      "Titre: " + (sanitizeForPrompt(lead.headline) || "inconnu") + "\n" +
+      "Entreprise: " + (sanitizeForPrompt(lead.company_name) || "inconnue") + "\n" +
+      "Signal detecte: " + (sanitizeForPrompt(lead.signal_type) || "inconnu") + " - " + sanitizeForPrompt(lead.signal_detail) + "\n\n" +
       'Reponds en JSON: {"body": "..."}', 512);
 
     return result.body || null;
@@ -200,11 +205,11 @@ async function generateInMail(lead) {
   try {
     var result = await callClaude(SYSTEM,
       "Redige un InMail LinkedIn.\n\n" +
-      "Prospect: " + (lead.full_name || "inconnu") + "\n" +
-      "Titre: " + (lead.headline || "inconnu") + "\n" +
-      "Entreprise: " + (lead.company_name || "inconnue") + "\n" +
-      "Secteur: " + (lead.company_sector || "inconnu") + "\n" +
-      "Signal detecte: " + (lead.signal_type || "inconnu") + " - " + (lead.signal_detail || "") + "\n\n" +
+      "Prospect: " + (sanitizeForPrompt(lead.full_name) || "inconnu") + "\n" +
+      "Titre: " + (sanitizeForPrompt(lead.headline) || "inconnu") + "\n" +
+      "Entreprise: " + (sanitizeForPrompt(lead.company_name) || "inconnue") + "\n" +
+      "Secteur: " + (sanitizeForPrompt(lead.company_sector) || "inconnu") + "\n" +
+      "Signal detecte: " + (sanitizeForPrompt(lead.signal_type) || "inconnu") + " - " + sanitizeForPrompt(lead.signal_detail) + "\n\n" +
       "Regles:\n" +
       "- Objet percutant et court\n" +
       "- Corps: reference au signal, valeur MessagingMe pour leur secteur, CTA clair\n" +

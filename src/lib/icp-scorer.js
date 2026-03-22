@@ -2,6 +2,11 @@ const { getAnthropicClient } = require("./anthropic");
 const { supabase } = require("./supabase");
 const { log } = require("./logger");
 
+function sanitizeForPrompt(value, maxLen = 200) {
+  if (!value) return "";
+  return String(value).replace(/[\r\n]+/g, " ").trim().slice(0, maxLen);
+}
+
 /**
  * Load ICP rules from Supabase icp_rules table.
  * Called once per task-a run, results passed to scoreLead.
@@ -64,12 +69,12 @@ function buildScoringPrompt(lead, newsEvidence, rules) {
     "**Taille entreprise:** " + sizeRange + "\n" +
     "**Seniorite minimum:** " + minSeniority + "\n\n" +
     "**Prospect a evaluer:**\n" +
-    "- Nom: " + (lead.full_name || "inconnu") + "\n" +
-    "- Titre: " + (lead.headline || "inconnu") + "\n" +
-    "- Entreprise: " + (lead.company_name || "inconnue") + "\n" +
-    "- Taille entreprise: " + (lead.company_size || "inconnue") + "\n" +
-    "- Secteur: " + (lead.company_sector || "inconnu") + "\n" +
-    "- Localisation: " + (lead.location || "inconnue") + "\n" +
+    "- Nom: " + (sanitizeForPrompt(lead.full_name) || "inconnu") + "\n" +
+    "- Titre: " + (sanitizeForPrompt(lead.headline) || "inconnu") + "\n" +
+    "- Entreprise: " + (sanitizeForPrompt(lead.company_name) || "inconnue") + "\n" +
+    "- Taille entreprise: " + (sanitizeForPrompt(lead.company_size) || "inconnue") + "\n" +
+    "- Secteur: " + (sanitizeForPrompt(lead.company_sector) || "inconnu") + "\n" +
+    "- Localisation: " + (sanitizeForPrompt(lead.location) || "inconnue") + "\n" +
     newsSection + "\n\n" +
     "Attribue un score de 0 a 100 et un tier:\n" +
     "- hot (>=70): prospect tres qualifie, correspond fortement a l'ICP\n" +
