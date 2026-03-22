@@ -1,0 +1,321 @@
+const { Router } = require("express");
+const crypto = require("crypto");
+const authMiddleware = require("./middleware");
+const { supabase } = require("../lib/supabase");
+
+const router = Router();
+router.use(authMiddleware);
+
+const VALID_ICP_CATEGORIES = [
+  "title_positive",
+  "title_negative",
+  "sector",
+  "company_size",
+  "seniority",
+  "freshness",
+  "signal_weights",
+];
+
+// ────────────────────────────────────────────────────────────
+// CONF-01 -- ICP Rules
+// ────────────────────────────────────────────────────────────
+
+router.get("/icp-rules", async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("icp_rules")
+      .select("*")
+      .order("category");
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ rules: data });
+  } catch (err) {
+    console.error("Settings GET /icp-rules error:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/icp-rules", async (req, res) => {
+  try {
+    const { category, value, key, numeric_value, threshold } = req.body;
+
+    if (!category || !VALID_ICP_CATEGORIES.includes(category)) {
+      return res.status(400).json({
+        error: `Invalid category. Allowed: ${VALID_ICP_CATEGORIES.join(", ")}`,
+      });
+    }
+
+    const { data, error } = await supabase
+      .from("icp_rules")
+      .insert({ category, value, key, numeric_value, threshold })
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.status(201).json(data);
+  } catch (err) {
+    console.error("Settings POST /icp-rules error:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.put("/icp-rules/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { category, value, key, numeric_value, threshold } = req.body;
+
+    if (category && !VALID_ICP_CATEGORIES.includes(category)) {
+      return res.status(400).json({
+        error: `Invalid category. Allowed: ${VALID_ICP_CATEGORIES.join(", ")}`,
+      });
+    }
+
+    const updates = {};
+    if (category !== undefined) updates.category = category;
+    if (value !== undefined) updates.value = value;
+    if (key !== undefined) updates.key = key;
+    if (numeric_value !== undefined) updates.numeric_value = numeric_value;
+    if (threshold !== undefined) updates.threshold = threshold;
+
+    const { data, error } = await supabase
+      .from("icp_rules")
+      .update(updates)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
+  } catch (err) {
+    console.error("Settings PUT /icp-rules/:id error:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.delete("/icp-rules/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { error } = await supabase
+      .from("icp_rules")
+      .delete()
+      .eq("id", id);
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Settings DELETE /icp-rules/:id error:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
+// CONF-02 -- Suppression List
+// ────────────────────────────────────────────────────────────
+
+router.get("/suppression", async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("suppression_list")
+      .select("*");
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ entries: data });
+  } catch (err) {
+    console.error("Settings GET /suppression error:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/suppression", async (req, res) => {
+  try {
+    const { value, source } = req.body;
+
+    if (!value || !source) {
+      return res.status(400).json({ error: "value and source are required" });
+    }
+    if (!["email", "linkedin"].includes(source)) {
+      return res.status(400).json({ error: "source must be 'email' or 'linkedin'" });
+    }
+
+    const hashed_value = crypto
+      .createHash("sha256")
+      .update(value.trim().toLowerCase())
+      .digest("hex");
+
+    const { error } = await supabase
+      .from("suppression_list")
+      .upsert({ hashed_value, source }, { onConflict: "hashed_value" });
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.status(201).json({ ok: true });
+  } catch (err) {
+    console.error("Settings POST /suppression error:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.delete("/suppression/:hash", async (req, res) => {
+  try {
+    const { hash } = req.params;
+
+    const { error } = await supabase
+      .from("suppression_list")
+      .delete()
+      .eq("hashed_value", hash);
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Settings DELETE /suppression/:hash error:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
+// CONF-03 + CONF-05 -- Config (limits + templates)
+// ────────────────────────────────────────────────────────────
+
+router.get("/config", async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("settings")
+      .select("*");
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ settings: data });
+  } catch (err) {
+    console.error("Settings GET /config error:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.patch("/config/:key", async (req, res) => {
+  try {
+    const { key } = req.params;
+    const { value } = req.body;
+
+    if (value === undefined) {
+      return res.status(400).json({ error: "value is required" });
+    }
+
+    const { data, error } = await supabase
+      .from("settings")
+      .upsert(
+        { key, value, updated_at: new Date().toISOString() },
+        { onConflict: "key" }
+      )
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
+  } catch (err) {
+    console.error("Settings PATCH /config/:key error:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
+// CONF-04 -- Watchlist
+// ────────────────────────────────────────────────────────────
+
+router.get("/watchlist", async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("watchlist")
+      .select("*")
+      .order("source_type");
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ sources: data });
+  } catch (err) {
+    console.error("Settings GET /watchlist error:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/watchlist", async (req, res) => {
+  try {
+    const { source_type, source_label, source_url, keywords, is_active, sequence_id } = req.body;
+
+    if (!source_type || !source_label) {
+      return res.status(400).json({ error: "source_type and source_label are required" });
+    }
+
+    const { data, error } = await supabase
+      .from("watchlist")
+      .insert({ source_type, source_label, source_url, keywords, is_active, sequence_id })
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.status(201).json(data);
+  } catch (err) {
+    console.error("Settings POST /watchlist error:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.put("/watchlist/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { source_type, source_label, source_url, keywords, is_active, sequence_id } = req.body;
+
+    const updates = {};
+    if (source_type !== undefined) updates.source_type = source_type;
+    if (source_label !== undefined) updates.source_label = source_label;
+    if (source_url !== undefined) updates.source_url = source_url;
+    if (keywords !== undefined) updates.keywords = keywords;
+    if (is_active !== undefined) updates.is_active = is_active;
+    if (sequence_id !== undefined) updates.sequence_id = sequence_id;
+
+    const { data, error } = await supabase
+      .from("watchlist")
+      .update(updates)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
+  } catch (err) {
+    console.error("Settings PUT /watchlist/:id error:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.delete("/watchlist/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { error } = await supabase
+      .from("watchlist")
+      .delete()
+      .eq("id", id);
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Settings DELETE /watchlist/:id error:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
+// CONF-06 -- Cron Schedule (static, read-only)
+// ────────────────────────────────────────────────────────────
+
+router.get("/cron", (req, res) => {
+  res.json([
+    { task: "task-a-signals", label: "A - Signaux", cron: "30 7 * * 1-5", time: "07h30", days: "Lun-Ven" },
+    { task: "task-f-briefing", label: "F - Briefing", cron: "30 8 * * 1-5", time: "08h30", days: "Lun-Ven" },
+    { task: "task-b-invitations", label: "B - Invitations", cron: "0 9 * * 1-5", time: "09h00", days: "Lun-Ven" },
+    { task: "task-d-email", label: "D - Email", cron: "0 10 * * 1-5", time: "10h00", days: "Lun-Ven" },
+    { task: "task-e-whatsapp", label: "E - WhatsApp", cron: "30 10 * * 1-5", time: "10h30", days: "Lun-Ven" },
+    { task: "task-c-followup", label: "C - Follow-up", cron: "0 11 * * 1-5", time: "11h00", days: "Lun-Ven" },
+    { task: "whatsapp-poll", label: "WhatsApp Poll", cron: "*/15 9-18 * * 1-5", time: "Toutes les 15min", days: "Lun-Ven 9h-18h" },
+  ]);
+});
+
+module.exports = router;
