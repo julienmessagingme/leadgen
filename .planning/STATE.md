@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-03-22)
 
 ## Current Position
 
-Phase: 11 of 14 (Browser Infrastructure)
-Plan: 1 of 2 in current phase
-Status: Executing
-Last activity: 2026-03-22 — Completed 11-01 (Playwright + browser.js)
+Phase: 11 of 14 (Browser Infrastructure) -- PHASE COMPLETE
+Plan: 2 of 2 in current phase
+Status: Phase Complete
+Last activity: 2026-03-22 — Completed 11-02 (Rate limiting + human delays)
 
-Progress: [#░░░░░░░░░] 10% (1/10 plans) | v1.0: 14 plans | v1.1: 11 plans | v1.2: 7 plans
+Progress: [##░░░░░░░░] 20% (2/10 plans) | v1.0: 14 plans | v1.1: 11 plans | v1.2: 7 plans
 
 ## Performance Metrics
 
@@ -44,6 +44,8 @@ See PROJECT.md Key Decisions table for full log.
 - v1.3: A/B test Bereach vs Browser avant de couper Bereach
 - 11-01: Playwright 1.58.2 installed, anti-detection with Chrome 120 UA + fr-FR locale
 - 11-01: Cookie path configurable via LINKEDIN_COOKIES_PATH env var
+- 11-02: In-memory page counter (no DB), resets daily Europe/Paris timezone
+- 11-02: navigateWithLimits replaces page.goto for all LinkedIn navigation
 
 ### Blockers/Concerns
 
@@ -53,5 +55,5 @@ See PROJECT.md Key Decisions table for full log.
 ## Session Continuity
 
 Last session: 2026-03-22
-Stopped at: Completed 11-01-PLAN.md (Playwright + browser.js)
+Stopped at: Completed 11-02-PLAN.md (Rate limiting + human delays) -- Phase 11 complete
 Resume file: None
