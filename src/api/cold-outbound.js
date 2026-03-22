@@ -1,12 +1,14 @@
+const crypto = require("crypto");
 const { Router } = require("express");
 const authMiddleware = require("./middleware");
 const { supabase } = require("../lib/supabase");
+const { executeColdSearch } = require("../lib/cold-outbound-pipeline");
 
 const router = Router();
 router.use(authMiddleware);
 
 // ────────────────────────────────────────────────────────────
-// POST /search -- Create a new cold outbound search
+// POST /search -- Create a new cold outbound search & trigger async execution
 // ────────────────────────────────────────────────────────────
 
 router.post("/search", async (req, res) => {
@@ -24,6 +26,17 @@ router.post("/search", async (req, res) => {
     const parsedMaxLeads = parseInt(max_leads, 10);
     if (!parsedMaxLeads || parsedMaxLeads < 1 || parsedMaxLeads > 50) {
       return res.status(400).json({ error: "max_leads must be between 1 and 50" });
+    }
+
+    // Stop safeguard: only one cold search can run at a time (single browser instance)
+    const { data: running } = await supabase
+      .from("cold_searches")
+      .select("id")
+      .eq("status", "running")
+      .limit(1);
+
+    if (running && running.length > 0) {
+      return res.status(409).json({ error: "A cold search is already running. Please wait for it to complete." });
     }
 
     const filters = {
@@ -44,6 +57,11 @@ router.post("/search", async (req, res) => {
       console.error("Cold outbound POST /search error:", error.message);
       return res.status(500).json({ error: "Internal server error" });
     }
+
+    // Fire-and-forget: trigger async pipeline execution
+    const runId = crypto.randomUUID();
+    executeColdSearch(data.id, filters, runId)
+      .catch(err => console.error("Cold search execution error:", err.message));
 
     res.status(201).json(data);
   } catch (err) {
@@ -122,7 +140,7 @@ router.get("/searches/:id/status", async (req, res) => {
 
     const { data, error } = await supabase
       .from("cold_searches")
-      .select("id, status, leads_found, leads_enriched, error_message")
+      .select("id, status, leads_found, leads_enriched, error_message, filters")
       .eq("id", id)
       .single();
 
@@ -131,7 +149,15 @@ router.get("/searches/:id/status", async (req, res) => {
       return res.status(404).json({ error: "Search not found" });
     }
 
-    res.json(data);
+    // Include max_leads from filters for frontend progress bar
+    res.json({
+      id: data.id,
+      status: data.status,
+      leads_found: data.leads_found,
+      leads_enriched: data.leads_enriched,
+      max_leads: data.filters ? data.filters.max_leads : null,
+      error_message: data.error_message,
+    });
   } catch (err) {
     console.error("Cold outbound GET /searches/:id/status error:", err.message);
     res.status(500).json({ error: "Internal server error" });
