@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-21)
 
 **Core value:** Prospecter uniquement des personnes ayant montre un signal d'interet LinkedIn -- zero liste froide, 100% signal-based.
-**Current focus:** v1.1 Interface Web -- Phase 6: Pipeline + Sequences + Lead Detail
+**Current focus:** v1.1 Interface Web -- Phase 7: Settings & Export
 
 ## Current Position
 
-Phase: 6 of 7 (Pipeline + Sequences + Lead Detail)
-Plan: 2 of 4 complete
+Phase: 7 of 7 (Settings & Export)
+Plan: 1 of 3 complete
 Status: In progress
-Last activity: 2026-03-21 -- Completed 06-02 (Shared UI Components & Lead Detail)
+Last activity: 2026-03-22 -- Completed 07-01 (Settings API & CSV Export)
 
-Progress: [##############░░░░░░] 14/14 v1.0 complete | v1.1: 6/8 plans (75%)
+Progress: [###############░░░░░] 14/14 v1.0 complete | v1.1: 7/11 plans (64%)
 
 ## Performance Metrics
 
@@ -32,6 +32,7 @@ Progress: [##############░░░░░░] 14/14 v1.0 complete | v1.1: 6/8 pla
 - 05-02: Dashboard UI Widgets (3min)
 - 06-01: Leads API Endpoints (3min)
 - 06-02: Shared UI Components & Lead Detail (3min)
+- 07-01: Settings API & CSV Export (3min)
 
 ## Accumulated Context
 
@@ -40,6 +41,9 @@ Progress: [##############░░░░░░] 14/14 v1.0 complete | v1.1: 6/8 pla
 See PROJECT.md Key Decisions table for full log.
 
 Recent:
+- Settings stored as key-value JSONB in dedicated settings table (runtime-configurable)
+- CSV export uses BOM prefix for Excel UTF-8 compatibility
+- Cron schedule endpoint is static JSON (matches scheduler.js)
 - useDeferredValue for search debounce (React 19 native)
 - Scoring reasoning collapsed by default in drawer for compactness
 - StatusBadge maps 12-value ENUM to 7 French group labels
@@ -65,6 +69,6 @@ Recent:
 
 ## Session Continuity
 
-Last session: 2026-03-21
-Stopped at: Completed 06-01-PLAN.md (Leads API + NavBar + Route Scaffolding) -- re-executed with correct column fix
+Last session: 2026-03-22
+Stopped at: Completed 07-01-PLAN.md (Settings API & CSV Export)
 Resume file: None

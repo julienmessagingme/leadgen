@@ -60,18 +60,18 @@ Requirements for the web interface milestone. Each maps to roadmap phases.
 
 ### Parametres
 
-- [ ] **CONF-01**: User can CRUD ICP scoring rules (categories, weights)
-- [ ] **CONF-02**: User can add entries to RGPD suppression list
-- [ ] **CONF-03**: User can edit daily limits (invitations, leads per batch)
-- [ ] **CONF-04**: User can edit signal keywords and sources
-- [ ] **CONF-05**: User can edit message templates
-- [ ] **CONF-06**: User sees cron schedule display (read-only)
+- [x] **CONF-01**: User can CRUD ICP scoring rules (categories, weights)
+- [x] **CONF-02**: User can add entries to RGPD suppression list
+- [x] **CONF-03**: User can edit daily limits (invitations, leads per batch)
+- [x] **CONF-04**: User can edit signal keywords and sources
+- [x] **CONF-05**: User can edit message templates
+- [x] **CONF-06**: User sees cron schedule display (read-only)
 
 ### Export
 
-- [ ] **EXP-01**: User can export leads to CSV with current filters applied
-- [ ] **EXP-02**: Export includes standard columns (name, email, LinkedIn, score, tier, status)
-- [ ] **EXP-03**: User can filter export by date range
+- [x] **EXP-01**: User can export leads to CSV with current filters applied
+- [x] **EXP-02**: Export includes standard columns (name, email, LinkedIn, score, tier, status)
+- [x] **EXP-03**: User can filter export by date range
 
 ## v2 Requirements
 
@@ -132,15 +132,15 @@ Requirements for the web interface milestone. Each maps to roadmap phases.
 | LEAD-04 | Phase 6 | Complete |
 | LEAD-05 | Phase 6 | Complete |
 | LEAD-06 | Phase 6 | Complete |
-| CONF-01 | Phase 7 | Pending |
-| CONF-02 | Phase 7 | Pending |
-| CONF-03 | Phase 7 | Pending |
-| CONF-04 | Phase 7 | Pending |
-| CONF-05 | Phase 7 | Pending |
-| CONF-06 | Phase 7 | Pending |
-| EXP-01 | Phase 7 | Pending |
-| EXP-02 | Phase 7 | Pending |
-| EXP-03 | Phase 7 | Pending |
+| CONF-01 | Phase 7 | Complete |
+| CONF-02 | Phase 7 | Complete |
+| CONF-03 | Phase 7 | Complete |
+| CONF-04 | Phase 7 | Complete |
+| CONF-05 | Phase 7 | Complete |
+| CONF-06 | Phase 7 | Complete |
+| EXP-01 | Phase 7 | Complete |
+| EXP-02 | Phase 7 | Complete |
+| EXP-03 | Phase 7 | Complete |
 
 **Coverage:**
 - v1.1 requirements: 42 total
