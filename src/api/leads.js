@@ -6,6 +6,16 @@ const { supabase } = require("../lib/supabase");
 const router = Router();
 router.use(authMiddleware);
 
+const PII_NULLS = {
+  email: null,
+  first_name: null,
+  last_name: null,
+  full_name: null,
+  phone: null,
+  linkedin_url: null,
+  headline: null,
+};
+
 const VALID_SORTS = ["icp_score", "created_at", "signal_date", "status"];
 
 /**
@@ -291,7 +301,7 @@ router.patch("/:id/action", async (req, res) => {
 
       const { error: updateErr } = await supabase
         .from("leads")
-        .update({ status: "disqualified", metadata })
+        .update({ status: "disqualified", metadata, ...PII_NULLS })
         .eq("id", id);
 
       if (updateErr) {
@@ -380,7 +390,7 @@ router.post("/bulk-action", async (req, res) => {
         metadata.excluded_reason = "manual_rgpd";
         const { error } = await supabase
           .from("leads")
-          .update({ status: "disqualified", metadata })
+          .update({ status: "disqualified", metadata, ...PII_NULLS })
           .eq("id", lead.id);
 
         if (!error) {
