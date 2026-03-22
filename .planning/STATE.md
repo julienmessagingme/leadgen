@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** Prospecter des personnes qualifiees via signaux LinkedIn ET recherche directe Sales Nav — signal-based + cold outbound cible.
-**Current focus:** v1.3 Browser Automation & Cold Outbound — Phase 11 in progress
+**Current focus:** v1.3 Browser Automation & Cold Outbound — Phase 12 in progress
 
 ## Current Position
 
-Phase: 11 of 14 (Browser Infrastructure) -- PHASE COMPLETE
-Plan: 2 of 2 in current phase
-Status: Phase Complete
-Last activity: 2026-03-22 — Completed 11-02 (Rate limiting + human delays)
+Phase: 12 of 14 (Browser Signal Collector)
+Plan: 1 of 3 in current phase
+Status: In Progress
+Last activity: 2026-03-22 — Completed 12-01 (Browser signal collector for competitor_page/influencer)
 
-Progress: [##░░░░░░░░] 20% (2/10 plans) | v1.0: 14 plans | v1.1: 11 plans | v1.2: 7 plans
+Progress: [###░░░░░░░] 30% (3/10 plans) | v1.0: 14 plans | v1.1: 11 plans | v1.2: 7 plans
 
 ## Performance Metrics
 
@@ -46,6 +46,9 @@ See PROJECT.md Key Decisions table for full log.
 - 11-01: Cookie path configurable via LINKEDIN_COOKIES_PATH env var
 - 11-02: In-memory page counter (no DB), resets daily Europe/Paris timezone
 - 11-02: navigateWithLimits replaces page.goto for all LinkedIn navigation
+- 12-01: Multi-selector fallback strategy for LinkedIn CSS resilience
+- 12-01: dismissPopups helper for cookie consent, sign-in modals, messaging overlays
+- 12-01: source_origin: "browser" field on all browser-collected signals
 
 ### Blockers/Concerns
 
@@ -55,5 +58,5 @@ See PROJECT.md Key Decisions table for full log.
 ## Session Continuity
 
 Last session: 2026-03-22
-Stopped at: Completed 11-02-PLAN.md (Rate limiting + human delays) -- Phase 11 complete
+Stopped at: Completed 12-01-PLAN.md (Browser signal collector for competitor_page/influencer)
 Resume file: None
