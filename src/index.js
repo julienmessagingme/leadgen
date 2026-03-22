@@ -78,6 +78,9 @@ app.use("/api/leads", require("./api/leads"));
 // Settings API routes (protected -- authMiddleware applied inside router)
 app.use("/api/settings", require("./api/settings"));
 
+// Cold Outbound API routes (protected -- authMiddleware applied inside router)
+app.use("/api/cold-outbound", require("./api/cold-outbound"));
+
 // Serve React build
 app.use(express.static(path.join(__dirname, "..", "dist")));
 
