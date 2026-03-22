@@ -6,7 +6,7 @@ Un agent autonome de prospection B2B signal-based qui tourne 24/7 sur un VPS OVH
 
 ## Core Value
 
-Prospecter uniquement des personnes ayant deja montre un signal d'interet — zero liste froide, 100% signal-based — pour que chaque contact soit pertinent et contextualise.
+Prospecter des personnes qualifiees via signaux d'interet LinkedIn ET recherche directe Sales Nav — signal-based + cold outbound cible — pour maximiser le volume de prospects pertinents.
 
 ## Requirements
 
@@ -31,7 +31,10 @@ Prospecter uniquement des personnes ayant deja montre un signal d'interet — ze
 
 ### Active
 
-(None — next milestone not yet defined)
+- [ ] Browser signal collector Playwright A/B test vs Bereach (BROWSER-01+)
+- [ ] Cold outbound search via Sales Nav + formulaire dashboard (COLD-01+)
+- [ ] Enrichissement email browser (LinkedIn visible + FullEnrich fallback) (ENR-07+)
+- [ ] Dedup cross-source browser vs bereach (DEDUP-01+)
 
 ### Out of Scope
 
@@ -40,7 +43,7 @@ Prospecter uniquement des personnes ayant deja montre un signal d'interet — ze
 - Real-time websocket updates — refresh suffisant pour usage solo
 - Integration CRM automatique — HubSpot en lecture seule (anti-doublon)
 - Multi-utilisateur — Julien seul utilisateur
-- Cold list import — philosophie signal-based uniquement
+- ~~Cold list import~~ — MOVED to Active (v1.3): cold outbound via Sales Nav browser search
 - Cron schedule editor dans l'UI — necessite restart PM2 via SSH
 - Drag & drop kanban — v2 potentiel
 
@@ -48,7 +51,9 @@ Prospecter uniquement des personnes ayant deja montre un signal d'interet — ze
 
 Shipped v1.0 MVP (2026-03-21) + v1.1 Interface Web (2026-03-22) + v1.2 Security & Performance (2026-03-22). Pipeline backend 100% operationnel avec 6 taches cron. Interface web React deployee avec dashboard, pipeline, sequences, settings, export CSV. API securisee (helmet, CORS, rate limiting, JWT 24h, input validation). DB optimisee (6 indexes, 3 RPC functions, column selects, bounded queries). RGPD conforme (PII erasure, prompt sanitization). Log cleanup automatique.
 
-Tech stack: Node.js + Express + node-cron, Supabase, React 19 + Vite + Tailwind v4 + TanStack Query, Recharts, BeReach, Fullenrich, Claude Haiku/Sonnet, Gmail SMTP, MessagingMe API.
+**v1.3 focus:** Ajouter Playwright comme alternative browser a Bereach pour la collecte de signaux (A/B test), et un mode cold outbound via recherche Sales Nav dans le dashboard. Objectif: pouvoir couper l'abonnement Bereach (49e/mois) a terme.
+
+Tech stack: Node.js + Express + node-cron, Supabase, React 19 + Vite + Tailwind v4 + TanStack Query, Recharts, BeReach, Fullenrich, Playwright, Claude Haiku/Sonnet, Gmail SMTP, MessagingMe API.
 VPS: ubuntu@146.59.233.252 at /home/openclaw/leadgen/, PM2 process manager, Nginx Proxy Manager HTTPS.
 Domain: leadgen.messagingme.app
 
@@ -68,6 +73,7 @@ Domain: leadgen.messagingme.app
 | Recharts | Charts dashboard |
 | TanStack Query | Data fetching + cache |
 | Express 5 + JWT | API layer + auth |
+| Playwright | Browser automation LinkedIn/Sales Nav |
 | Nginx Proxy Manager | HTTPS reverse proxy |
 | node-cron + PM2 | Scheduler |
 
@@ -114,5 +120,11 @@ Domain: leadgen.messagingme.app
 | CSV export BOM prefix pour Excel | Compatibilite UTF-8 Excel francais | ✓ Good |
 | useDeferredValue pour search debounce | React 19 natif, pas de setTimeout/lodash | ✓ Good |
 
+| Playwright vs Puppeteer pour browser automation | Plus robuste, auto-wait, meilleur support multi-browser | — Pending |
+| Compte Julien Sales Nav (pas de fake) | Sales Nav payant sur compte Julien, fake inutile | — Pending |
+| Cookies session LinkedIn (pas d'API) | Sales Nav n'a pas d'API ouverte, cookies = methode standard | — Pending |
+| Pas de proxy (pour l'instant) | <100 pages/jour, volume trop faible pour detection | — Pending |
+| A/B test Bereach vs Browser | Valider que Playwright trouve autant/mieux avant de couper Bereach | — Pending |
+
 ---
-*Last updated: 2026-03-22 after v1.2 milestone completion*
+*Last updated: 2026-03-22 after v1.3 milestone start*

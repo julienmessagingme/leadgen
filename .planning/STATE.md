@@ -4,15 +4,15 @@
 
 See: .planning/PROJECT.md (updated 2026-03-22)
 
-**Core value:** Prospecter uniquement des personnes ayant montre un signal d'interet LinkedIn -- zero liste froide, 100% signal-based.
-**Current focus:** v1.2 Security & Performance -- Phase 10 complete
+**Core value:** Prospecter des personnes qualifiees via signaux LinkedIn ET recherche directe Sales Nav — signal-based + cold outbound cible.
+**Current focus:** v1.3 Browser Automation & Cold Outbound — Not started (defining requirements)
 
 ## Current Position
 
-Status: v1.2 Security & Performance COMPLETE (all 7 plans done)
-Last activity: 2026-03-22 -- Completed 10-01 (Dashboard RPC aggregation)
+Status: Defining requirements for v1.3
+Last activity: 2026-03-22 — Milestone v1.3 started
 
-Progress: [####################] v1.0 complete (14 plans) | v1.1 complete (11 plans) | v1.2: 7/7 plans COMPLETE
+Progress: [####################] v1.0 complete (14 plans) | v1.1 complete (11 plans) | v1.2 complete (7 plans) | v1.3: defining requirements
 
 ## Performance Metrics
 
@@ -26,26 +26,10 @@ Progress: [####################] v1.0 complete (14 plans) | v1.1 complete (11 pl
 - Plans completed: 11
 - Average duration: ~4min
 - Timeline: 2 days (2026-03-21 -> 2026-03-22)
-- 04-01: Express API + JWT Auth + React Login (7min)
-- 04-02: Secure Deployment + Keep-alive (5min)
-- 05-01: Dashboard API Endpoints (4min)
-- 05-02: Dashboard UI Widgets (3min)
-- 06-01: Leads API Endpoints (3min)
-- 06-02: Shared UI Components & Lead Detail (3min)
-- 06-03: Pipeline Kanban/List (3min)
-- 06-04: Sequences Table + Bulk Actions (3min)
-- 07-01: Settings API & CSV Export (3min)
-- 07-02: Settings UI & CSV Export Frontend (6min)
-- 07-03: Settings Wiring (3min)
 
 **v1.2 Velocity:**
-- 08-01: Express security middleware + JWT hardening
-- 08-02: Input validation & error masking (2min)
-- 09-01: Supabase schema indexes & DDL export (4min)
-- 09-02: RGPD PII nullification & prompt sanitization (3min)
-- 10-03: Log cleanup cron + dotenv housekeeping (1min)
-- 10-02: Task query optimization (5min)
-- 10-01: Dashboard RPC aggregation (8min)
+- Plans completed: 7
+- Timeline: 1 day (2026-03-22)
 
 ## Accumulated Context
 
@@ -53,28 +37,21 @@ Progress: [####################] v1.0 complete (14 plans) | v1.1 complete (11 pl
 
 See PROJECT.md Key Decisions table for full log.
 
-- 08-01: JWT_SECRET moved to REQUIRED_VARS (server exits if missing)
-- 08-01: CORS defaults to production domain, overridable via CORS_ORIGIN env var
-- 08-01: Rate limit 10 req/15min on login endpoint
-- [Phase 08]: Strip all PostgREST special chars and cap search at 100 chars for safety
-- [Phase 09]: PII_NULLS constant centralizes 7 PII fields for consistent nullification on exclude
-- [Phase 09]: sanitizeForPrompt strips newlines and truncates to 200 chars to prevent prompt injection
-- [Phase 09]: All indexes use IF NOT EXISTS for idempotent re-application
-- [Phase 09]: DDL export via information_schema.columns (portable, no pg_dump needed)
-- [Phase 10]: Log cleanup uses Supabase delete with exact count for observability
-- [Phase 10]: Cleanup runs daily at 02:00 including weekends (no rate limit concern)
-- [Phase 10]: last_processed_run_id replaces ILIKE idempotence for O(1) duplicate detection
-- [Phase 10]: Generator functions accept optional templates param for backward compatibility
-- [Phase 10]: Limit bounds: task-c invitation_sent 200, others 50, whatsapp-poll 100
-- [Phase 10]: RPC functions use LANGUAGE sql STABLE with REVOKE/GRANT for service_role only
-- [Phase 10]: signal_category enum requires ::text cast in GROUP BY for JSON aggregation
+- v1.3: Playwright for browser automation (not Puppeteer)
+- v1.3: Compte Julien Sales Nav, pas de fake account
+- v1.3: Cookies session LinkedIn pour auth Playwright
+- v1.3: Pas de proxy pour l'instant (<100 pages/jour)
+- v1.3: A/B test Bereach vs Browser avant de couper Bereach
+- v1.3: Cold outbound via formulaire dashboard + Sales Nav search
+- v1.3: FullEnrich cle API a configurer (Julien fournit demain)
 
 ### Blockers/Concerns
 
-No active blockers. All v1.0 and v1.1 blockers resolved.
+- FullEnrich API key not yet configured (Julien provides tomorrow)
+- LinkedIn cookie session renewal needed every 2-4 weeks (manual)
 
 ## Session Continuity
 
 Last session: 2026-03-22
-Stopped at: Completed 10-01-PLAN.md (v1.2 fully complete)
+Stopped at: Starting v1.3 milestone — defining requirements
 Resume file: None
