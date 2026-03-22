@@ -125,7 +125,7 @@ Phases execute in numeric order: 11 -> 12 -> 13 -> 14
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 11. Browser Infrastructure | 2/2 | Complete    | 2026-03-22 | - |
-| 12. Browser Signal Collector | 3/3 | Complete   | 2026-03-22 | - |
+| 12. Browser Signal Collector | 3/3 | Complete    | 2026-03-22 | - |
 | 13. Cold Outbound | v1.3 | 0/3 | Not started | - |
 | 14. Outreach Adaptation | v1.3 | 0/2 | Not started | - |
 | 10. Query Optimization & Ops | v1.2 | 3/3 | Complete | 2026-03-22 |
