@@ -4,6 +4,7 @@ const REQUIRED_VARS = [
   "SUPABASE_URL",
   "SUPABASE_SERVICE_ROLE_KEY",
   "SUPABASE_ANON_KEY",
+  "JWT_SECRET",
 ];
 
 const missing = REQUIRED_VARS.filter((v) => !process.env[v]);
@@ -36,7 +37,6 @@ if (missingRecommended.length > 0) {
 const DASHBOARD_VARS = [
   "DASHBOARD_USER",
   "DASHBOARD_PASSWORD_HASH",
-  "JWT_SECRET",
 ];
 
 const missingDashboard = DASHBOARD_VARS.filter((v) => !process.env[v]);
@@ -47,10 +47,18 @@ if (missingDashboard.length > 0) {
 
 // Express HTTP server
 const express = require("express");
+const helmet = require("helmet");
+const cors = require("cors");
 const path = require("path");
 const app = express();
 
-app.use(express.json());
+// Security middleware -- applied before all routes
+app.use(helmet());
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || "https://leadgen.messagingme.app",
+  credentials: true,
+}));
+app.use(express.json({ limit: "50kb" }));
 
 // Auth routes (public -- no middleware)
 app.use("/api/auth", require("./api/auth"));
