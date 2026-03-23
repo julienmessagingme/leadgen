@@ -39,10 +39,38 @@
 
 ## v1.2 Security & Performance (Shipped: 2026-03-22)
 
-**Phases completed:** 7 phases, 21 plans, 0 tasks
+**Phases completed:** 3 phases (8-10), 7 plans
+**Timeline:** 1 day (2026-03-22)
+**Requirements:** 20/20 complete
 
 **Key accomplishments:**
-- (none recorded)
+- Express security hardening: rate limiting, helmet, CORS strict, JWT 24h rotation, input validation
+- Supabase 6 indexes + DDL migration exports for reproducibility
+- RGPD PII erasure on exclude + Claude prompt sanitization
+- Dashboard RPC aggregation, query optimization, bounded queries
+- Log cleanup automatique (90 jours retention)
+
+**Git range:** `feat(08-01)` → `feat(10-03)`
+
+---
+
+
+## v1.3 Browser Automation & Cold Outbound (Shipped: 2026-03-23)
+
+**Phases completed:** 4 phases (11-14), 10 plans
+**Timeline:** 1 day (2026-03-22 → 2026-03-23)
+**Requirements:** 23/23 complete
+**LOC added:** ~6,650 lines (53 files)
+
+**Key accomplishments:**
+- Playwright Chromium headless on VPS with cookie-based LinkedIn auth and anti-detection (100 pages/day, 3-8s delays)
+- Browser signal collector: likers, commenters, keyword posts, job posts scraping via Playwright
+- Dual-source Task A pipeline (Bereach + browser) with cross-source dedup and cookie expiry alerts
+- Cold outbound dashboard: Sales Nav search form, browser scraper, email enrichment (FullEnrich), ICP scoring
+- Cold-aware message generation (no signal references) with configurable multi-template Settings UI
+- Cold leads flowing through full outreach sequence (invitation → followup → email J+7 → WhatsApp J+14)
+
+**Git range:** `feat(11-01)` → `feat(14-02)`
 
 ---
 

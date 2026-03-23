@@ -2,7 +2,7 @@
 
 ## What This Is
 
-Un agent autonome de prospection B2B signal-based qui tourne 24/7 sur un VPS OVH avec une interface web React de pilotage. Il detecte les signaux d'interet LinkedIn (likes, commentaires, posts sur des sujets cibles), score les prospects via ICP, et orchestre une sequence multi-canal automatisee (invitation LinkedIn → message → email J+7 → WhatsApp J+14). Julien pilote le pipeline depuis un dashboard web avec KPIs temps reel, vues kanban/liste, gestion des sequences, et parametres editables.
+Un agent autonome de prospection B2B dual-source (signal-based + cold outbound) qui tourne 24/7 sur un VPS OVH avec une interface web React de pilotage. Il detecte les signaux d'interet LinkedIn via BeReach ET Playwright browser (likers, commentaires, posts mots-cles, offres d'emploi), et permet des recherches cold outbound via Sales Navigator. Chaque lead est enrichi, score ICP, et entre dans une sequence multi-canal automatisee (invitation LinkedIn → message → email J+7 → WhatsApp J+14). Julien pilote le pipeline depuis un dashboard web avec KPIs temps reel, vues kanban/liste, cold outbound search, gestion des sequences, et parametres editables.
 
 ## Core Value
 
@@ -28,13 +28,14 @@ Prospecter des personnes qualifiees via signaux d'interet LinkedIn ET recherche 
 - ✓ Supabase 6 indexes + DDL migration exports (DB-01-07) — v1.2
 - ✓ RGPD PII erasure on exclude + prompt sanitization (RGPD-01-02) — v1.2
 - ✓ Dashboard RPC aggregation, query optimization, log cleanup (PERF-01-08, OPS-01-02) — v1.2
+- ✓ Playwright browser automation avec cookie auth, rate limiting 100p/j, delais humains 3-8s (BROW-01-05) — v1.3
+- ✓ Browser signal collector dual-source (competitor, influencer, keyword, job) avec dedup cross-source (BSIG-01-07) — v1.3
+- ✓ Cold outbound Sales Nav search depuis dashboard avec enrichissement email et scoring ICP (COLD-01-08) — v1.3
+- ✓ Messages cold adaptes sans reference signal + templates configurables + sequence outreach complete (OUTR-01-03) — v1.3
 
 ### Active
 
-- [ ] Browser signal collector Playwright A/B test vs Bereach (BROWSER-01+)
-- [ ] Cold outbound search via Sales Nav + formulaire dashboard (COLD-01+)
-- [ ] Enrichissement email browser (LinkedIn visible + FullEnrich fallback) (ENR-07+)
-- [ ] Dedup cross-source browser vs bereach (DEDUP-01+)
+(Next milestone requirements to be defined via `/gsd:new-milestone`)
 
 ### Out of Scope
 
@@ -43,15 +44,13 @@ Prospecter des personnes qualifiees via signaux d'interet LinkedIn ET recherche 
 - Real-time websocket updates — refresh suffisant pour usage solo
 - Integration CRM automatique — HubSpot en lecture seule (anti-doublon)
 - Multi-utilisateur — Julien seul utilisateur
-- ~~Cold list import~~ — MOVED to Active (v1.3): cold outbound via Sales Nav browser search
+- ~~Cold list import~~ — DELIVERED in v1.3: cold outbound via Sales Nav browser search
 - Cron schedule editor dans l'UI — necessite restart PM2 via SSH
 - Drag & drop kanban — v2 potentiel
 
 ## Context
 
-Shipped v1.0 MVP (2026-03-21) + v1.1 Interface Web (2026-03-22) + v1.2 Security & Performance (2026-03-22). Pipeline backend 100% operationnel avec 6 taches cron. Interface web React deployee avec dashboard, pipeline, sequences, settings, export CSV. API securisee (helmet, CORS, rate limiting, JWT 24h, input validation). DB optimisee (6 indexes, 3 RPC functions, column selects, bounded queries). RGPD conforme (PII erasure, prompt sanitization). Log cleanup automatique.
-
-**v1.3 focus:** Ajouter Playwright comme alternative browser a Bereach pour la collecte de signaux (A/B test), et un mode cold outbound via recherche Sales Nav dans le dashboard. Objectif: pouvoir couper l'abonnement Bereach (49e/mois) a terme.
+Shipped v1.0 MVP (2026-03-21) + v1.1 Interface Web (2026-03-22) + v1.2 Security & Performance (2026-03-22) + v1.3 Browser Automation & Cold Outbound (2026-03-23). Pipeline dual-source (BeReach + Playwright browser) operationnel avec 6 taches cron. Browser collecte signaux LinkedIn en parallele de BeReach (A/B test). Cold outbound via recherche Sales Nav dans le dashboard avec enrichissement email et scoring ICP. Interface web React avec dashboard, pipeline, cold search, sequences, settings, export CSV. 10,446 LOC JS/JSX/CSS.
 
 Tech stack: Node.js + Express + node-cron, Supabase, React 19 + Vite + Tailwind v4 + TanStack Query, Recharts, BeReach, Fullenrich, Playwright, Claude Haiku/Sonnet, Gmail SMTP, MessagingMe API.
 VPS: ubuntu@146.59.233.252 at /home/openclaw/leadgen/, PM2 process manager, Nginx Proxy Manager HTTPS.
@@ -120,11 +119,15 @@ Domain: leadgen.messagingme.app
 | CSV export BOM prefix pour Excel | Compatibilite UTF-8 Excel francais | ✓ Good |
 | useDeferredValue pour search debounce | React 19 natif, pas de setTimeout/lodash | ✓ Good |
 
-| Playwright vs Puppeteer pour browser automation | Plus robuste, auto-wait, meilleur support multi-browser | — Pending |
-| Compte Julien Sales Nav (pas de fake) | Sales Nav payant sur compte Julien, fake inutile | — Pending |
-| Cookies session LinkedIn (pas d'API) | Sales Nav n'a pas d'API ouverte, cookies = methode standard | — Pending |
-| Pas de proxy (pour l'instant) | <100 pages/jour, volume trop faible pour detection | — Pending |
-| A/B test Bereach vs Browser | Valider que Playwright trouve autant/mieux avant de couper Bereach | — Pending |
+| Playwright vs Puppeteer pour browser automation | Plus robuste, auto-wait, meilleur support multi-browser | ✓ Good |
+| Compte Julien Sales Nav (pas de fake) | Sales Nav payant sur compte Julien, fake inutile | ✓ Good |
+| Cookies session LinkedIn (pas d'API) | Sales Nav n'a pas d'API ouverte, cookies = methode standard | ✓ Good |
+| Pas de proxy (pour l'instant) | <100 pages/jour, volume trop faible pour detection | ✓ Good |
+| A/B test Bereach vs Browser | Dual-source en parallele, dedup cross-source | ✓ Good |
+| In-memory rate limiter (pas DB) | Process restart reset acceptable pour <100p/j | ✓ Good |
+| Keywords URL approach Sales Nav | Plus resilient que encoded filter blobs | ✓ Good |
+| Cold detection via metadata (pas colonne DB) | signal_category + signal_type + metadata.cold_outbound | ✓ Good |
+| FullEnrich only pour cold email | Skip BeReach profile visits, enrichissement direct | ✓ Good |
 
 ---
-*Last updated: 2026-03-22 after v1.3 milestone start*
+*Last updated: 2026-03-23 after v1.3 milestone*
