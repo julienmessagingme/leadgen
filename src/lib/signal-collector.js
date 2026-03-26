@@ -243,7 +243,9 @@ async function collectJobSignals(source, runId) {
 
   var jobs = Array.isArray(result) ? result : (result.items || result.jobs || result.results || []);
 
-  for (var i = 0; i < jobs.length; i++) {
+  // Limit to first 2 jobs to control credit consumption (1 searchJobs + 2 DM searches = 3 credits max)
+  var maxJobs = 2;
+  for (var i = 0; i < Math.min(jobs.length, maxJobs); i++) {
     var job = jobs[i];
     var companyName = job.company || job.companyName || job.company_name;
     var jobTitle = job.title || job.jobTitle || job.job_title || "unknown";
@@ -256,7 +258,7 @@ async function collectJobSignals(source, runId) {
       var dmResult = await searchPostsByKeywords(dmQuery);
       await rateLimitDelay(1000, 3000);
 
-      var dmPosts = Array.isArray(dmResult) ? dmResult : (dmResult.posts || dmResult.results || []);
+      var dmPosts = Array.isArray(dmResult) ? dmResult : (dmResult.items || dmResult.posts || dmResult.results || []);
 
       // Extract profiles from search results that match the hiring company
       var decisionMakers = dmPosts
@@ -265,6 +267,7 @@ async function collectJobSignals(source, runId) {
           return authorCompany.toLowerCase().indexOf(companyName.toLowerCase()) !== -1;
         })
         .map(function (p) {
+          var postText = (p.text || "").substring(0, 300);
           return {
             profileUrl: p.author ? (p.author.profileUrl || p.author.url) : (p.profileUrl || p.profile_url),
             firstName: p.author ? (p.author.firstName || p.author.first_name) : (p.firstName || p.first_name),
@@ -272,6 +275,8 @@ async function collectJobSignals(source, runId) {
             name: p.author ? p.author.name : p.name,
             headline: p.author ? p.author.headline : p.headline,
             company: companyName,
+            post_text: postText,
+            post_url: p.postUrl || p.url || p.post_url || null,
           };
         });
 
@@ -395,7 +400,9 @@ async function collectSignals(runId) {
   for (var i = 0; i < priority1.length; i++) {
     var source = priority1[i];
 
-    if (creditsUsed + 1 > DAILY_SCRAPING_BUDGET) {
+    // job_keyword costs ~3 credits (1 searchJobs + 2 DM searches), keyword costs 1
+    var sourceCost = source.source_type === "job_keyword" ? 3 : 1;
+    if (creditsUsed + sourceCost > DAILY_SCRAPING_BUDGET) {
       await log(runId, "signal-collector", "info",
         "Budget exhausted during priority 1 at " + creditsUsed + " credits");
       break;
@@ -403,7 +410,7 @@ async function collectSignals(runId) {
 
     try {
       var signals = await processSource(source);
-      creditsUsed += 1;
+      creditsUsed += sourceCost;
       sourcesProcessed++;
       allSignals = allSignals.concat(signals);
 
@@ -421,7 +428,7 @@ async function collectSignals(runId) {
       }
       await log(runId, "signal-collector", "error",
         "[P1] '" + source.source_label + "' failed: " + err.message);
-      creditsUsed += 1;
+      creditsUsed += sourceCost;
     }
   }
 
