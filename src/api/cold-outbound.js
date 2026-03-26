@@ -58,10 +58,13 @@ router.post("/search", async (req, res) => {
       return res.status(500).json({ error: "Internal server error" });
     }
 
-    // Fire-and-forget: trigger async pipeline execution
+    // Cold search execution delegated to local PC watcher (Playwright).
+    // The local watcher.js polls for pending searches and executes via Playwright.
+    // OLD: Fire-and-forget server-side execution (disabled - needs browser on VPS)
     const runId = crypto.randomUUID();
-    executeColdSearch(data.id, filters, runId)
-      .catch(err => console.error("Cold search execution error:", err.message));
+    // executeColdSearch disabled - cold search via bookmarklet
+    // executeColdSearch(data.id, filters, runId)
+    //   .catch(err => console.error("Cold search execution error:", err.message));
 
     res.status(201).json(data);
   } catch (err) {
@@ -157,6 +160,7 @@ router.get("/searches/:id/status", async (req, res) => {
       leads_enriched: data.leads_enriched,
       max_leads: data.filters ? data.filters.max_leads : null,
       error_message: data.error_message,
+      filters: data.filters,
     });
   } catch (err) {
     console.error("Cold outbound GET /searches/:id/status error:", err.message);

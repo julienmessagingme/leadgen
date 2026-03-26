@@ -14,6 +14,7 @@ const { supabase } = require("./supabase");
 const {
   collectPostLikers,
   collectPostCommenters,
+  collectProfilePosts,
   searchPostsByKeywords,
   searchJobs,
   sleep,
@@ -89,50 +90,85 @@ function formatSignals(profiles, signalType, signalCategory, source) {
 async function collectPageSignals(source, signalCategory, runId) {
   var signals = [];
 
-  // Search for recent posts from this page using the source label as keywords
-  var searchQuery = source.source_label || source.source_url;
-  var postsResult = await searchPostsByKeywords(searchQuery);
+  // Get recent posts using the right BeReach endpoint:
+  // - Influencer (/in/ URL) → collectProfilePosts with the actual LinkedIn URL
+  // - Company (/company/ URL) → searchPostsByKeywords with the source label (no direct API)
+  var postsResult;
+  var sourceDesc;
+  if (source.source_url && source.source_url.includes("linkedin.com/in/")) {
+    // Influencer: use direct profile posts endpoint with LinkedIn URL
+    sourceDesc = source.source_url;
+    postsResult = await collectProfilePosts(source.source_url);
+  } else if (source.source_url && source.source_url.includes("linkedin.com/company/")) {
+    // Company page: use source_label for keyword search (no company posts endpoint in BeReach)
+    sourceDesc = source.source_label;
+    postsResult = await searchPostsByKeywords(source.source_label);
+  } else {
+    sourceDesc = source.source_label;
+    postsResult = await searchPostsByKeywords(source.source_label);
+  }
   await rateLimitDelay(1000, 3000);
 
-  // Extract post URLs from search results (take last 3)
-  var posts = Array.isArray(postsResult) ? postsResult : (postsResult.posts || postsResult.results || []);
-  var recentPosts = posts.slice(0, 3);
+  // Extract posts from search results
+  var posts = Array.isArray(postsResult) ? postsResult : (postsResult.items || postsResult.posts || postsResult.results || []);
 
-  if (recentPosts.length === 0) {
+  if (posts.length === 0) {
     await log(runId, "signal-collector", "info",
-      "No posts found for " + signalCategory + " source: " + searchQuery);
+      "No posts found for " + signalCategory + " source: " + sourceDesc);
     return signals;
   }
 
-  for (var i = 0; i < recentPosts.length; i++) {
-    var post = recentPosts[i];
-    var postUrl = post.url || post.postUrl || post.post_url || null;
-
-    if (!postUrl) continue;
-
-    // Collect likers
-    try {
-      var likers = await collectPostLikers(postUrl);
-      await rateLimitDelay(1000, 3000);
-      var likerProfiles = Array.isArray(likers) ? likers : (likers.profiles || likers.results || []);
-      var likerSignals = formatSignals(likerProfiles, "like", signalCategory, source);
-      signals = signals.concat(likerSignals);
-    } catch (err) {
-      await log(runId, "signal-collector", "warn",
-        "Failed to collect likers for post: " + err.message, { postUrl: postUrl });
+  // Filter out already-scraped posts (avoid wasting credits on same posts)
+  var newPosts = [];
+  for (var p = 0; p < posts.length; p++) {
+    var pUrl = posts[p].postUrl || posts[p].url || posts[p].post_url;
+    if (!pUrl) continue;
+    var { data: existing } = await supabase.from("scraped_posts").select("id").eq("post_url", pUrl).limit(1);
+    if (!existing || existing.length === 0) {
+      newPosts.push(posts[p]);
     }
+  }
 
-    // Collect commenters
-    try {
-      var commenters = await collectPostCommenters(postUrl);
-      await rateLimitDelay(1000, 3000);
-      var commenterProfiles = Array.isArray(commenters) ? commenters : (commenters.profiles || commenters.results || []);
-      var commenterSignals = formatSignals(commenterProfiles, "comment", signalCategory, source);
-      signals = signals.concat(commenterSignals);
-    } catch (err) {
-      await log(runId, "signal-collector", "warn",
-        "Failed to collect commenters for post: " + err.message, { postUrl: postUrl });
-    }
+  if (newPosts.length === 0) {
+    await log(runId, "signal-collector", "info",
+      "All posts already scraped for " + signalCategory + " source: " + sourceDesc + " (" + posts.length + " posts seen)");
+    return signals;
+  }
+
+  // Pick the best new post: highest engagement (likes + comments)
+  newPosts.sort(function(a, b) {
+    var engA = (a.likesCount || 0) + (a.commentsCount || 0);
+    var engB = (b.likesCount || 0) + (b.commentsCount || 0);
+    return engB - engA;
+  });
+  var bestPost = newPosts[0];
+  var postUrl = bestPost.postUrl || bestPost.url || bestPost.post_url;
+
+  // Mark as scraped
+  var _sp = await supabase.from("scraped_posts").insert({ post_url: postUrl, source_id: source.id }); // ignore errors
+
+  // Collect likers (1 credit)
+  try {
+    var likers = await collectPostLikers(postUrl);
+    await rateLimitDelay(1000, 3000);
+    var likerProfiles = Array.isArray(likers) ? likers : (likers.items || likers.profiles || likers.results || []);
+    var likerSignals = formatSignals(likerProfiles, "like", signalCategory, source);
+    signals = signals.concat(likerSignals);
+  } catch (err) {
+    await log(runId, "signal-collector", "warn",
+      "Failed to collect likers for post: " + err.message, { postUrl: postUrl });
+  }
+
+  // Collect commenters (1 credit)
+  try {
+    var commenters = await collectPostCommenters(postUrl);
+    await rateLimitDelay(1000, 3000);
+    var commenterProfiles = Array.isArray(commenters) ? commenters : (commenters.items || commenters.profiles || commenters.results || []);
+    var commenterSignals = formatSignals(commenterProfiles, "comment", signalCategory, source);
+    signals = signals.concat(commenterSignals);
+  } catch (err) {
+    await log(runId, "signal-collector", "warn",
+      "Failed to collect commenters for post: " + err.message, { postUrl: postUrl });
   }
 
   return signals;
@@ -147,10 +183,11 @@ async function collectPageSignals(source, signalCategory, runId) {
  * @returns {Promise<Array>} Formatted signals
  */
 async function collectKeywordSignals(source, runId) {
-  var result = await searchPostsByKeywords(source.keywords);
+  var kw = Array.isArray(source.keywords) ? source.keywords.join(" ") : (source.keywords || source.source_label);
+  var result = await searchPostsByKeywords(kw);
   await rateLimitDelay(1000, 3000);
 
-  var posts = Array.isArray(result) ? result : (result.posts || result.results || []);
+  var posts = Array.isArray(result) ? result : (result.items || result.posts || result.results || []);
 
   // Extract post authors as profiles
   var authors = posts
@@ -180,10 +217,11 @@ async function collectKeywordSignals(source, runId) {
 async function collectJobSignals(source, runId) {
   var signals = [];
 
-  var result = await searchJobs(source.keywords);
+  var kw = Array.isArray(source.keywords) ? source.keywords.join(" ") : (source.keywords || source.source_label);
+  var result = await searchJobs(kw);
   await rateLimitDelay(1000, 3000);
 
-  var jobs = Array.isArray(result) ? result : (result.jobs || result.results || []);
+  var jobs = Array.isArray(result) ? result : (result.items || result.jobs || result.results || []);
 
   for (var i = 0; i < jobs.length; i++) {
     var job = jobs[i];
@@ -252,73 +290,175 @@ async function collectJobSignals(source, runId) {
  * @returns {Promise<Array>} All collected signals
  */
 async function collectSignals(runId) {
-  // Load active watchlist entries from Supabase
-  var { data: sources, error } = await supabase
+  // ══════════════════════════════════════════════════════════════
+  // SMART COLLECTION STRATEGY
+  // ══════════════════════════════════════════════════════════════
+  // Budget: 280 credits/day (safety margin on 300 limit)
+  //
+  // PRIORITY 1 (every day, ~1 credit each):
+  //   - keyword sources → search posts from last 24h → collect AUTHORS
+  //   - job_keyword sources → search jobs → find DECISION MAKERS in France
+  //
+  // PRIORITY 2 (rotation on remaining budget, ~3 credits each):
+  //   - competitor_page + influencer → oldest-first rotation
+  //   - Only scrape NEW posts (not already in scraped_posts table)
+  // ══════════════════════════════════════════════════════════════
+
+  var DAILY_SCRAPING_BUDGET = 50; // TEMP: reduced to test scoring (was 280)
+  var creditsUsed = 0;
+
+  // Load all active sources
+  var { data: allSources, error } = await supabase
     .from("watchlist")
-    .select("id, source_type, source_label, source_url, keywords, sequence_id")
+    .select("id, source_type, source_label, source_url, keywords, sequence_id, last_scraped_at")
     .eq("is_active", true);
 
   if (error) {
-    await log(runId, "signal-collector", "error",
-      "Failed to load watchlist: " + error.message);
+    await log(runId, "signal-collector", "error", "Failed to load watchlist: " + error.message);
     return [];
   }
 
-  if (!sources || sources.length === 0) {
-    await log(runId, "signal-collector", "info",
-      "No active watchlist sources found");
+  if (!allSources || allSources.length === 0) {
+    await log(runId, "signal-collector", "info", "No active watchlist sources found");
     return [];
   }
+
+  // Split into priority groups
+  var priority1 = allSources.filter(function(s) {
+    return s.source_type === "keyword" || s.source_type === "job_keyword";
+  });
+  var priority2 = allSources.filter(function(s) {
+    return s.source_type === "competitor_page" || s.source_type === "influencer";
+  });
+
+  // Sort priority 2 by last_scraped_at ASC (oldest first = rotation)
+  priority2.sort(function(a, b) {
+    if (!a.last_scraped_at && !b.last_scraped_at) return 0;
+    if (!a.last_scraped_at) return -1;
+    if (!b.last_scraped_at) return 1;
+    return new Date(a.last_scraped_at) - new Date(b.last_scraped_at);
+  });
 
   await log(runId, "signal-collector", "info",
-    "Loaded " + sources.length + " active watchlist sources");
+    "Loaded " + allSources.length + " sources: " +
+    priority1.length + " keywords/jobs (priority 1, daily) + " +
+    priority2.length + " pages/influencers (priority 2, rotation). Budget: " + DAILY_SCRAPING_BUDGET);
 
   var allSignals = [];
+  var sourcesProcessed = 0;
 
-  for (var i = 0; i < sources.length; i++) {
-    var source = sources[i];
+  // ── HELPER: process a single source ──
+  async function processSource(source) {
+    var sourceSignals = [];
+    switch (source.source_type) {
+      case "competitor_page":
+        sourceSignals = await collectPageSignals(source, "concurrent", runId);
+        break;
+      case "influencer":
+        sourceSignals = await collectPageSignals(source, "influenceur", runId);
+        break;
+      case "keyword":
+        sourceSignals = await collectKeywordSignals(source, runId);
+        break;
+      case "job_keyword":
+        sourceSignals = await collectJobSignals(source, runId);
+        break;
+    }
+    return sourceSignals;
+  }
+
+  // ── PRIORITY 1: Keywords + Job keywords (every day) ──
+  await log(runId, "signal-collector", "info",
+    "── Priority 1: " + priority1.length + " keyword/job sources (daily) ──");
+
+  for (var i = 0; i < priority1.length; i++) {
+    var source = priority1[i];
+
+    if (creditsUsed + 1 > DAILY_SCRAPING_BUDGET) {
+      await log(runId, "signal-collector", "info",
+        "Budget exhausted during priority 1 at " + creditsUsed + " credits");
+      break;
+    }
+
     try {
-      var sourceSignals = [];
-
-      switch (source.source_type) {
-        case "competitor_page":
-          sourceSignals = await collectPageSignals(source, "concurrent", runId);
-          break;
-
-        case "influencer":
-          sourceSignals = await collectPageSignals(source, "influenceur", runId);
-          break;
-
-        case "keyword":
-          sourceSignals = await collectKeywordSignals(source, runId);
-          break;
-
-        case "job_keyword":
-          sourceSignals = await collectJobSignals(source, runId);
-          break;
-
-        default:
-          await log(runId, "signal-collector", "warn",
-            "Unknown source_type: " + source.source_type,
-            { source_id: source.id });
-          continue;
-      }
+      var signals = await processSource(source);
+      creditsUsed += 1;
+      sourcesProcessed++;
+      allSignals = allSignals.concat(signals);
 
       await log(runId, "signal-collector", "info",
-        "Source '" + (source.source_label || source.source_type) + "' collected " + sourceSignals.length + " signals");
+        "[P1] '" + source.source_label + "' → " + signals.length +
+        " signals (credits: " + creditsUsed + "/" + DAILY_SCRAPING_BUDGET + ")");
 
-      allSignals = allSignals.concat(sourceSignals);
+      await supabase.from("watchlist").update({ last_scraped_at: new Date().toISOString() }).eq("id", source.id);
 
     } catch (err) {
-      // Error isolation: one failing source does not crash collection
+      if (err.message && err.message.includes("Rate limit")) {
+        await log(runId, "signal-collector", "warn",
+          "Rate limit hit during priority 1 after " + creditsUsed + " credits. Stopping.");
+        return allSignals;
+      }
       await log(runId, "signal-collector", "error",
-        "Source '" + (source.source_label || source.source_type) + "' failed: " + err.message,
-        { source_id: source.id, source_type: source.source_type });
+        "[P1] '" + source.source_label + "' failed: " + err.message);
+      creditsUsed += 1;
     }
   }
 
+  // ── PRIORITY 2: Company pages + Influencers (rotation) ──
+  var remainingBudget = DAILY_SCRAPING_BUDGET - creditsUsed;
+  var maxP2Sources = Math.floor(remainingBudget / 3); // ~3 credits per page/influencer source
+
   await log(runId, "signal-collector", "info",
-    "Total signals collected: " + allSignals.length + " from " + sources.length + " sources");
+    "── Priority 2: " + priority2.length + " page/influencer sources (rotation, max " + maxP2Sources + " today) ──");
+
+  var p2Processed = 0;
+  for (var j = 0; j < priority2.length; j++) {
+    if (p2Processed >= maxP2Sources) {
+      await log(runId, "signal-collector", "info",
+        "Priority 2 budget reached (" + p2Processed + " sources). " +
+        (priority2.length - j) + " sources deferred to next run.");
+      break;
+    }
+
+    if (creditsUsed + 3 > DAILY_SCRAPING_BUDGET) {
+      await log(runId, "signal-collector", "info",
+        "Budget exhausted at " + creditsUsed + " credits. " +
+        (priority2.length - j) + " P2 sources deferred.");
+      break;
+    }
+
+    var src = priority2[j];
+    try {
+      var sigs = await processSource(src);
+      creditsUsed += 3;
+      sourcesProcessed++;
+      p2Processed++;
+      allSignals = allSignals.concat(sigs);
+
+      await log(runId, "signal-collector", "info",
+        "[P2] '" + src.source_label + "' → " + sigs.length +
+        " signals (credits: " + creditsUsed + "/" + DAILY_SCRAPING_BUDGET + ")");
+
+      await supabase.from("watchlist").update({ last_scraped_at: new Date().toISOString() }).eq("id", src.id);
+
+    } catch (err) {
+      if (err.message && err.message.includes("Rate limit")) {
+        await log(runId, "signal-collector", "warn",
+          "Rate limit hit during priority 2 after " + creditsUsed + " credits. Stopping.");
+        break;
+      }
+      await log(runId, "signal-collector", "error",
+        "[P2] '" + src.source_label + "' failed: " + err.message);
+      creditsUsed += 3;
+    }
+  }
+
+  // ── SUMMARY ──
+  var deferred = priority2.length - p2Processed;
+  await log(runId, "signal-collector", "info",
+    "Collection complete: " + allSignals.length + " signals from " + sourcesProcessed + " sources. " +
+    "Credits: ~" + creditsUsed + "/" + DAILY_SCRAPING_BUDGET + ". " +
+    (deferred > 0 ? deferred + " P2 sources deferred to tomorrow." : "All sources covered."));
 
   return allSignals;
 }

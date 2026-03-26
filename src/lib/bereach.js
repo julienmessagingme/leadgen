@@ -4,7 +4,7 @@
  * Uses Node 20 built-in fetch (no extra dependency).
  */
 
-const BEREACH_BASE = "https://api.bereach.io";
+const BEREACH_BASE = "https://api.berea.ch";
 
 /**
  * Sleep helper for rate limiting between API calls.
@@ -76,11 +76,19 @@ async function searchJobs(keywords) {
 }
 
 /**
+ * Collect recent posts from a LinkedIn profile.
+ * @param {string} profileUrl - LinkedIn profile URL (must be /in/ URL)
+ */
+async function collectProfilePosts(profileUrl) {
+  return bereach("/collect/linkedin/posts", { profileUrl: profileUrl });
+}
+
+/**
  * Visit a LinkedIn profile for enrichment data.
  * @param {string} profileUrl - LinkedIn profile URL
  */
 async function visitProfile(profileUrl) {
-  return bereach("/visit/linkedin/profile", { url: profileUrl });
+  return bereach("/visit/linkedin/profile", { profile: profileUrl });
 }
 
 /**
@@ -88,7 +96,7 @@ async function visitProfile(profileUrl) {
  * @param {string} companyUrl - LinkedIn company URL
  */
 async function visitCompany(companyUrl) {
-  return bereach("/visit/linkedin/company", { url: companyUrl });
+  return bereach("/visit/linkedin/company", { companyUrl: companyUrl });
 }
 
 /**
@@ -139,6 +147,7 @@ async function searchInbox(keyword) {
 module.exports = {
   collectPostLikers,
   collectPostCommenters,
+  collectProfilePosts,
   searchPostsByKeywords,
   searchJobs,
   visitProfile,

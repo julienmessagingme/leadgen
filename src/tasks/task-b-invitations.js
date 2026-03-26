@@ -14,7 +14,7 @@
  */
 
 const { supabase } = require("../lib/supabase");
-const { checkLimits, connectProfile, sleep } = require("../lib/bereach");
+const { checkLimits, connectProfile, visitProfile, sleep } = require("../lib/bereach");
 const { isSuppressed } = require("../lib/suppression");
 const { generateInvitationNote, isColdLead, loadTemplates } = require("../lib/message-generator");
 const { log } = require("../lib/logger");
@@ -54,7 +54,7 @@ module.exports = async function taskBInvitations(runId) {
   var dailyLimit = 15;
   try {
     var { data: limitSetting } = await supabase
-      .from("settings")
+      .from("global_settings")
       .select("value")
       .eq("key", "daily_invitation_limit")
       .single();
@@ -139,8 +139,32 @@ module.exports = async function taskBInvitations(runId) {
 
       // Cold lead: enforce 200 char limit (stricter than 280 for signal-based)
       var isCold = isColdLead(lead);
-      if (isCold && note.length > 200) {
-        note = note.substring(0, 197) + "...";
+      if (isCold && note.length > 150) {
+        note = note.substring(0, 147) + "...";
+      }
+
+      // LIN-09: Check if already connected (skip to follow-up)
+      try {
+        var profileData = await visitProfile(lead.linkedin_url);
+        var degree = profileData && (profileData.connectionDegree || profileData.degree || profileData.connection_degree);
+        if (degree === 1 || degree === "1st" || degree === "DISTANCE_1") {
+          await log(runId, "task-b-invitations", "info",
+            "Lead already connected: " + (lead.full_name || lead.id) + " -> skip to follow-up");
+          await supabase.from("leads").update({
+            status: "connected",
+            invitation_sent_at: new Date().toISOString(),
+            metadata: Object.assign({}, lead.metadata || {}, {
+              already_connected: true,
+              invitation_run_id: runId,
+            }),
+            last_processed_run_id: runId,
+          }).eq("id", lead.id);
+          sent++;
+          continue;
+        }
+      } catch (profileErr) {
+        await log(runId, "task-b-invitations", "warn",
+          "Could not check connection status for " + (lead.full_name || lead.id) + ": " + profileErr.message);
       }
 
       // LIN-01: Send invitation via BeReach

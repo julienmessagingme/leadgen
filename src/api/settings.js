@@ -18,7 +18,6 @@ const ALLOWED_CONFIG_KEYS = [
   "followup_delay_days",
   "email_delay_days",
   "whatsapp_delay_days",
-  "cold_templates",
 ];
 
 const VALID_ICP_CATEGORIES = [
@@ -215,7 +214,7 @@ router.delete("/suppression/:hash", async (req, res) => {
 router.get("/config", async (req, res) => {
   try {
     const { data, error } = await supabase
-      .from("settings")
+      .from("global_settings")
       .select("*");
 
     if (error) {
@@ -243,7 +242,7 @@ router.patch("/config/:key", async (req, res) => {
     }
 
     const { data, error } = await supabase
-      .from("settings")
+      .from("global_settings")
       .upsert(
         { key, value, updated_at: new Date().toISOString() },
         { onConflict: "key" }

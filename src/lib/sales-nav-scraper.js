@@ -477,238 +477,85 @@ async function sendAlertEmail(reason, errorMessage, runId) {
  * @param {string} runId - Run identifier for logging
  * @returns {Promise<{profiles: Array, pages_consumed: number, stopped_reason: string|null}>}
  */
+/**
+ * Search for leads using BeReach People Search API.
+ * Replaces the Playwright-based Sales Nav scraper.
+ * Maps cold outbound filters to BeReach search parameters.
+ *
+ * @param {object} filters - { sector, company_size, job_title, geography, max_leads }
+ * @param {string} runId - UUID for logging
+ * @returns {object} { profiles: Array, pages_consumed: 0, stopped_reason: null }
+ */
 async function searchSalesNav(filters, runId) {
+  const { log } = require("./logger");
+
+  // Lazy import BeReach (ESM)
+  const { Bereach } = await import("bereach");
+  const client = new Bereach({ token: process.env.BEREACH_API_KEY });
+
   const maxLeads = Math.min(filters.max_leads || 50, 50);
-  let browser = null;
-  let pagesConsumed = 0;
   const allProfiles = [];
-  let stoppedReason = null;
+
+  await log(runId, "sales-nav-scraper", "info",
+    "Using BeReach People Search (browser disabled)", { filters });
 
   try {
-    // Create browser context with LinkedIn cookies
-    const ctx = await createBrowserContext(runId);
-    browser = ctx.browser;
-    const page = ctx.page;
-
-    // Build and navigate to search URL
-    const searchUrl = buildSearchUrl(filters);
-    await log(
-      runId,
-      "sales-nav-scraper",
-      "info",
-      "Navigating to Sales Nav search: " + searchUrl
-    );
-
-    await navigateWithLimits(page, searchUrl);
-    pagesConsumed++;
-
-    // Check for session expiry (redirect to login)
-    if (isSessionExpired(page)) {
-      await log(
-        runId,
-        "sales-nav-scraper",
-        "error",
-        "Session expired - redirected to login"
-      );
-      stoppedReason = "session_expired";
-      await sendAlertEmail("session_expired", "Redirected to login page", runId);
-      return { profiles: [], pages_consumed: pagesConsumed, stopped_reason: stoppedReason };
+    // Build search keywords from filters
+    var keywords = [filters.job_title, filters.sector].filter(Boolean).join(" ");
+    if (filters.geography) {
+      keywords += " " + filters.geography;
     }
 
-    // Dismiss popups and wait for results
-    await dismissPopups(page);
-    await humanDelay(2000, 4000);
+    await log(runId, "sales-nav-scraper", "info",
+      "Searching BeReach: " + keywords);
 
-    // Check for CAPTCHA
-    if (await isCaptchaPresent(page)) {
-      await log(
-        runId,
-        "sales-nav-scraper",
-        "warn",
-        "CAPTCHA detected on search page"
-      );
-      stoppedReason = "captcha";
-      await sendAlertEmail("captcha", "CAPTCHA on search results page", runId);
-      return { profiles: [], pages_consumed: pagesConsumed, stopped_reason: stoppedReason };
-    }
+    // Search people
+    var result = await client.search.people({
+      keywords: keywords,
+      start: 0,
+    });
 
-    // Wait for search results to load
-    const hasResults = await waitForResults(page);
-    if (!hasResults) {
-      await log(
-        runId,
-        "sales-nav-scraper",
-        "warn",
-        "No search results found on page"
-      );
-      stoppedReason = "no_results";
-      return { profiles: [], pages_consumed: pagesConsumed, stopped_reason: stoppedReason };
-    }
+    var items = result.items || result.profiles || [];
+    await log(runId, "sales-nav-scraper", "info",
+      "BeReach returned " + items.length + " profiles");
 
-    // Scroll to simulate human behavior before extracting
-    await humanScroll(page);
+    for (var i = 0; i < Math.min(items.length, maxLeads); i++) {
+      var p = items[i];
+      var profileUrl = p.profileUrl || p.profile_url || p.url || null;
+      if (!profileUrl) continue;
 
-    // Extract profiles from first page
-    const page1Profiles = await extractProfilesFromPage(page);
-    allProfiles.push(...page1Profiles);
-    await log(
-      runId,
-      "sales-nav-scraper",
-      "info",
-      "Page 1: extracted " + page1Profiles.length + " profiles"
-    );
-
-    // Check if we need page 2 (max 2 pages, 50 results cap)
-    if (allProfiles.length < maxLeads && page1Profiles.length >= 20) {
-      // Try to navigate to page 2
-      await humanDelay(3000, 6000);
-
-      let clickedNext = false;
-      for (const sel of NEXT_PAGE_SELECTORS) {
-        try {
-          const btn = page.locator(sel).first();
-          const visible = await btn.isVisible({ timeout: 1000 }).catch(() => false);
-          const enabled = visible
-            ? await btn.isEnabled({ timeout: 500 }).catch(() => false)
-            : false;
-          if (visible && enabled) {
-            await btn.click({ timeout: 2000 });
-            clickedNext = true;
-            break;
-          }
-        } catch (_) {
-          // try next selector
-        }
+      var firstName = p.firstName || p.first_name || null;
+      var lastName = p.lastName || p.last_name || null;
+      if (!firstName && !lastName && p.name) {
+        var parts = p.name.trim().split(/\s+/);
+        firstName = parts[0] || null;
+        lastName = parts.slice(1).join(" ") || null;
       }
 
-      if (clickedNext) {
-        pagesConsumed++;
-        await humanDelay(3000, 6000);
-
-        // Check for CAPTCHA on page 2
-        if (await isCaptchaPresent(page)) {
-          await log(
-            runId,
-            "sales-nav-scraper",
-            "warn",
-            "CAPTCHA detected on page 2 - returning partial results"
-          );
-          stoppedReason = "captcha";
-          await sendAlertEmail(
-            "captcha",
-            "CAPTCHA on search results page 2",
-            runId
-          );
-          // Return partial results from page 1
-        } else if (isSessionExpired(page)) {
-          await log(
-            runId,
-            "sales-nav-scraper",
-            "error",
-            "Session expired on page 2 - returning partial results"
-          );
-          stoppedReason = "session_expired";
-          await sendAlertEmail(
-            "session_expired",
-            "Session expired navigating to page 2",
-            runId
-          );
-        } else {
-          await dismissPopups(page);
-          const hasPage2Results = await waitForResults(page, 10000);
-
-          if (hasPage2Results) {
-            await humanScroll(page);
-            const page2Profiles = await extractProfilesFromPage(page);
-            allProfiles.push(...page2Profiles);
-            await log(
-              runId,
-              "sales-nav-scraper",
-              "info",
-              "Page 2: extracted " + page2Profiles.length + " profiles"
-            );
-          }
-        }
-      }
+      allProfiles.push({
+        first_name: firstName,
+        last_name: lastName,
+        full_name: p.name || ((firstName || "") + " " + (lastName || "")).trim(),
+        headline: p.headline || p.title || null,
+        company_name: p.company || p.companyName || null,
+        linkedin_url: profileUrl,
+        location: p.location || null,
+      });
     }
 
-    // Trim to max_leads
-    if (allProfiles.length > maxLeads) {
-      allProfiles.length = maxLeads;
-    }
+    await log(runId, "sales-nav-scraper", "info",
+      "Cold search complete: " + allProfiles.length + " profiles extracted");
 
-    // Set stopped reason
-    if (!stoppedReason) {
-      stoppedReason =
-        allProfiles.length >= maxLeads ? "max_reached" : null;
-    }
-
-    await log(
-      runId,
-      "sales-nav-scraper",
-      "info",
-      "Search complete: " +
-        allProfiles.length +
-        " profiles, " +
-        pagesConsumed +
-        " pages consumed, reason: " +
-        (stoppedReason || "done")
-    );
-
-    return {
-      profiles: allProfiles,
-      pages_consumed: pagesConsumed,
-      stopped_reason: stoppedReason,
-    };
   } catch (err) {
-    // Handle browser creation failure (cookies expired)
-    if (
-      err.message.includes("cookies") ||
-      err.message.includes("session expired")
-    ) {
-      await log(
-        runId,
-        "sales-nav-scraper",
-        "error",
-        "Browser/session error: " + err.message
-      );
-      await sendAlertEmail("session_expired", err.message, runId);
-      return {
-        profiles: allProfiles,
-        pages_consumed: pagesConsumed,
-        stopped_reason: "session_expired",
-      };
-    }
-
-    // Handle rate limit errors
-    if (err.message.includes("Daily page limit")) {
-      await log(
-        runId,
-        "sales-nav-scraper",
-        "warn",
-        "Daily page limit reached: " + err.message
-      );
-      return {
-        profiles: allProfiles,
-        pages_consumed: pagesConsumed,
-        stopped_reason: "rate_limited",
-      };
-    }
-
-    await log(
-      runId,
-      "sales-nav-scraper",
-      "error",
-      "Unexpected error: " + err.message
-    );
-    return {
-      profiles: allProfiles,
-      pages_consumed: pagesConsumed,
-      stopped_reason: "error",
-    };
-  } finally {
-    await closeBrowser(browser);
+    await log(runId, "sales-nav-scraper", "error",
+      "BeReach search failed: " + err.message);
   }
+
+  return {
+    profiles: allProfiles,
+    pages_consumed: 0,
+    stopped_reason: null,
+  };
 }
 
 module.exports = { searchSalesNav };

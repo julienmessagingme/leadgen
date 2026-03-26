@@ -2,9 +2,6 @@
  * Claude Sonnet message generator for all outreach channels.
  * Uses messages.create with JSON instruction in prompt.
  * Returns null on error to let calling tasks decide fallback behavior.
- *
- * Supports both signal-based and cold outbound leads.
- * Cold leads receive prompts that never reference LinkedIn signals.
  */
 
 const { getAnthropicClient } = require("./anthropic");
@@ -17,33 +14,15 @@ function sanitizeForPrompt(value, maxLen = 200) {
   return String(value).replace(/[\r\n]+/g, " ").trim().slice(0, maxLen);
 }
 
-// ────────────────────────────────────────────────────────────
-// Cold lead detection
-// ────────────────────────────────────────────────────────────
-
 /**
- * Determine if a lead is a cold outbound lead (no LinkedIn signal).
- * @param {object} lead
- * @returns {boolean}
+ * Default template instructions (used as fallback when settings table is unavailable).
  */
-function isColdLead(lead) {
-  if (!lead) return false;
-  if (lead.signal_category === "cold_outbound") return true;
-  if (lead.signal_type === "cold_search") return true;
-  if (lead.metadata && lead.metadata.cold_outbound === true) return true;
-  return false;
-}
-
-// ────────────────────────────────────────────────────────────
-// Signal-based default templates
-// ────────────────────────────────────────────────────────────
-
 var DEFAULT_INVITATION_TEMPLATE =
   "Redige une invitation LinkedIn personnalisee pour ce prospect.\n\n" +
   "Regles:\n" +
   "- Reference au signal detecte\n" +
   "- Ton professionnel mais humain\n" +
-  "- Max 280 caracteres STRICT\n" +
+  "- Max 150 caracteres STRICT (2-3 phrases courtes)\n" +
   "- Pas d'emojis, pas de pitch commercial\n" +
   "- Pas de guillemets autour du texte";
 
@@ -64,7 +43,7 @@ var DEFAULT_EMAIL_TEMPLATE =
   "- Reference a la connexion LinkedIn\n" +
   "- Proposition de valeur MessagingMe pour leur secteur\n" +
   "- CTA: lien Calendly {calendlyUrl}\n" +
-  "- Signature: Julien Poupard, DG MessagingMe\n" +
+  "- Signature: Julien Dumas, DG MessagingMe\n" +
   "- Ton professionnel mais personnel";
 
 var DEFAULT_WHATSAPP_TEMPLATE =
@@ -76,121 +55,19 @@ var DEFAULT_WHATSAPP_TEMPLATE =
   "- Ton direct et personnel\n" +
   "- Pas d'emojis excessifs";
 
-// ────────────────────────────────────────────────────────────
-// Cold outbound default templates (no signal references)
-// ────────────────────────────────────────────────────────────
-
-var DEFAULT_COLD_INVITATION_TEMPLATE =
-  "Redige une invitation LinkedIn courte et professionnelle pour ce prospect.\n\n" +
-  "Regles:\n" +
-  "- Presentation courte de Julien et MessagingMe\n" +
-  "- Proposition de valeur adaptee au secteur du prospect\n" +
-  "- Ton professionnel et direct\n" +
-  "- Max 200 caracteres STRICT (cible 150-200)\n" +
-  "- Pas d'emojis, pas de pitch commercial\n" +
-  "- NE JAMAIS mentionner un post, like, commentaire ou signal LinkedIn\n" +
-  "- Personnaliser avec le nom et l'entreprise (PAS le titre)";
-
-var DEFAULT_COLD_FOLLOWUP_TEMPLATE =
-  "Redige un message de suivi LinkedIn post-connexion pour un prospect contacte en cold.\n\n" +
-  "Regles:\n" +
-  "- Remercier pour la connexion\n" +
-  "- Proposer un echange sur les enjeux de messaging/communication client\n" +
-  "- Mentionner MessagingMe brievement\n" +
-  "- 3 a 5 phrases max\n" +
-  "- Ton naturel et direct\n" +
-  "- NE JAMAIS mentionner un signal LinkedIn";
-
-var DEFAULT_COLD_EMAIL_TEMPLATE =
-  "Redige un email de relance pour un prospect contacte en cold.\n\n" +
-  "Regles:\n" +
-  "- Objet accrocheur et court\n" +
-  "- Corps en HTML simple\n" +
-  "- Proposition de valeur MessagingMe pour leur secteur\n" +
-  "- CTA: lien Calendly {calendlyUrl}\n" +
-  "- Signature: Julien Poupard, DG MessagingMe\n" +
-  "- Ton professionnel mais personnel\n" +
-  "- NE JAMAIS mentionner un post, like ou signal LinkedIn";
-
-var DEFAULT_COLD_WHATSAPP_TEMPLATE =
-  "Redige un message WhatsApp pour un prospect contacte en cold.\n\n" +
-  "Regles:\n" +
-  "- 3 a 4 lignes max\n" +
-  "- Proposition de RDV via Calendly\n" +
-  "- Ton direct et personnel\n" +
-  "- Pas d'emojis excessifs\n" +
-  "- NE JAMAIS mentionner un signal LinkedIn";
-
-// ────────────────────────────────────────────────────────────
-// Cold template helper
-// ────────────────────────────────────────────────────────────
-
-/**
- * Pick a cold template from configured templates (random for variety).
- * @param {Array} coldTemplates - Array of {name, prompt, value_proposition}
- * @returns {object|null} Selected template or null
- */
-function pickColdTemplate(coldTemplates) {
-  if (!Array.isArray(coldTemplates) || coldTemplates.length === 0) return null;
-  var idx = Math.floor(Math.random() * coldTemplates.length);
-  return coldTemplates[idx];
-}
-
-/**
- * Build the user prompt for a cold lead (no signal references).
- * @param {string} instructions - Cold template instructions
- * @param {string} valueProposition - Value proposition text
- * @param {object} lead - Lead data
- * @param {string} jsonShape - Expected JSON response shape
- * @returns {string}
- */
-function buildColdPrompt(instructions, valueProposition, lead, jsonShape) {
-  var parts = [instructions];
-  if (valueProposition) {
-    parts.push("\nProposition de valeur a mettre en avant: " + valueProposition);
-  }
-  parts.push(
-    "\nProspect: " + (sanitizeForPrompt(lead.full_name) || "inconnu") +
-    "\nEntreprise: " + (sanitizeForPrompt(lead.company_name) || "inconnue")
-  );
-  parts.push("\nReponds en JSON: " + jsonShape);
-  return parts.join("\n");
-}
-
-// ────────────────────────────────────────────────────────────
-// Template loading
-// ────────────────────────────────────────────────────────────
-
 /**
  * Load template instructions from settings table.
  * Fail-open: returns empty object on error (hardcoded defaults will be used).
- * Also loads cold_templates key (JSON array of cold template objects).
  * @returns {Promise<object>} Map of template key to value
  */
 async function loadTemplates() {
   try {
     var { data, error } = await supabase
-      .from("settings")
+      .from("global_settings")
       .select("key, value")
-      .in("key", [
-        "template_invitation", "template_followup", "template_email", "template_whatsapp",
-        "cold_templates"
-      ]);
+      .in("key", ["template_invitation", "template_followup", "template_email", "template_whatsapp"]);
     if (error || !data) return {};
-    var result = {};
-    for (var i = 0; i < data.length; i++) {
-      var r = data[i];
-      if (r.key === "cold_templates") {
-        try {
-          result.cold_templates = JSON.parse(r.value);
-        } catch (_e) {
-          result.cold_templates = [];
-        }
-      } else {
-        result[r.key] = r.value;
-      }
-    }
-    return result;
+    return Object.fromEntries(data.map(function (r) { return [r.key, r.value]; }));
   } catch (e) {
     console.warn("loadTemplates failed:", e.message);
     return {};
@@ -210,52 +87,73 @@ async function callClaude(systemPrompt, userPrompt, maxTokens) {
   return JSON.parse(response.content[0].text);
 }
 
-var SYSTEM = "Tu es Julien Poupard, DG de MessagingMe (plateforme de messaging WhatsApp/RCS pour entreprises). Reponds UNIQUEMENT en JSON valide, sans markdown, sans code block.";
+var SYSTEM = "Tu es Julien Dumas, DG de MessagingMe. MessagingMe est a la fois un cabinet de conseil en strategie conversationnelle et une plateforme technologique (messagingme.app). On aide les entreprises a definir leur strategie messaging (WhatsApp, RCS, SMS), puis on les accompagne dans la mise en oeuvre avec notre techno. REGLE N1 ABSOLUE : Le premier contact REAGIT au signal chaud detecte. C est le hook. Si le mec a like un post sur l abandon de panier WhatsApp, on parle d abandon de panier. Si il a commente sur le RCS, on parle RCS. Si il a re-engage plusieurs fois, on fait reference a cet interet repete. Le signal = le sujet de conversation. C est ce qui rend le message pertinent et non spam. Ne jamais pitcher la plateforme en premier. REGLE N2 : Le positionnement conseil/strategie vient EN COMPLEMENT du signal, ou en REMPLACEMENT si le signal est trop generique pour accrocher. Par exemple : signal generique (like page Infobip) = on peut ajouter l angle conseil. Signal precis (commente un post sur WhatsApp dans le retail) = on reste 100% sur le signal. ADAPTATION ZONE FRANCE : Quand le signal est exploite, on peut ajouter une touche conseil/strategie conversationnelle. On est des strateges, pas juste un outil. Ton = pair a pair, expert accessible. ADAPTATION ZONE GCC (Dubai, KSA, Qatar, Oman, Koweit, UAE) : Ton = business, en anglais. On peut mentionner notre expertise MENA. Reponds UNIQUEMENT en JSON valide, sans markdown, sans code block.";
 
-// ────────────────────────────────────────────────────────────
-// Message generation functions
-// ────────────────────────────────────────────────────────────
+/**
+ * Build full prospect context for Claude, including all signals history.
+ * @param {object} lead - Lead data with metadata
+ * @returns {string} Formatted context block
+ */
+function buildLeadContext(lead) {
+  var lines = [];
+  lines.push("Prospect: " + (sanitizeForPrompt(lead.full_name) || "inconnu"));
+  lines.push("Titre: " + (sanitizeForPrompt(lead.headline) || "inconnu"));
+  lines.push("Entreprise: " + (sanitizeForPrompt(lead.company_name) || "inconnue"));
+  lines.push("Secteur: " + (sanitizeForPrompt(lead.company_sector) || "inconnu"));
+  lines.push("Localisation: " + (sanitizeForPrompt(lead.location) || "inconnue"));
+  lines.push("Score ICP: " + (lead.icp_score || 0) + "/100 (" + (lead.tier || "?") + ")");
+
+  // Current signal
+  lines.push("");
+  lines.push("Signal principal: " + (sanitizeForPrompt(lead.signal_type) || "inconnu") + " - " + sanitizeForPrompt(lead.signal_detail));
+
+  // Previous signals (re-engagements)
+  var meta = lead.metadata || {};
+  var prevSignals = meta.previous_signals || [];
+  if (prevSignals.length > 0) {
+    lines.push("");
+    lines.push("Historique d engagement (" + (prevSignals.length + 1) + " signaux detectes) :");
+    for (var i = 0; i < prevSignals.length; i++) {
+      var ps = prevSignals[i];
+      var dateStr = ps.date ? new Date(ps.date).toLocaleDateString("fr-FR") : "?";
+      lines.push("  - " + dateStr + " : " + (ps.type || "?") + " via " + (ps.source || "?"));
+    }
+    lines.push("");
+    lines.push("IMPORTANT : Ce prospect a montre un interet REPETE (" + (prevSignals.length + 1) + " fois). Adapte ton message en faisant reference a cet engagement multiple. C est un signal fort.");
+  }
+
+  // News evidence if available
+  if (meta.news_titles && meta.news_titles.length > 0) {
+    lines.push("");
+    lines.push("Actualites recentes de son entreprise :");
+    for (var j = 0; j < Math.min(3, meta.news_titles.length); j++) {
+      lines.push("  - " + meta.news_titles[j]);
+    }
+  }
+
+  return lines.join("\n");
+}
+
+
 
 /**
  * Generate a personalized LinkedIn invitation note.
  * @param {object} lead - Lead data
- * @returns {Promise<string|null>} Invitation note (max 280 chars signal / 200 chars cold) or null on error
+ * @returns {Promise<string|null>} Invitation note (max 150 chars) or null on error
  */
 async function generateInvitationNote(lead, templates) {
   try {
     var tpl = templates || (await loadTemplates());
-
-    // Cold lead branch
-    if (isColdLead(lead)) {
-      var coldTpl = pickColdTemplate(tpl.cold_templates);
-      var coldInstructions = coldTpl ? coldTpl.prompt : DEFAULT_COLD_INVITATION_TEMPLATE;
-      var coldValueProp = coldTpl ? coldTpl.value_proposition : "";
-
-      var coldResult = await callClaude(SYSTEM,
-        buildColdPrompt(coldInstructions, coldValueProp, lead, '{"note": "..."}'),
-        256);
-
-      var coldNote = coldResult.note || "";
-      if (coldNote.length > 200) {
-        coldNote = coldNote.substring(0, 197) + "...";
-      }
-      return coldNote;
-    }
-
-    // Signal-based lead (existing behavior)
     var instructions = tpl.template_invitation || DEFAULT_INVITATION_TEMPLATE;
 
     var result = await callClaude(SYSTEM,
       instructions + "\n\n" +
-      "Prospect: " + (sanitizeForPrompt(lead.full_name) || "inconnu") + "\n" +
-      "Titre: " + (sanitizeForPrompt(lead.headline) || "inconnu") + "\n" +
-      "Entreprise: " + (sanitizeForPrompt(lead.company_name) || "inconnue") + "\n" +
-      "Signal detecte: " + (sanitizeForPrompt(lead.signal_type) || "inconnu") + " - " + sanitizeForPrompt(lead.signal_detail) + "\n\n" +
+      buildLeadContext(lead) + "\n\n" +
       'Reponds en JSON: {"note": "..."}', 256);
 
     var note = result.note || "";
-    if (note.length > 280) {
-      note = note.substring(0, 277) + "...";
+    if (note.length > 150) {
+      note = note.substring(0, 147) + "...";
     }
     return note;
   } catch (err) {
@@ -272,29 +170,11 @@ async function generateInvitationNote(lead, templates) {
 async function generateFollowUpMessage(lead, templates) {
   try {
     var tpl = templates || (await loadTemplates());
-
-    // Cold lead branch
-    if (isColdLead(lead)) {
-      var coldTpl = pickColdTemplate(tpl.cold_templates);
-      var coldInstructions = coldTpl ? coldTpl.prompt : DEFAULT_COLD_FOLLOWUP_TEMPLATE;
-      var coldValueProp = coldTpl ? coldTpl.value_proposition : "";
-
-      var coldResult = await callClaude(SYSTEM,
-        buildColdPrompt(coldInstructions, coldValueProp, lead, '{"message": "..."}'),
-        512);
-
-      return coldResult.message || null;
-    }
-
-    // Signal-based lead (existing behavior)
     var instructions = tpl.template_followup || DEFAULT_FOLLOWUP_TEMPLATE;
 
     var result = await callClaude(SYSTEM,
       instructions + "\n\n" +
-      "Prospect: " + (sanitizeForPrompt(lead.full_name) || "inconnu") + "\n" +
-      "Titre: " + (sanitizeForPrompt(lead.headline) || "inconnu") + "\n" +
-      "Entreprise: " + (sanitizeForPrompt(lead.company_name) || "inconnue") + "\n" +
-      "Signal detecte: " + (sanitizeForPrompt(lead.signal_type) || "inconnu") + " - " + sanitizeForPrompt(lead.signal_detail) + "\n\n" +
+      buildLeadContext(lead) + "\n\n" +
       'Reponds en JSON: {"message": "..."}', 512);
 
     return result.message || null;
@@ -305,7 +185,7 @@ async function generateFollowUpMessage(lead, templates) {
 }
 
 /**
- * Generate an email (subject + HTML body) for follow-up.
+ * Generate an email (subject + HTML body) for J+7 follow-up.
  * @param {object} lead - Lead data
  * @returns {Promise<{subject: string, body: string}|null>} Email object or null on error
  */
@@ -313,31 +193,11 @@ async function generateEmail(lead, templates) {
   try {
     var calendlyUrl = process.env.CALENDLY_URL || "https://calendly.com/julien-messagingme";
     var tpl = templates || (await loadTemplates());
-
-    // Cold lead branch
-    if (isColdLead(lead)) {
-      var coldTpl = pickColdTemplate(tpl.cold_templates);
-      var coldInstructions = (coldTpl ? coldTpl.prompt : DEFAULT_COLD_EMAIL_TEMPLATE)
-        .replace("{calendlyUrl}", calendlyUrl);
-      var coldValueProp = coldTpl ? coldTpl.value_proposition : "";
-
-      var coldResult = await callClaude(SYSTEM,
-        buildColdPrompt(coldInstructions, coldValueProp, lead, '{"subject": "...", "body": "<html>...</html>"}'),
-        1024);
-
-      if (!coldResult.subject || !coldResult.body) return null;
-      return { subject: coldResult.subject, body: coldResult.body };
-    }
-
-    // Signal-based lead (existing behavior)
     var instructions = (tpl.template_email || DEFAULT_EMAIL_TEMPLATE).replace("{calendlyUrl}", calendlyUrl);
 
     var result = await callClaude(SYSTEM,
       instructions + "\n\n" +
-      "Prospect: " + (sanitizeForPrompt(lead.full_name) || "inconnu") + "\n" +
-      "Titre: " + (sanitizeForPrompt(lead.headline) || "inconnu") + "\n" +
-      "Entreprise: " + (sanitizeForPrompt(lead.company_name) || "inconnue") + "\n" +
-      "Signal detecte: " + (sanitizeForPrompt(lead.signal_type) || "inconnu") + " - " + sanitizeForPrompt(lead.signal_detail) + "\n" +
+      buildLeadContext(lead) + "\n" +
       "Email: " + sanitizeForPrompt(lead.email) + "\n\n" +
       'Reponds en JSON: {"subject": "...", "body": "<html>...</html>"}', 1024);
 
@@ -357,29 +217,11 @@ async function generateEmail(lead, templates) {
 async function generateWhatsAppBody(lead, templates) {
   try {
     var tpl = templates || (await loadTemplates());
-
-    // Cold lead branch
-    if (isColdLead(lead)) {
-      var coldTpl = pickColdTemplate(tpl.cold_templates);
-      var coldInstructions = coldTpl ? coldTpl.prompt : DEFAULT_COLD_WHATSAPP_TEMPLATE;
-      var coldValueProp = coldTpl ? coldTpl.value_proposition : "";
-
-      var coldResult = await callClaude(SYSTEM,
-        buildColdPrompt(coldInstructions, coldValueProp, lead, '{"body": "..."}'),
-        512);
-
-      return coldResult.body || null;
-    }
-
-    // Signal-based lead (existing behavior)
     var instructions = tpl.template_whatsapp || DEFAULT_WHATSAPP_TEMPLATE;
 
     var result = await callClaude(SYSTEM,
       instructions + "\n\n" +
-      "Prospect: " + (sanitizeForPrompt(lead.full_name) || "inconnu") + "\n" +
-      "Titre: " + (sanitizeForPrompt(lead.headline) || "inconnu") + "\n" +
-      "Entreprise: " + (sanitizeForPrompt(lead.company_name) || "inconnue") + "\n" +
-      "Signal detecte: " + (sanitizeForPrompt(lead.signal_type) || "inconnu") + " - " + sanitizeForPrompt(lead.signal_detail) + "\n\n" +
+      buildLeadContext(lead) + "\n\n" +
       'Reponds en JSON: {"body": "..."}', 512);
 
     return result.body || null;
@@ -419,7 +261,6 @@ async function generateInMail(lead) {
 }
 
 module.exports = {
-  isColdLead,
   loadTemplates,
   generateInvitationNote,
   generateFollowUpMessage,

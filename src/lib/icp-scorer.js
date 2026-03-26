@@ -39,14 +39,25 @@ function buildScoringPrompt(lead, newsEvidence, rules) {
   const targetSectors = rules
     .filter((r) => r.category === "sector")
     .map((r) => r.value);
+  const targetGeos = rules
+    .filter((r) => r.category === "geo_positive")
+    .map((r) => r.value);
   const sizeRules = rules.filter((r) => r.category === "company_size");
   const seniorityRules = rules.filter((r) => r.category === "seniority");
 
-  const sizeRange = sizeRules.length > 0
-    ? sizeRules.map((r) => r.value).join(", ")
-    : "non specifie";
+  // Build human-readable size range from min/max/ideal_min/ideal_max
+  var sizeMin = sizeRules.find((r) => r.key === "min");
+  var sizeMax = sizeRules.find((r) => r.key === "max");
+  var sizeIdealMin = sizeRules.find((r) => r.key === "ideal_min");
+  var sizeIdealMax = sizeRules.find((r) => r.key === "ideal_max");
+  var sizeRange = "non specifie";
+  if (sizeIdealMin && sizeIdealMax) {
+    sizeRange = (sizeIdealMin.value || "10") + " a " + (sizeIdealMax.value || "5000") + " employes (ideal)";
+    if (sizeMin) sizeRange += ", minimum " + (sizeMin.value || "10");
+    if (sizeMax) sizeRange += ", maximum " + (sizeMax.value || "50000");
+  }
   const minSeniority = seniorityRules.length > 0
-    ? seniorityRules.map((r) => r.value).join(", ")
+    ? seniorityRules.map((r) => (r.key || "") + ": " + (r.value || "")).join(", ")
     : "non specifie";
 
   // Format news evidence if available
@@ -61,25 +72,38 @@ function buildScoringPrompt(lead, newsEvidence, rules) {
     }
   }
 
-  return "Tu es un expert en qualification de prospects B2B pour MessagingMe, une plateforme de messaging WhatsApp/RCS pour entreprises.\n\n" +
+  return "Tu es un expert en qualification de prospects B2B pour MessagingMe, une plateforme de messaging WhatsApp/RCS pour entreprises.\n" +
+    "MessagingMe VEND une solution de messaging aux entreprises. On cherche des ACHETEURS potentiels, PAS des concurrents.\n\n" +
     "Evalue ce prospect selon le profil client ideal (ICP) suivant:\n\n" +
     "**Titres recherches (positifs):** " + (positiveTitles.length > 0 ? positiveTitles.join(", ") : "non specifie") + "\n" +
     "**Titres a exclure (negatifs):** " + (negativeTitles.length > 0 ? negativeTitles.join(", ") : "aucun") + "\n" +
     "**Secteurs cibles:** " + (targetSectors.length > 0 ? targetSectors.join(", ") : "non specifie") + "\n" +
+    "**Zones geographiques cibles:** " + (targetGeos.length > 0 ? targetGeos.join(", ") : "non specifie") + "\n" +
     "**Taille entreprise:** " + sizeRange + "\n" +
     "**Seniorite minimum:** " + minSeniority + "\n\n" +
+    "**REGLES STRICTES (a appliquer dans cet ordre) :**\n" +
+    "1. CONCURRENTS = COLD : Si le prospect travaille pour une entreprise qui VEND des solutions de messaging, chatbot, WhatsApp API, CPaaS, ou communication client (ex: Twilio, Sinch, Vonage, Alcmeon, iAdvize, Zendesk, Intercom, Freshdesk, Respond.io, WATI, Manychat, etc.), c'est un CONCURRENT → score cold (<20).\n" +
+    "2. GEOGRAPHIE : Les zones cibles prioritaires sont listees ci-dessus. Un prospect en France/GCC a un bonus. Un prospect hors zone (US, Canada, Inde, Afrique, etc.) peut etre warm/hot SEULEMENT si c'est une vraie entreprise credible (pas un freelance) avec un besoin clair de messaging B2C. Sinon, cold.\n" +
+    "3. TAILLE ENTREPRISE : On cible des entreprises de 10+ employes. Les freelances, consultants solo, micro-agences, 'Founder of [nom perso] Consulting', self-employed, solopreneurs → cold (<20). Indices : headline avec 'Freelance', 'Independent', 'Self-employed', 'Solopreneur', nom de boite = nom de la personne + 'Consulting'.\n" +
+    "4. PERTINENCE METIER : Le prospect doit etre un ACHETEUR potentiel de messaging pour sa relation client B2C/B2B. On cherche des CMO, CRM managers, directeurs marketing, responsables relation client dans des boites qui ont des CLIENTS FINAUX a contacter par messaging. Pas des consultants, coaches, auteurs, conferenciers, recruteurs.\n" +
+    "5. Si l'entreprise ou la localisation sont inconnues, sois CONSERVATEUR : ne mets pas hot sans certitude. Un titre senior seul ne suffit pas. Quand tu doutes, mets warm (40-50) max.\n\n" +
     "**Prospect a evaluer:**\n" +
     "- Nom: " + (sanitizeForPrompt(lead.full_name) || "inconnu") + "\n" +
     "- Titre: " + (sanitizeForPrompt(lead.headline) || "inconnu") + "\n" +
     "- Entreprise: " + (sanitizeForPrompt(lead.company_name) || "inconnue") + "\n" +
-    "- Taille entreprise: " + (sanitizeForPrompt(lead.company_size) || "inconnue") + "\n" +
+    "- Description entreprise: " + (sanitizeForPrompt(lead.metadata && lead.metadata.company_description) || "inconnue") + "\n" +
+    "- Specialites entreprise: " + (lead.metadata && lead.metadata.company_specialities && lead.metadata.company_specialities.length > 0 ? sanitizeForPrompt(lead.metadata.company_specialities.join(", ")) : "inconnues") + "\n" +
+    "- Site web entreprise: " + (sanitizeForPrompt(lead.metadata && lead.metadata.company_website) || "inconnu") + "\n" +
+    "- Taille entreprise: " + (sanitizeForPrompt(lead.company_size) || "inconnue") + (lead.metadata && lead.metadata.company_founded ? " (fondee en " + lead.metadata.company_founded + ")" : "") + "\n" +
     "- Secteur: " + (sanitizeForPrompt(lead.company_sector) || "inconnu") + "\n" +
-    "- Localisation: " + (sanitizeForPrompt(lead.location) || "inconnue") + "\n" +
+    "- Localisation: " + (sanitizeForPrompt(lead.location || lead.company_location) || "inconnue") + "\n" +
+    "- Seniorite: " + (lead.seniority_years ? lead.seniority_years + " ans" : "inconnue") + "\n" +
+    "- Connexions LinkedIn: " + (lead.connections_count || "inconnu") + "\n" +
     newsSection + "\n\n" +
     "Attribue un score de 0 a 100 et un tier:\n" +
-    "- hot (>=70): prospect tres qualifie, correspond fortement a l'ICP\n" +
-    "- warm (>=40): prospect interessant, correspond partiellement\n" +
-    "- cold (<40): prospect peu qualifie, ne correspond pas\n\n" +
+    "- hot (>=70): decideur senior dans une entreprise cible, en zone geographique cible, qui ACHETERAIT du messaging\n" +
+    "- warm (40-69): profil interessant mais informations incompletes ou localisation incertaine\n" +
+    "- cold (<40): concurrent, hors zone, pas de potentiel d'achat, ou profil non pertinent\n\n" +
     "Reponds avec ton evaluation et un raisonnement concis.";
 }
 
@@ -106,7 +130,7 @@ async function scoreLead(lead, newsEvidence, rules, runId) {
 
     if (signalAge > skipDays) {
       await log(runId, "icp-scorer", "info",
-        "Lead " + (lead.full_name || lead.id) + " skipped: signal too old (" + signalAge + "d > " + skipDays + "d)");
+        "Lead " + (lead.full_name || ((lead.first_name || "") + " " + (lead.last_name || "")).trim() || "unknown") + " skipped: signal too old (" + signalAge + "d > " + skipDays + "d)");
       return {
         ...lead,
         icp_score: 0,
@@ -130,7 +154,7 @@ async function scoreLead(lead, newsEvidence, rules, runId) {
     var prompt = buildScoringPrompt(lead, newsEvidence, rules);
 
     var response = await getAnthropicClient().messages.create({
-      model: "claude-3-haiku-20240307",
+      model: "claude-haiku-4-5-20251001",
       max_tokens: 512,
       messages: [{ role: "user", content: prompt }],
       output_config: {
@@ -156,9 +180,9 @@ async function scoreLead(lead, newsEvidence, rules, runId) {
     // Step 3: Signal weight bonus (ICP-03)
     var signalWeightRules = rules.filter((r) => r.category === "signal_weights");
     var signalWeights = {
-      concurrent: getNumericRuleValue(signalWeightRules, "concurrent", 25),
-      influenceur: getNumericRuleValue(signalWeightRules, "influenceur", 15),
-      sujet: getNumericRuleValue(signalWeightRules, "sujet", 10),
+      concurrent: getNumericRuleValue(signalWeightRules, "concurrent", 10),
+      influenceur: getNumericRuleValue(signalWeightRules, "influenceur", 5),
+      sujet: getNumericRuleValue(signalWeightRules, "sujet", 5),
       job: getNumericRuleValue(signalWeightRules, "job", 5),
     };
     var signalBonus = signalWeights[lead.signal_category] || 0;
@@ -194,7 +218,7 @@ async function scoreLead(lead, newsEvidence, rules, runId) {
     }
 
     await log(runId, "icp-scorer", "info",
-      "Lead " + (lead.full_name || lead.id) + " scored: " + finalScore + " (" + finalTier + ")", {
+      "Lead " + (lead.full_name || ((lead.first_name || "") + " " + (lead.last_name || "")).trim() || "unknown") + " scored: " + finalScore + " (" + finalTier + ")", {
       haiku_score: haikuScore,
       signal_bonus: signalBonus,
       freshness_malus: freshnessMalus,
@@ -243,12 +267,17 @@ async function scoreLead(lead, newsEvidence, rules, runId) {
  * @returns {number}
  */
 function getNumericRuleValue(rules, key, defaultValue) {
-  var rule = rules.find(function(r) { return r.key === key || r.value === key; });
-  if (rule && rule.numeric_value !== undefined && rule.numeric_value !== null) {
+  var rule = rules.find(function(r) { return r.key === key; });
+  if (!rule) return defaultValue;
+  // Try numeric_value, threshold, then value (where DB actually stores it)
+  if (rule.numeric_value !== undefined && rule.numeric_value !== null) {
     return Number(rule.numeric_value);
   }
-  if (rule && rule.threshold !== undefined && rule.threshold !== null) {
+  if (rule.threshold !== undefined && rule.threshold !== null) {
     return Number(rule.threshold);
+  }
+  if (rule.value !== undefined && rule.value !== null && !isNaN(Number(rule.value))) {
+    return Number(rule.value);
   }
   return defaultValue;
 }
