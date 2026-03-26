@@ -104,9 +104,22 @@ Flow : modifier en local → commit → `/deploy` (ou `cd /c/Users/julie && GIT_
   - P2 tourne en rotation oldest-first sur le budget restant apres P1
 
 ### Modele ICP Scorer
-- Utilise claude-haiku-4-5-20251001 (corrige le 26 mars 2026, l'ancien claude-3-haiku-20240307 etait deprecie)
-- Code : src/lib/icp-scorer.js ligne 133
+- Utilise claude-haiku-4-5-20251001, code : src/lib/icp-scorer.js
 - Le scoring utilise output_config avec json_schema pour forcer le format de sortie
+- Score final = Haiku (0-100) + signal_bonus (+5 a +10) + news (+10) + activite LinkedIn (+5 a +10) - fraicheur (-5 a -15)
+- Signal weights configurables dans l'onglet Scoring ICP (numeric_value)
+- Le prompt Haiku recoit : titres, secteurs, geo, taille, seniorite + donnees prospect (description entreprise, specialites, site web, taille, localisation, seniorite, connexions, posts recents, commentaires recents)
+- Regles strictes : concurrents=cold, geo, taille>10, pertinence metier, conservatisme si info manquante
+
+### Modele Message Generator
+- Utilise claude-sonnet-4-20250514, code : src/lib/message-generator.js
+- SYSTEM prompt avec 4 regles : N1 (reagir au signal), N2 (strategie en complement), N3 (signal concurrent = consultant), N4 (adapter au contexte client)
+- Le contexte Sonnet inclut TOUT : profil, entreprise (description, specialites, site web, taille, fondation), signal declencheur (post_text, post_url, comment_text), posts recents du prospect (lastPosts), commentaires recents (lastComments), historique signaux, news entreprise
+- BeReach visitProfile avec includePosts=true et includeComments=true (meme credit, champs lastPosts et lastComments)
+- Invitation LinkedIn : PAS de note, invitation a blanc, on attend l'acceptation
+- Follow-up : premier vrai message, reagir au signal, question ouverte, pas de pitch
+- Email J+7 : si pas accepte, apporter de la valeur, CTA leger
+- WhatsApp : ultra court, direct
 
 ### Cold Outbound (v1.3 phase 13-14)
 - Les leads cold (trouves par recherche directe, pas par signal) sont geres

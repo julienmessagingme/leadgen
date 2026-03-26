@@ -65,16 +65,16 @@ async function enrichLead(signal, runId) {
         enriched.profile_last_fetched_at = new Date().toISOString();
 
         // Store prospect's recent LinkedIn activity for message context
-        if (profile.posts && profile.posts.length > 0) {
+        if (profile.lastPosts && profile.lastPosts.length > 0) {
           enriched.metadata = enriched.metadata || {};
-          enriched.metadata.prospect_posts = profile.posts.slice(0, 5).map(function(p) {
-            return { text: (p.text || "").substring(0, 200), url: p.postUrl || null, likes: p.likesCount || 0 };
+          enriched.metadata.prospect_posts = profile.lastPosts.slice(0, 5).map(function(p) {
+            return { text: (p.text || "").substring(0, 300), url: p.postUrl || null, likes: p.likesCount || 0, comments: p.commentsCount || 0 };
           });
         }
-        if (profile.comments && profile.comments.length > 0) {
+        if (profile.lastComments && profile.lastComments.length > 0) {
           enriched.metadata = enriched.metadata || {};
-          enriched.metadata.prospect_comments = profile.comments.slice(0, 5).map(function(c) {
-            return { targetPostText: (c.targetPostText || "").substring(0, 200), targetPostAuthor: c.targetPostAuthor || null };
+          enriched.metadata.prospect_comments = profile.lastComments.slice(0, 5).map(function(c) {
+            return { targetPostText: (c.targetPostText || "").substring(0, 300), targetPostAuthor: c.targetPostAuthor || null, type: c.type || "comment" };
           });
         }
 

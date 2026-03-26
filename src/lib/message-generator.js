@@ -109,6 +109,7 @@ function buildLeadContext(lead) {
   lines.push("Taille: " + (sanitizeForPrompt(lead.company_size) || "inconnue") + (meta.company_founded ? " (fondee en " + meta.company_founded + ")" : ""));
   lines.push("Localisation: " + (sanitizeForPrompt(lead.location || lead.company_location) || "inconnue"));
   if (lead.seniority_years) lines.push("Seniorite: " + lead.seniority_years + " ans");
+  if (lead.connections_count) lines.push("Connexions LinkedIn: " + lead.connections_count);
   lines.push("Score ICP: " + (lead.icp_score || 0) + "/100 (" + (lead.tier || "?") + ")");
 
   // Current signal

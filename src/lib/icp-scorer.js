@@ -99,6 +99,22 @@ function buildScoringPrompt(lead, newsEvidence, rules) {
     "- Localisation: " + (sanitizeForPrompt(lead.location || lead.company_location) || "inconnue") + "\n" +
     "- Seniorite: " + (lead.seniority_years ? lead.seniority_years + " ans" : "inconnue") + "\n" +
     "- Connexions LinkedIn: " + (lead.connections_count || "inconnu") + "\n" +
+    (function() {
+      var meta = lead.metadata || {};
+      var actLines = "";
+      if (meta.prospect_posts && meta.prospect_posts.length > 0) {
+        actLines += "- Posts recents LinkedIn (" + meta.prospect_posts.length + "): ";
+        actLines += meta.prospect_posts.slice(0, 3).map(function(p) { return "\"" + sanitizeForPrompt(p.text, 100) + "\""; }).join(" | ");
+        actLines += "\n";
+      }
+      if (meta.prospect_comments && meta.prospect_comments.length > 0) {
+        actLines += "- Commente recemment sur des posts de: ";
+        actLines += meta.prospect_comments.slice(0, 3).map(function(c) { return sanitizeForPrompt(c.targetPostAuthor || "?") + " (sujet: " + sanitizeForPrompt(c.targetPostText, 60) + ")"; }).join(" | ");
+        actLines += "\n";
+      }
+      if (!actLines) actLines = "- Activite LinkedIn recente: inconnue\n";
+      return actLines;
+    })() +
     newsSection + "\n\n" +
     "Attribue un score de 0 a 100 et un tier:\n" +
     "- hot (>=70): decideur senior dans une entreprise cible, en zone geographique cible, qui ACHETERAIT du messaging\n" +
