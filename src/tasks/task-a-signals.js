@@ -141,32 +141,12 @@ module.exports = async function taskASignals(runId) {
       "Bereach collected " + rawSignals.length + " raw signals");
 
     // ---------------------------------------------------------------
-    // Step 3b: Collect browser signals
+    // Step 3b: Browser signals — DISABLED (cookies expired, BeReach suffices)
+    // See CLAUDE.md: NE PAS reactiver sans instruction explicite de Julien
     // ---------------------------------------------------------------
-    var browserStats = null;
-    try {
-      var browserResult = await collectAllBrowserSignals(runId);
-      browserStats = browserResult.stats;
-
-      if (browserResult.stats.error === "cookies_expired") {
-        await log(runId, "task-a-signals", "warn",
-          "Browser collection skipped - LinkedIn cookies expired (email alert sent)");
-      } else {
-        rawSignals = rawSignals.concat(browserResult.signals);
-        await log(runId, "task-a-signals", "info",
-          "Browser collection: " + (browserStats.competitor_page || 0) + " competitor, " +
-          (browserStats.influencer || 0) + " influencer, " +
-          (browserStats.keyword || 0) + " keyword, " +
-          (browserStats.job_keyword || 0) + " job signals. " +
-          "Pages consumed: " + (browserStats.pages_consumed || 0));
-      }
-    } catch (err) {
-      await log(runId, "task-a-signals", "error",
-        "Browser collection crashed: " + err.message + " -- continuing with Bereach-only results");
-    }
 
     await log(runId, "task-a-signals", "info",
-      "Total raw signals (Bereach + browser): " + rawSignals.length);
+      "Total raw signals (Bereach): " + rawSignals.length);
 
     if (rawSignals.length === 0) {
       await log(runId, "task-a-signals", "info",
