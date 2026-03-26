@@ -18,42 +18,37 @@ function sanitizeForPrompt(value, maxLen = 200) {
  * Default template instructions (used as fallback when settings table is unavailable).
  */
 var DEFAULT_INVITATION_TEMPLATE =
-  "Redige une invitation LinkedIn personnalisee pour ce prospect.\n\n" +
-  "Regles:\n" +
-  "- Reference au signal detecte\n" +
-  "- Ton professionnel mais humain\n" +
-  "- Max 150 caracteres STRICT (2-3 phrases courtes)\n" +
-  "- Pas d'emojis, pas de pitch commercial\n" +
-  "- Pas de guillemets autour du texte";
+  "Pas de note d'invitation. On invite sans message.";
 
 var DEFAULT_FOLLOWUP_TEMPLATE =
-  "Redige un message de suivi LinkedIn post-connexion.\n\n" +
-  "Regles:\n" +
-  "- Remercier pour la connexion\n" +
-  "- Proposer un echange sur le sujet du signal\n" +
-  "- Mentionner MessagingMe brievement\n" +
-  "- 3 a 5 phrases max\n" +
-  "- Ton naturel et direct";
+  "Redige le PREMIER MESSAGE LinkedIn apres que le prospect a accepte l'invitation.\n\n" +
+  "C'est le message le plus important de toute la sequence. Il doit etre CLEVER, pas commercial.\n\n" +
+  "REGLES ABSOLUES :\n" +
+  "1. REAGIR AU SIGNAL : Le prospect a montre un interet (like, commentaire, post). Le message DOIT partir de ce signal. C'est ce qui le rend pertinent. Si le signal est precis (ex: a commente sur WhatsApp retail), on parle de ca. Si c'est generique (like page Infobip), on peut elargir.\n" +
+  "2. PAS DE PITCH : Ne JAMAIS vendre MessagingMe dans ce premier message. On est la pour echanger, comprendre, partager une vision. On se positionne comme un pair qui s'interesse au meme sujet.\n" +
+  "3. SI SIGNAL CONCURRENT : Le prospect a peut-etre deja un outil. On se positionne en expert strategie conversationnelle, pas en outil concurrent. On apporte de la hauteur, une vision, pas un produit.\n" +
+  "4. QUESTION OUVERTE : Terminer par une question ouverte qui engage la conversation. Pas 'voulez-vous un RDV' mais plutot 'comment vous gerez X chez vous ?' ou 'vous avez teste Y ?'\n" +
+  "5. FORMAT : 3 a 5 phrases max. Ton naturel, pair a pair. Pas de formules commerciales. Pas de 'je me permets', pas de 'n hesitez pas'. Parler comme un humain, pas comme un commercial.\n" +
+  "6. EN FRANCAIS si le prospect est en France, EN ANGLAIS si zone GCC/international.";
 
 var DEFAULT_EMAIL_TEMPLATE =
-  "Redige un email de relance J+7 apres connexion LinkedIn.\n\n" +
-  "Regles:\n" +
-  "- Objet accrocheur et court\n" +
-  "- Corps en HTML simple (pas de CSS inline complexe)\n" +
-  "- Reference a la connexion LinkedIn\n" +
-  "- Proposition de valeur MessagingMe pour leur secteur\n" +
-  "- CTA: lien Calendly {calendlyUrl}\n" +
-  "- Signature: Julien Dumas, DG MessagingMe\n" +
-  "- Ton professionnel mais personnel";
+  "Redige un email de relance pour un prospect qui n'a PAS accepte l'invitation LinkedIn apres 7 jours.\n\n" +
+  "REGLES :\n" +
+  "1. REAGIR AU SIGNAL : Meme principe que le message LinkedIn. On part du signal detecte.\n" +
+  "2. APPORTER DE LA VALEUR : Partager un insight, une tendance, un retour d'experience concret sur le sujet du signal. Pas un pitch produit.\n" +
+  "3. SI SIGNAL CONCURRENT : Se positionner comme consultant en strategie conversationnelle. On aide a choisir les bons canaux, la bonne approche. Notre techno vient en complement.\n" +
+  "4. CTA LEGER : Proposer un echange rapide (15 min), pas un 'demo produit'. Lien Calendly : {calendlyUrl}\n" +
+  "5. FORMAT : Objet court et accrocheur (pas 'Relance' ou 'Suite a'). Corps : 4-6 phrases. HTML simple. Signature : Julien Dumas, DG MessagingMe.\n" +
+  "6. EN FRANCAIS si le prospect est en France, EN ANGLAIS si zone GCC/international.";
 
 var DEFAULT_WHATSAPP_TEMPLATE =
   "Redige un message WhatsApp pour ce prospect.\n\n" +
-  "Regles:\n" +
-  "- 3 a 4 lignes max\n" +
-  "- Reference au signal et a l'echange LinkedIn\n" +
-  "- Proposition de RDV via Calendly\n" +
-  "- Ton direct et personnel\n" +
-  "- Pas d'emojis excessifs";
+  "REGLES :\n" +
+  "1. REAGIR AU SIGNAL : Partir du signal detecte et de l'echange LinkedIn precedent.\n" +
+  "2. ULTRA COURT : 2-3 lignes max. C'est du WhatsApp, pas un email.\n" +
+  "3. CTA DIRECT : Proposer un call rapide ou un echange. Lien Calendly si pertinent.\n" +
+  "4. TON : Direct, personnel, comme un message a un contact pro. Pas de formalisme.\n" +
+  "5. EN FRANCAIS si le prospect est en France, EN ANGLAIS si zone GCC/international.";
 
 /**
  * Load template instructions from settings table.

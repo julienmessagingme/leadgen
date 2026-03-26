@@ -129,19 +129,8 @@ module.exports = async function taskBInvitations(runId) {
         continue;
       }
 
-      // LIN-02: Generate personalized invitation note
-      var note = await generateInvitationNote(lead, templates);
-      if (!note) {
-        await log(runId, "task-b-invitations", "warn", "Failed to generate invitation note for " + (lead.full_name || lead.id));
-        skipped++;
-        continue;
-      }
-
-      // Cold lead: enforce 200 char limit (stricter than 280 for signal-based)
-      var isCold = isColdLead(lead);
-      if (isCold && note.length > 150) {
-        note = note.substring(0, 147) + "...";
-      }
+      // LIN-02: No invitation note — invite blank, message comes after acceptance
+      var note = null;
 
       // LIN-09: Check if already connected (skip to follow-up)
       try {
@@ -186,7 +175,7 @@ module.exports = async function taskBInvitations(runId) {
         })
         .eq("id", lead.id);
 
-      await log(runId, "task-b-invitations", "info", "Invitation sent to " + (lead.full_name || lead.id) + " (" + note.length + " chars" + (isCold ? ", cold" : "") + ")");
+      await log(runId, "task-b-invitations", "info", "Invitation sent to " + (lead.full_name || lead.id) + " (no note)");
       sent++;
 
       // LIN-04: Rate limiting -- 60-120s delay between invitations
