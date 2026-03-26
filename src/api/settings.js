@@ -285,7 +285,7 @@ router.get("/watchlist", async (req, res) => {
 
 router.post("/watchlist", async (req, res) => {
   try {
-    const { source_type, source_label, source_url, keywords, is_active, sequence_id } = req.body;
+    const { source_type, source_label, source_url, keywords, is_active, sequence_id, priority } = req.body;
 
     if (!source_type || !source_label) {
       return res.status(400).json({ error: "source_type and source_label are required" });
@@ -293,7 +293,7 @@ router.post("/watchlist", async (req, res) => {
 
     const { data, error } = await supabase
       .from("watchlist")
-      .insert({ source_type, source_label, source_url, keywords, is_active, sequence_id })
+      .insert({ source_type, source_label, source_url, keywords, is_active, sequence_id, priority: priority || "P1" })
       .select()
       .single();
 
@@ -311,7 +311,7 @@ router.post("/watchlist", async (req, res) => {
 router.put("/watchlist/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { source_type, source_label, source_url, keywords, is_active, sequence_id } = req.body;
+    const { source_type, source_label, source_url, keywords, is_active, sequence_id, priority } = req.body;
 
     const updates = {};
     if (source_type !== undefined) updates.source_type = source_type;
@@ -320,6 +320,7 @@ router.put("/watchlist/:id", async (req, res) => {
     if (keywords !== undefined) updates.keywords = keywords;
     if (is_active !== undefined) updates.is_active = is_active;
     if (sequence_id !== undefined) updates.sequence_id = sequence_id;
+    if (priority !== undefined) updates.priority = priority;
 
     const { data, error } = await supabase
       .from("watchlist")
@@ -355,6 +356,49 @@ router.delete("/watchlist/:id", async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error("Settings DELETE /watchlist/:id error:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
+// BeReach credit usage (last 4 days)
+// ────────────────────────────────────────────────────────────
+
+router.get("/bereach-credits", async (req, res) => {
+  try {
+    const { data, error } = await supabase.rpc("get_bereach_credits");
+
+    if (error) {
+      // Fallback: query logs directly
+      const { data: logs, error: logErr } = await supabase
+        .from("logs")
+        .select("created_at, message")
+        .like("message", "%credits:%")
+        .gte("created_at", new Date(Date.now() - 4 * 86400000).toISOString())
+        .order("created_at", { ascending: false });
+
+      if (logErr) return res.status(500).json({ error: logErr.message });
+
+      // Parse credit values from log messages and group by day
+      const days = {};
+      (logs || []).forEach((l) => {
+        const day = l.created_at.substring(0, 10);
+        const match = l.message.match(/credits: (\d+)\/(\d+)/);
+        if (match) {
+          const used = parseInt(match[1]);
+          const budget = parseInt(match[2]);
+          if (!days[day] || used > days[day].credits_used) {
+            days[day] = { day, credits_used: used, budget };
+          }
+        }
+      });
+
+      return res.json(Object.values(days).sort((a, b) => a.day.localeCompare(b.day)));
+    }
+
+    res.json(data);
+  } catch (err) {
+    console.error("BeReach credits error:", err.message);
     res.status(500).json({ error: "Internal server error" });
   }
 });

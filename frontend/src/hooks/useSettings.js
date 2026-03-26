@@ -109,6 +109,16 @@ export function useDeleteWatchlistEntry() {
   });
 }
 
+// ── BeReach Credits ──
+
+export function useBeReachCredits() {
+  return useQuery({
+    queryKey: ["bereach-credits"],
+    queryFn: () => api.get("/settings/bereach-credits"),
+    refetchInterval: 60000, // refresh every minute
+  });
+}
+
 // ── Cron Schedule ──
 
 export function useCronSchedule() {

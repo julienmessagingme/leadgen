@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useWatchlist, useCreateWatchlistEntry, useUpdateWatchlistEntry, useDeleteWatchlistEntry } from "../../hooks/useSettings";
+import { useWatchlist, useCreateWatchlistEntry, useUpdateWatchlistEntry, useDeleteWatchlistEntry, useBeReachCredits } from "../../hooks/useSettings";
 
 const SOURCE_TYPES = [
   { value: "competitor_page", label: "Page concurrent" },
@@ -27,6 +27,51 @@ const emptyEntry = {
   sequence_id: "",
   priority: "P2",
 };
+
+function CreditGauge() {
+  const { data } = useBeReachCredits();
+  const days = Array.isArray(data) ? data : [];
+  const DAILY_LIMIT = 300;
+
+  // Pad to 4 days
+  const today = new Date();
+  const last4 = [];
+  for (let i = 3; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().substring(0, 10);
+    const found = days.find((x) => x.day === key);
+    last4.push({
+      day: key,
+      label: i === 0 ? "Aujourd'hui" : i === 1 ? "Hier" : d.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" }),
+      used: found ? found.credits_used : 0,
+      budget: found ? found.budget : DAILY_LIMIT,
+    });
+  }
+
+  return (
+    <div className="bg-white rounded-lg shadow p-4 mb-4">
+      <h3 className="text-sm font-semibold text-gray-700 mb-3">Credits BeReach (300/jour)</h3>
+      <div className="grid grid-cols-4 gap-3">
+        {last4.map((d) => {
+          const pct = Math.min(100, Math.round((d.used / DAILY_LIMIT) * 100));
+          const color = pct > 90 ? "bg-red-500" : pct > 60 ? "bg-yellow-500" : "bg-green-500";
+          return (
+            <div key={d.day}>
+              <div className="flex justify-between items-baseline mb-1">
+                <span className="text-xs text-gray-500">{d.label}</span>
+                <span className="text-xs font-mono font-semibold text-gray-700">{d.used}/{DAILY_LIMIT}</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-3">
+                <div className={`${color} h-3 rounded-full transition-all`} style={{ width: pct + "%" }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export default function WatchlistTab() {
   const { data, isLoading } = useWatchlist();
@@ -109,6 +154,8 @@ export default function WatchlistTab() {
 
   return (
     <div>
+      <CreditGauge />
+
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-gray-800">Sources & Mots-cles</h2>
         {!adding && (
