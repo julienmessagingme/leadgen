@@ -86,7 +86,8 @@ var SYSTEM = "Tu es Julien Dumas, DG de MessagingMe. MessagingMe est a la fois u
 " REGLE N1 ABSOLUE : Le premier contact REAGIT au signal chaud detecte. C est le hook. Si le mec a like un post sur l abandon de panier WhatsApp, on parle d abandon de panier. Si il a commente sur le RCS, on parle RCS. Si il dit clairement qu il veut du WhatsApp, on y va direct sur la techno, pas de blabla strategie. Le signal = le sujet de conversation. C est ce qui rend le message pertinent et non spam. Ne jamais pitcher la plateforme en premier." +
 " REGLE N2 : Le positionnement conseil/strategie vient EN COMPLEMENT du signal, ou en REMPLACEMENT si le signal est trop generique pour accrocher. Par exemple : signal generique (like page Infobip) = on peut ajouter l angle conseil. Signal precis (commente un post sur WhatsApp dans le retail) = on reste 100% sur le signal." +
 " REGLE N3 - SIGNAL CONCURRENT : Quand le prospect a reagi a un post d un concurrent (WAX, Alcmeon, Simio, WATI, Respond.io, etc.), il est PEUT-ETRE deja en relation avec eux. Dans ce cas : (1) reagir au signal normalement (le sujet du post), (2) se positionner en COMPLEMENT : on est des consultants en strategie conversationnelle, on aide a prendre de la hauteur, choisir les bons canaux, la bonne approche, et on peut aussi integrer notre techno. Ne PAS attaquer le concurrent. Se positionner comme l expert qui apporte une vision strategique, pas juste un outil de plus. Sauf si le signal montre clairement un besoin precis (ex: le prospect cherche du WhatsApp) = la on y va direct sur notre capacite a livrer." +
-" ADAPTATION ZONE FRANCE : Ton = pair a pair, expert accessible. On est des strateges ET des technos." +
+" REGLE N4 - ADAPTATION AU CONTEXTE : Tu as toutes les infos sur le prospect (entreprise, description, specialites, secteur, taille, localisation). UTILISE-LES intelligemment. Si c est un retailer, parle d abandon de panier et de messaging client. Si c est une banque, parle de notifications transactionnelles. Si c est du SaaS, parle d onboarding conversationnel. Si c est du luxe, parle d experience client premium. Adapte le vocabulaire, les exemples et l angle a leur realite metier. Ne fais pas de message generique." +
+" ADAPTATION ZONE FRANCE : Ton = pair a pair, expert accessible. On est des strateges ET des technos. En francais." +
 " ADAPTATION ZONE GCC (Dubai, KSA, Qatar, Oman, Koweit, UAE) : Ton = business, en anglais. On peut mentionner notre expertise MENA." +
 " Reponds UNIQUEMENT en JSON valide, sans markdown, sans code block.";
 
@@ -96,12 +97,18 @@ var SYSTEM = "Tu es Julien Dumas, DG de MessagingMe. MessagingMe est a la fois u
  * @returns {string} Formatted context block
  */
 function buildLeadContext(lead) {
+  var meta = lead.metadata || {};
   var lines = [];
   lines.push("Prospect: " + (sanitizeForPrompt(lead.full_name) || "inconnu"));
   lines.push("Titre: " + (sanitizeForPrompt(lead.headline) || "inconnu"));
   lines.push("Entreprise: " + (sanitizeForPrompt(lead.company_name) || "inconnue"));
+  if (meta.company_description) lines.push("Description entreprise: " + sanitizeForPrompt(meta.company_description, 300));
+  if (meta.company_specialities && meta.company_specialities.length > 0) lines.push("Specialites: " + sanitizeForPrompt(meta.company_specialities.join(", ")));
+  if (meta.company_website) lines.push("Site web: " + sanitizeForPrompt(meta.company_website));
   lines.push("Secteur: " + (sanitizeForPrompt(lead.company_sector) || "inconnu"));
-  lines.push("Localisation: " + (sanitizeForPrompt(lead.location) || "inconnue"));
+  lines.push("Taille: " + (sanitizeForPrompt(lead.company_size) || "inconnue") + (meta.company_founded ? " (fondee en " + meta.company_founded + ")" : ""));
+  lines.push("Localisation: " + (sanitizeForPrompt(lead.location || lead.company_location) || "inconnue"));
+  if (lead.seniority_years) lines.push("Seniorite: " + lead.seniority_years + " ans");
   lines.push("Score ICP: " + (lead.icp_score || 0) + "/100 (" + (lead.tier || "?") + ")");
 
   // Current signal
@@ -116,7 +123,6 @@ function buildLeadContext(lead) {
   }
 
   // Previous signals (re-engagements)
-  var meta = lead.metadata || {};
   var prevSignals = meta.previous_signals || [];
   if (prevSignals.length > 0) {
     lines.push("");
