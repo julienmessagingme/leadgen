@@ -206,8 +206,19 @@ async function scoreLead(lead, newsEvidence, rules, runId) {
       }
     }
 
-    // Step 6: Final score and tier (ICP-05)
-    var finalScore = Math.max(0, Math.min(100, haikuScore + signalBonus + freshnessMalus + newsBonus));
+    // Step 6: LinkedIn activity bonus — active prospects are easier to engage
+    var activityBonus = 0;
+    var leadMeta = lead.metadata || {};
+    var hasPosts = leadMeta.prospect_posts && leadMeta.prospect_posts.length > 0;
+    var hasComments = leadMeta.prospect_comments && leadMeta.prospect_comments.length > 0;
+    if (hasPosts && hasComments) {
+      activityBonus = 10; // Very active — posts AND comments
+    } else if (hasPosts || hasComments) {
+      activityBonus = 5; // Somewhat active
+    }
+
+    // Step 7: Final score and tier (ICP-05)
+    var finalScore = Math.max(0, Math.min(100, haikuScore + signalBonus + freshnessMalus + newsBonus + activityBonus));
     var finalTier;
     if (finalScore >= 70) {
       finalTier = "hot";
@@ -223,6 +234,7 @@ async function scoreLead(lead, newsEvidence, rules, runId) {
       signal_bonus: signalBonus,
       freshness_malus: freshnessMalus,
       news_bonus: newsBonus,
+      activity_bonus: activityBonus,
       final_score: finalScore,
     });
 
@@ -238,6 +250,7 @@ async function scoreLead(lead, newsEvidence, rules, runId) {
         freshness_malus: freshnessMalus,
         signal_age_days: signalAge,
         news_bonus: newsBonus,
+        activity_bonus: activityBonus,
         final_score: finalScore,
       },
     };
