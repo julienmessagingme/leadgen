@@ -55,7 +55,7 @@ module.exports = async function taskCFollowup(runId) {
     // Get leads with status 'invitation_sent'
     var { data: invitedLeads, error: invitedErr } = await supabase
       .from("leads")
-      .select("id, full_name, first_name, last_name, linkedin_url, headline, company_name, signal_type, signal_detail, metadata, email, status, last_processed_run_id")
+      .select("id, full_name, first_name, last_name, linkedin_url, headline, company_name, signal_type, signal_category, signal_source, signal_detail, metadata, email, icp_score, tier, status, last_processed_run_id, location, company_location, company_size, company_sector, seniority_years, connections_count")
       .eq("status", "invitation_sent")
       .limit(200);
 
@@ -103,7 +103,7 @@ module.exports = async function taskCFollowup(runId) {
   // Query connected leads that haven't received a follow-up yet
   var { data: connectedLeads, error: connectedErr } = await supabase
     .from("leads")
-    .select("id, full_name, first_name, last_name, linkedin_url, headline, company_name, signal_type, signal_detail, metadata, email, follow_up_sent_at, last_processed_run_id")
+    .select("id, full_name, first_name, last_name, linkedin_url, headline, company_name, signal_type, signal_category, signal_source, signal_detail, metadata, email, icp_score, tier, follow_up_sent_at, last_processed_run_id, location, company_location, company_size, company_sector, seniority_years, connections_count")
     .eq("status", "connected")
     .is("follow_up_sent_at", null)
     .limit(50);

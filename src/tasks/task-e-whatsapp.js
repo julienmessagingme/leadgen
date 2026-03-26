@@ -25,7 +25,7 @@ module.exports = async function taskEWhatsapp(runId) {
     // Two paths: email_sent leads at J+7 after email, or invitation_sent leads at J+14
     var { data: emailLeads, error: err1 } = await supabase
       .from("leads")
-      .select("id, full_name, first_name, last_name, linkedin_url, phone, headline, company_name, signal_type, signal_detail, metadata, email, tier")
+      .select("id, full_name, first_name, last_name, linkedin_url, phone, headline, company_name, signal_type, signal_category, signal_source, signal_detail, metadata, email, icp_score, tier, location, company_location, company_size, company_sector, seniority_years, connections_count")
       .eq("status", "email_sent")
       .lte("email_sent_at", sevenDaysAgo)
       .is("whatsapp_template_created_at", null)
@@ -35,7 +35,7 @@ module.exports = async function taskEWhatsapp(runId) {
 
     var { data: invitationLeads, error: err2 } = await supabase
       .from("leads")
-      .select("id, full_name, first_name, last_name, linkedin_url, phone, headline, company_name, signal_type, signal_detail, metadata, email, tier")
+      .select("id, full_name, first_name, last_name, linkedin_url, phone, headline, company_name, signal_type, signal_category, signal_source, signal_detail, metadata, email, icp_score, tier, location, company_location, company_size, company_sector, seniority_years, connections_count")
       .eq("status", "invitation_sent")
       .lte("invitation_sent_at", fourteenDaysAgo)
       .is("whatsapp_template_created_at", null)

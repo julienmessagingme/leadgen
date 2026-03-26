@@ -90,7 +90,7 @@ module.exports = async function taskBInvitations(runId) {
   // Step 3: Select leads to invite (hot/warm, ordered by ICP score)
   var { data: leads, error: selectErr } = await supabase
     .from("leads")
-    .select("id, full_name, first_name, last_name, linkedin_url, headline, company_name, signal_type, signal_detail, metadata, email, icp_score, tier, status, last_processed_run_id")
+    .select("id, full_name, first_name, last_name, linkedin_url, headline, company_name, signal_type, signal_category, signal_source, signal_detail, metadata, email, icp_score, tier, status, last_processed_run_id, location, company_location, company_size, company_sector, seniority_years, connections_count")
     .in("status", ["new", "enriched", "scored"])
     .in("tier", ["hot", "warm", "cold"])
     .order("icp_score", { ascending: false })

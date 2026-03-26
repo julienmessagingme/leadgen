@@ -258,6 +258,15 @@ module.exports = async function taskASignals(runId) {
         // 7b. Gather news evidence
         var newsEvidence = await gatherNewsEvidence(enrichedLead, runId);
 
+        // Store news titles in metadata for Sonnet prompt
+        if (newsEvidence && newsEvidence.length > 0) {
+          enrichedLead.metadata = enrichedLead.metadata || {};
+          enrichedLead.metadata.news_titles = newsEvidence
+            .filter(function(n) { return n.source_title; })
+            .map(function(n) { return n.source_title; })
+            .slice(0, 5);
+        }
+
         // 7c. Score lead via ICP scoring
         var scoredLead = await scoreLead(enrichedLead, newsEvidence, rules, runId);
 
@@ -289,13 +298,16 @@ module.exports = async function taskASignals(runId) {
           signal_type: scoredLead.signal_type || null,
           signal_category: scoredLead.signal_category || null,
           signal_source: scoredLead.signal_source || null,
-          signal_detail: scoredLead.signal_source || null,
+          signal_detail: scoredLead.signal_type && scoredLead.signal_source
+            ? scoredLead.signal_type + " — " + scoredLead.signal_source + (scoredLead.post_author_name ? " (" + scoredLead.post_author_name + ")" : "")
+            : scoredLead.signal_source || null,
           signal_date: scoredLead.signal_date || null,
           sequence_id: scoredLead.sequence_id || null,
           icp_score: scoredLead.icp_score,
           tier: scoredLead.tier,
           scoring_metadata: scoredLead.scoring_metadata || null,
           seniority_years: scoredLead.seniority_years || null,
+          connections_count: scoredLead.connections_count || null,
           metadata: Object.assign({}, scoredLead.metadata || {}, {
             source_origin: scoredLead.source_origin || "bereach",
             post_text: scoredLead.post_text || null,
