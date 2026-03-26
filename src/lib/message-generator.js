@@ -147,6 +147,25 @@ function buildLeadContext(lead) {
     lines.push("IMPORTANT : Ce prospect a montre un interet REPETE (" + (prevSignals.length + 1) + " fois). Adapte ton message en faisant reference a cet engagement multiple. C est un signal fort.");
   }
 
+  // Prospect's recent LinkedIn activity
+  if (meta.prospect_posts && meta.prospect_posts.length > 0) {
+    lines.push("");
+    lines.push("Posts recents du prospect (ce qu il publie sur LinkedIn) :");
+    for (var k = 0; k < Math.min(3, meta.prospect_posts.length); k++) {
+      var pp = meta.prospect_posts[k];
+      lines.push("  - \"" + sanitizeForPrompt(pp.text, 200) + "\"" + (pp.likes ? " (" + pp.likes + " likes)" : ""));
+    }
+    lines.push("UTILISE ces posts pour personnaliser ton message. Si le prospect parle d un sujet lie au messaging/CRM/experience client, rebondis dessus.");
+  }
+  if (meta.prospect_comments && meta.prospect_comments.length > 0) {
+    lines.push("");
+    lines.push("Posts recemment commentes par le prospect :");
+    for (var m = 0; m < Math.min(3, meta.prospect_comments.length); m++) {
+      var pc = meta.prospect_comments[m];
+      lines.push("  - A commente sur un post de " + sanitizeForPrompt(pc.targetPostAuthor) + " : \"" + sanitizeForPrompt(pc.targetPostText, 150) + "\"");
+    }
+  }
+
   // News evidence if available
   if (meta.news_titles && meta.news_titles.length > 0) {
     lines.push("");

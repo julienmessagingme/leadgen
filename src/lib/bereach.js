@@ -87,8 +87,11 @@ async function collectProfilePosts(profileUrl) {
  * Visit a LinkedIn profile for enrichment data.
  * @param {string} profileUrl - LinkedIn profile URL
  */
-async function visitProfile(profileUrl) {
-  return bereach("/visit/linkedin/profile", { profile: profileUrl });
+async function visitProfile(profileUrl, options) {
+  var body = { profile: profileUrl };
+  if (options && options.includePosts) body.includePosts = true;
+  if (options && options.includeComments) body.includeComments = true;
+  return bereach("/visit/linkedin/profile", body);
 }
 
 /**

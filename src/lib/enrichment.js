@@ -35,7 +35,7 @@ async function enrichLead(signal, runId) {
         "Profile cache fresh (< 48h) -- skipping BeReach call",
         { linkedin_url: signal.linkedin_url });
     } else {
-      const profile = await visitProfile(signal.linkedin_url);
+      const profile = await visitProfile(signal.linkedin_url, { includePosts: true, includeComments: true });
       if (profile) {
         enriched.first_name = profile.firstName || profile.first_name || enriched.first_name;
         enriched.last_name = profile.lastName || profile.last_name || enriched.last_name;
@@ -64,9 +64,23 @@ async function enrichLead(signal, runId) {
 
         enriched.profile_last_fetched_at = new Date().toISOString();
 
+        // Store prospect's recent LinkedIn activity for message context
+        if (profile.posts && profile.posts.length > 0) {
+          enriched.metadata = enriched.metadata || {};
+          enriched.metadata.prospect_posts = profile.posts.slice(0, 5).map(function(p) {
+            return { text: (p.text || "").substring(0, 200), url: p.postUrl || null, likes: p.likesCount || 0 };
+          });
+        }
+        if (profile.comments && profile.comments.length > 0) {
+          enriched.metadata = enriched.metadata || {};
+          enriched.metadata.prospect_comments = profile.comments.slice(0, 5).map(function(c) {
+            return { targetPostText: (c.targetPostText || "").substring(0, 200), targetPostAuthor: c.targetPostAuthor || null };
+          });
+        }
+
         await log(runId, "enrichment", "info",
           "Profile enriched via BeReach",
-          { linkedin_url: signal.linkedin_url, name: enriched.first_name + " " + enriched.last_name, location: enriched.location, company: enriched.company_name });
+          { linkedin_url: signal.linkedin_url, name: enriched.first_name + " " + enriched.last_name, location: enriched.location, company: enriched.company_name, posts: (profile.posts || []).length, comments: (profile.comments || []).length });
       }
     }
   } catch (err) {
