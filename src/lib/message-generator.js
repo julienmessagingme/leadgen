@@ -128,6 +128,11 @@ function buildLeadContext(lead) {
     lines.push("");
     lines.push("Contenu du post qui a declenche le signal :");
     lines.push("\"" + sanitizeForPrompt(meta.post_text, 300) + "\"");
+    if (meta.post_author_name) {
+      var authorInfo = "Auteur du post : " + sanitizeForPrompt(meta.post_author_name);
+      if (meta.post_author_headline) authorInfo += " — " + sanitizeForPrompt(meta.post_author_headline);
+      lines.push(authorInfo);
+    }
     if (meta.post_url) lines.push("URL du post: " + sanitizeForPrompt(meta.post_url));
   }
   if (meta.comment_text) {
