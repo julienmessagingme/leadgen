@@ -29,8 +29,10 @@ export default function WatchlistTab() {
   const [newEntry, setNewEntry] = useState({ ...emptyEntry });
   const [editId, setEditId] = useState(null);
   const [editData, setEditData] = useState({});
+  const [filterType, setFilterType] = useState("all");
 
-  const entries = data?.sources ?? [];
+  const allEntries = data?.sources ?? [];
+  const entries = filterType === "all" ? allEntries : allEntries.filter((e) => e.source_type === filterType);
 
   const handleCreate = () => {
     const payload = {
@@ -102,6 +104,22 @@ export default function WatchlistTab() {
             Ajouter une source
           </button>
         )}
+      </div>
+
+      <div className="flex gap-2 mb-4">
+        {[{ value: "all", label: "Tout (" + allEntries.length + ")" }, ...SOURCE_TYPES.map((t) => ({ value: t.value, label: t.label + " (" + allEntries.filter((e) => e.source_type === t.value).length + ")" }))].map((f) => (
+          <button
+            key={f.value}
+            onClick={() => setFilterType(f.value)}
+            className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
+              filterType === f.value
+                ? "bg-blue-600 text-white"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
       </div>
 
       <div className="bg-white rounded-lg shadow overflow-x-auto">
