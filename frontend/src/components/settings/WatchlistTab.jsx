@@ -50,7 +50,7 @@ function CreditGauge() {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow p-4 mb-4">
+    <div className="bg-white rounded-lg shadow p-4 mb-4 sticky top-0 z-10">
       <h3 className="text-sm font-semibold text-gray-700 mb-3">Credits BeReach (300/jour)</h3>
       <div className="grid grid-cols-4 gap-3">
         {last4.map((d) => {
