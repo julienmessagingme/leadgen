@@ -175,6 +175,44 @@ module.exports = async function taskASignals(runId) {
     }
 
     // ---------------------------------------------------------------
+    // Step 3c: Persist raw signals (for re-scoring without BeReach)
+    // ---------------------------------------------------------------
+    try {
+      var rawRows = rawSignals.map(function(s) {
+        return {
+          run_id: runId,
+          linkedin_url: s.linkedin_url || null,
+          first_name: s.first_name || null,
+          last_name: s.last_name || null,
+          headline: s.headline || null,
+          company_name: s.company_name || null,
+          signal_type: s.signal_type || null,
+          signal_category: s.signal_category || null,
+          signal_source: s.signal_source || null,
+          signal_date: s.signal_date || null,
+          sequence_id: s.sequence_id || null,
+          source_origin: s.source_origin || "bereach",
+          post_text: s.post_text || null,
+          post_url: s.post_url || null,
+          comment_text: s.comment_text || null,
+          post_author_name: s.post_author_name || null,
+          post_author_headline: s.post_author_headline || null,
+        };
+      });
+      var { error: rawError } = await supabase.from("raw_signals").insert(rawRows);
+      if (rawError) {
+        await log(runId, "task-a-signals", "warn",
+          "Failed to persist raw_signals: " + rawError.message);
+      } else {
+        await log(runId, "task-a-signals", "info",
+          "Persisted " + rawRows.length + " raw signals for re-scoring");
+      }
+    } catch (rawErr) {
+      await log(runId, "task-a-signals", "warn",
+        "raw_signals persistence error: " + rawErr.message);
+    }
+
+    // ---------------------------------------------------------------
     // Step 4: Dedup
     // ---------------------------------------------------------------
     var uniqueSignals = await dedup(rawSignals, runId);
@@ -263,6 +301,8 @@ module.exports = async function taskASignals(runId) {
             post_text: scoredLead.post_text || null,
             post_url: scoredLead.post_url || null,
             comment_text: scoredLead.comment_text || null,
+            post_author_name: scoredLead.post_author_name || null,
+            post_author_headline: scoredLead.post_author_headline || null,
           }),
           status: "new",
         };

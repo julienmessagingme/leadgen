@@ -73,6 +73,8 @@ function formatSignals(profiles, signalType, signalCategory, source) {
       post_text: p.post_text || null,
       post_url: p.post_url || null,
       comment_text: p.comment_text || null,
+      post_author_name: p.post_author_name || null,
+      post_author_headline: p.post_author_headline || null,
     };
   });
 }
@@ -148,6 +150,13 @@ async function collectPageSignals(source, signalCategory, runId) {
   var postUrl = bestPost.postUrl || bestPost.url || bestPost.post_url;
   var postText = (bestPost.text || "").substring(0, 300);
 
+  // Extract post author info
+  var postAuthor = bestPost.author || {};
+  var postAuthorName = postAuthor.firstName && postAuthor.lastName
+    ? postAuthor.firstName + " " + postAuthor.lastName
+    : postAuthor.name || bestPost.authorName || bestPost.name || null;
+  var postAuthorHeadline = postAuthor.headline || bestPost.authorHeadline || null;
+
   // Mark as scraped
   var _sp = await supabase.from("scraped_posts").insert({ post_url: postUrl, source_id: source.id }); // ignore errors
 
@@ -156,8 +165,8 @@ async function collectPageSignals(source, signalCategory, runId) {
     var likers = await collectPostLikers(postUrl);
     await rateLimitDelay(1000, 3000);
     var likerProfiles = Array.isArray(likers) ? likers : (likers.items || likers.profiles || likers.results || []);
-    // Inject post context into each liker profile
-    likerProfiles.forEach(function(lp) { lp.post_text = postText; lp.post_url = postUrl; });
+    // Inject post context + author into each liker profile
+    likerProfiles.forEach(function(lp) { lp.post_text = postText; lp.post_url = postUrl; lp.post_author_name = postAuthorName; lp.post_author_headline = postAuthorHeadline; });
     var likerSignals = formatSignals(likerProfiles, "like", signalCategory, source);
     signals = signals.concat(likerSignals);
   } catch (err) {
@@ -170,8 +179,8 @@ async function collectPageSignals(source, signalCategory, runId) {
     var commenters = await collectPostCommenters(postUrl);
     await rateLimitDelay(1000, 3000);
     var commenterProfiles = Array.isArray(commenters) ? commenters : (commenters.items || commenters.profiles || commenters.results || []);
-    // Inject post context + comment text into each commenter
-    commenterProfiles.forEach(function(cp) { cp.post_text = postText; cp.post_url = postUrl; cp.comment_text = cp.text || cp.comment || null; });
+    // Inject post context + comment text + author into each commenter
+    commenterProfiles.forEach(function(cp) { cp.post_text = postText; cp.post_url = postUrl; cp.comment_text = cp.text || cp.comment || null; cp.post_author_name = postAuthorName; cp.post_author_headline = postAuthorHeadline; });
     var commenterSignals = formatSignals(commenterProfiles, "comment", signalCategory, source);
     signals = signals.concat(commenterSignals);
   } catch (err) {
