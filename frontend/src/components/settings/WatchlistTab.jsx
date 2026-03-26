@@ -318,9 +318,16 @@ export default function WatchlistTab() {
                   <tr key={entry.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-sm text-gray-700">{typeLabel(entry.source_type)}</td>
                     <td className="px-4 py-3 text-sm">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${priorityColor(entry.priority)}`}>
-                        {entry.priority || "P2"}
-                      </span>
+                      <select
+                        value={entry.priority || "P2"}
+                        onChange={(e) => updateEntry.mutate({ id: entry.id, priority: e.target.value })}
+                        className={`px-2 py-0.5 rounded-full text-xs font-semibold border-0 cursor-pointer appearance-none text-center ${priorityColor(entry.priority)}`}
+                        style={{ paddingRight: "1.2rem", backgroundPosition: "right 0.2rem center", backgroundSize: "0.6rem" }}
+                      >
+                        {PRIORITIES.map((p) => (
+                          <option key={p.value} value={p.value}>{p.label}</option>
+                        ))}
+                      </select>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-700">{entry.source_label || "—"}</td>
                     <td className="px-4 py-3 text-sm text-gray-700 max-w-xs truncate">
