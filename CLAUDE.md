@@ -45,14 +45,24 @@ Docker network existant : nginx-proxy-manager_default
 
 ### Deploiement
 
-Pour deployer un fichier modifie :
-```bash
-scp -i ~/.ssh/id_ed25519 <fichier_local> ubuntu@146.59.233.252:/home/openclaw/leadgen/<chemin>
-```
-Pour redemarrer le process :
-```bash
-ssh -i ~/.ssh/id_ed25519 ubuntu@146.59.233.252 "kill \$(pgrep -f 'leadgen/src/index') && sleep 2 && cd /home/openclaw/leadgen && export PATH=/home/ubuntu/.nvm/versions/node/v20.20.1/bin:\$PATH && nohup node src/index.js > logs/out.log 2> logs/error.log &"
-```
+**UTILISER `/deploy` (skill Claude Code) — JAMAIS de scp fichier par fichier.**
+
+Le code local est la source de verite. Le VPS tire le code via git.
+- Remote git : `vps` → `ubuntu@146.59.233.252:/home/openclaw/leadgen.git`
+- Le push declenche automatiquement : checkout + restart du process
+- Git root = `C:\Users\julie` (pas `C:\Users\julie\leadgen`)
+
+Flow : modifier en local → commit → `/deploy` (ou `cd /c/Users/julie && GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519" git push vps master`)
+
+**REGLES STRICTES :**
+- **JAMAIS de scp pour deployer des fichiers** — toujours git push
+- **JAMAIS modifier un fichier sur le VPS directement** — toujours modifier en local, commit, push
+- **TOUJOURS verifier les logs apres deploy** (`/vps-logs`)
+
+### Skills disponibles
+- `/deploy` : commit + push + restart VPS
+- `/vps-logs` : voir les logs VPS (stdout, errors, Supabase)
+- `/rescore` : re-scorer les raw_signals du jour sans credits BeReach
 
 ### TODO Securite
 - **Port 3005 expose sur 0.0.0.0** : le process Node.js leadgen ecoute sur toutes les interfaces. Il faut le binder sur 127.0.0.1 et le mettre derriere Nginx Proxy Manager.
