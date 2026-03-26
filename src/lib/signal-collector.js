@@ -302,26 +302,25 @@ async function collectJobSignals(source, runId) {
  */
 async function collectSignals(runId) {
   // ══════════════════════════════════════════════════════════════
-  // SMART COLLECTION STRATEGY
+  // SMART COLLECTION STRATEGY (priority from DB column `priority`)
   // ══════════════════════════════════════════════════════════════
   // Budget: 280 credits/day (safety margin on 300 limit)
   //
-  // PRIORITY 1 (every day, ~1 credit each):
-  //   - keyword sources → search posts from last 24h → collect AUTHORS
-  //   - job_keyword sources → search jobs → find DECISION MAKERS in France
+  // P1 (every day, ~1 credit each): keywords + job_keywords
+  // P2 (rotation prioritaire, ~3 credits each): FR concurrents/influenceurs
+  // P3 (rotation secondaire, ~3 credits each): international/low priority
   //
-  // PRIORITY 2 (rotation on remaining budget, ~3 credits each):
-  //   - competitor_page + influencer → oldest-first rotation
-  //   - Only scrape NEW posts (not already in scraped_posts table)
+  // P2 passe avant P3 sur le budget restant après P1.
+  // Rotation oldest-first (last_scraped_at ASC).
   // ══════════════════════════════════════════════════════════════
 
   var DAILY_SCRAPING_BUDGET = 50; // TEMP: reduced to test scoring (was 280)
   var creditsUsed = 0;
 
-  // Load all active sources
+  // Load all active sources (with priority column from DB)
   var { data: allSources, error } = await supabase
     .from("watchlist")
-    .select("id, source_type, source_label, source_url, keywords, sequence_id, last_scraped_at")
+    .select("id, source_type, source_label, source_url, keywords, sequence_id, last_scraped_at, priority")
     .eq("is_active", true);
 
   if (error) {
@@ -334,26 +333,28 @@ async function collectSignals(runId) {
     return [];
   }
 
-  // Split into priority groups
-  var priority1 = allSources.filter(function(s) {
-    return s.source_type === "keyword" || s.source_type === "job_keyword";
-  });
-  var priority2 = allSources.filter(function(s) {
-    return s.source_type === "competitor_page" || s.source_type === "influencer";
-  });
+  // Split into priority groups from DB column (P1/P2/P3)
+  var priority1 = allSources.filter(function(s) { return s.priority === "P1"; });
+  var priority2 = allSources.filter(function(s) { return s.priority === "P2"; });
+  var priority3 = allSources.filter(function(s) { return s.priority === "P3"; });
 
-  // Sort priority 2 by last_scraped_at ASC (oldest first = rotation)
-  priority2.sort(function(a, b) {
-    if (!a.last_scraped_at && !b.last_scraped_at) return 0;
-    if (!a.last_scraped_at) return -1;
-    if (!b.last_scraped_at) return 1;
-    return new Date(a.last_scraped_at) - new Date(b.last_scraped_at);
-  });
+  // Sort P2 and P3 by last_scraped_at ASC (oldest first = rotation)
+  function sortByOldest(arr) {
+    arr.sort(function(a, b) {
+      if (!a.last_scraped_at && !b.last_scraped_at) return 0;
+      if (!a.last_scraped_at) return -1;
+      if (!b.last_scraped_at) return 1;
+      return new Date(a.last_scraped_at) - new Date(b.last_scraped_at);
+    });
+  }
+  sortByOldest(priority2);
+  sortByOldest(priority3);
 
   await log(runId, "signal-collector", "info",
     "Loaded " + allSources.length + " sources: " +
-    priority1.length + " keywords/jobs (priority 1, daily) + " +
-    priority2.length + " pages/influencers (priority 2, rotation). Budget: " + DAILY_SCRAPING_BUDGET);
+    priority1.length + " P1 (daily) + " +
+    priority2.length + " P2 (rotation prioritaire) + " +
+    priority3.length + " P3 (rotation secondaire). Budget: " + DAILY_SCRAPING_BUDGET);
 
   var allSignals = [];
   var sourcesProcessed = 0;
@@ -415,61 +416,61 @@ async function collectSignals(runId) {
     }
   }
 
-  // ── PRIORITY 2: Company pages + Influencers (rotation) ──
-  var remainingBudget = DAILY_SCRAPING_BUDGET - creditsUsed;
-  var maxP2Sources = Math.floor(remainingBudget / 3); // ~3 credits per page/influencer source
+  // ── Helper: process a priority group with rotation ──
+  async function processGroup(label, sources, creditsPerSource) {
+    var processed = 0;
+    await log(runId, "signal-collector", "info",
+      "── " + label + ": " + sources.length + " sources (rotation) ──");
 
-  await log(runId, "signal-collector", "info",
-    "── Priority 2: " + priority2.length + " page/influencer sources (rotation, max " + maxP2Sources + " today) ──");
-
-  var p2Processed = 0;
-  for (var j = 0; j < priority2.length; j++) {
-    if (p2Processed >= maxP2Sources) {
-      await log(runId, "signal-collector", "info",
-        "Priority 2 budget reached (" + p2Processed + " sources). " +
-        (priority2.length - j) + " sources deferred to next run.");
-      break;
-    }
-
-    if (creditsUsed + 3 > DAILY_SCRAPING_BUDGET) {
-      await log(runId, "signal-collector", "info",
-        "Budget exhausted at " + creditsUsed + " credits. " +
-        (priority2.length - j) + " P2 sources deferred.");
-      break;
-    }
-
-    var src = priority2[j];
-    try {
-      var sigs = await processSource(src);
-      creditsUsed += 3;
-      sourcesProcessed++;
-      p2Processed++;
-      allSignals = allSignals.concat(sigs);
-
-      await log(runId, "signal-collector", "info",
-        "[P2] '" + src.source_label + "' → " + sigs.length +
-        " signals (credits: " + creditsUsed + "/" + DAILY_SCRAPING_BUDGET + ")");
-
-      await supabase.from("watchlist").update({ last_scraped_at: new Date().toISOString() }).eq("id", src.id);
-
-    } catch (err) {
-      if (err.message && err.message.includes("Rate limit")) {
-        await log(runId, "signal-collector", "warn",
-          "Rate limit hit during priority 2 after " + creditsUsed + " credits. Stopping.");
+    for (var j = 0; j < sources.length; j++) {
+      if (creditsUsed + creditsPerSource > DAILY_SCRAPING_BUDGET) {
+        await log(runId, "signal-collector", "info",
+          label + " budget exhausted at " + creditsUsed + " credits. " +
+          (sources.length - j) + " sources deferred.");
         break;
       }
-      await log(runId, "signal-collector", "error",
-        "[P2] '" + src.source_label + "' failed: " + err.message);
-      creditsUsed += 3;
+
+      var src = sources[j];
+      try {
+        var sigs = await processSource(src);
+        creditsUsed += creditsPerSource;
+        sourcesProcessed++;
+        processed++;
+        allSignals = allSignals.concat(sigs);
+
+        await log(runId, "signal-collector", "info",
+          "[" + label + "] '" + src.source_label + "' → " + sigs.length +
+          " signals (credits: " + creditsUsed + "/" + DAILY_SCRAPING_BUDGET + ")");
+
+        await supabase.from("watchlist").update({ last_scraped_at: new Date().toISOString() }).eq("id", src.id);
+
+      } catch (err) {
+        if (err.message && err.message.includes("Rate limit")) {
+          await log(runId, "signal-collector", "warn",
+            "Rate limit hit during " + label + " after " + creditsUsed + " credits. Stopping.");
+          return processed;
+        }
+        await log(runId, "signal-collector", "error",
+          "[" + label + "] '" + src.source_label + "' failed: " + err.message);
+        creditsUsed += creditsPerSource;
+      }
     }
+    return processed;
   }
 
+  // ── PRIORITY 2: rotation prioritaire (FR influenceurs/concurrents) ──
+  var p2Processed = await processGroup("P2", priority2, 3);
+
+  // ── PRIORITY 3: rotation secondaire (international) ──
+  var p3Processed = await processGroup("P3", priority3, 3);
+
   // ── SUMMARY ──
-  var deferred = priority2.length - p2Processed;
+  var deferredP2 = priority2.length - p2Processed;
+  var deferredP3 = priority3.length - p3Processed;
   await log(runId, "signal-collector", "info",
     "Collection complete: " + allSignals.length + " signals from " + sourcesProcessed + " sources. " +
     "Credits: ~" + creditsUsed + "/" + DAILY_SCRAPING_BUDGET + ". " +
-    (deferred > 0 ? deferred + " P2 sources deferred to tomorrow." : "All sources covered."));
+    "P2 deferred: " + deferredP2 + ", P3 deferred: " + deferredP3 + ".");
 
   return allSignals;
 }

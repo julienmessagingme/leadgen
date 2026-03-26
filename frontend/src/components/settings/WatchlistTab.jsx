@@ -8,6 +8,14 @@ const SOURCE_TYPES = [
   { value: "job_keyword", label: "Offre emploi" },
 ];
 
+const PRIORITIES = [
+  { value: "P1", label: "P1", color: "bg-red-100 text-red-800" },
+  { value: "P2", label: "P2", color: "bg-yellow-100 text-yellow-800" },
+  { value: "P3", label: "P3", color: "bg-gray-100 text-gray-600" },
+];
+
+const priorityColor = (p) => PRIORITIES.find((x) => x.value === p)?.color || "bg-gray-100 text-gray-600";
+
 const typeLabel = (type) => SOURCE_TYPES.find((t) => t.value === type)?.label || type;
 
 const emptyEntry = {
@@ -17,6 +25,7 @@ const emptyEntry = {
   keywords: "",
   is_active: true,
   sequence_id: "",
+  priority: "P2",
 };
 
 export default function WatchlistTab() {
@@ -30,9 +39,14 @@ export default function WatchlistTab() {
   const [editId, setEditId] = useState(null);
   const [editData, setEditData] = useState({});
   const [filterType, setFilterType] = useState("all");
+  const [filterPriority, setFilterPriority] = useState("all");
 
   const allEntries = data?.sources ?? [];
-  const entries = filterType === "all" ? allEntries : allEntries.filter((e) => e.source_type === filterType);
+  const entries = allEntries.filter((e) => {
+    if (filterType !== "all" && e.source_type !== filterType) return false;
+    if (filterPriority !== "all" && (e.priority || "P1") !== filterPriority) return false;
+    return true;
+  });
 
   const handleCreate = () => {
     const payload = {
@@ -79,6 +93,7 @@ export default function WatchlistTab() {
       keywords: Array.isArray(entry.keywords) ? entry.keywords.join(" ") : entry.keywords || "",
       is_active: entry.is_active ?? true,
       sequence_id: entry.sequence_id || "",
+      priority: entry.priority || "P2",
     });
   };
 
@@ -106,7 +121,8 @@ export default function WatchlistTab() {
         )}
       </div>
 
-      <div className="flex gap-2 mb-4">
+      <div className="flex flex-wrap gap-2 mb-2">
+        <span className="text-xs text-gray-400 self-center mr-1">Type:</span>
         {[{ value: "all", label: "Tout (" + allEntries.length + ")" }, ...SOURCE_TYPES.map((t) => ({ value: t.value, label: t.label + " (" + allEntries.filter((e) => e.source_type === t.value).length + ")" }))].map((f) => (
           <button
             key={f.value}
@@ -121,12 +137,29 @@ export default function WatchlistTab() {
           </button>
         ))}
       </div>
+      <div className="flex gap-2 mb-4">
+        <span className="text-xs text-gray-400 self-center mr-1">Priorite:</span>
+        {[{ value: "all", label: "Tout" }, ...PRIORITIES.map((p) => ({ value: p.value, label: p.label + " (" + allEntries.filter((e) => (e.priority || "P1") === p.value).length + ")" }))].map((f) => (
+          <button
+            key={f.value}
+            onClick={() => setFilterPriority(f.value)}
+            className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
+              filterPriority === f.value
+                ? "bg-blue-600 text-white"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
 
       <div className="bg-white rounded-lg shadow overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Priorite</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Label</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">URL</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Requete de recherche</th>
@@ -147,6 +180,17 @@ export default function WatchlistTab() {
                   >
                     {SOURCE_TYPES.map((t) => (
                       <option key={t.value} value={t.value}>{t.label}</option>
+                    ))}
+                  </select>
+                </td>
+                <td className="px-4 py-2">
+                  <select
+                    value={newEntry.priority}
+                    onChange={(e) => setNewEntry({ ...newEntry, priority: e.target.value })}
+                    className="w-full rounded border-gray-300 text-sm"
+                  >
+                    {PRIORITIES.map((p) => (
+                      <option key={p.value} value={p.value}>{p.label}</option>
                     ))}
                   </select>
                 </td>
@@ -199,7 +243,7 @@ export default function WatchlistTab() {
 
             {entries.length === 0 && !adding ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
+                <td colSpan={8} className="px-4 py-8 text-center text-gray-400">
                   Aucune source configuree
                 </td>
               </tr>
@@ -215,6 +259,17 @@ export default function WatchlistTab() {
                       >
                         {SOURCE_TYPES.map((t) => (
                           <option key={t.value} value={t.value}>{t.label}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-4 py-2">
+                      <select
+                        value={editData.priority}
+                        onChange={(e) => setEditData({ ...editData, priority: e.target.value })}
+                        className="w-full rounded border-gray-300 text-sm"
+                      >
+                        {PRIORITIES.map((p) => (
+                          <option key={p.value} value={p.value}>{p.label}</option>
                         ))}
                       </select>
                     </td>
@@ -262,6 +317,11 @@ export default function WatchlistTab() {
                 ) : (
                   <tr key={entry.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-sm text-gray-700">{typeLabel(entry.source_type)}</td>
+                    <td className="px-4 py-3 text-sm">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${priorityColor(entry.priority)}`}>
+                        {entry.priority || "P2"}
+                      </span>
+                    </td>
                     <td className="px-4 py-3 text-sm text-gray-700">{entry.source_label || "—"}</td>
                     <td className="px-4 py-3 text-sm text-gray-700 max-w-xs truncate">
                       {entry.source_url ? (
