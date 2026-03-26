@@ -45,7 +45,7 @@ function CreditGauge({ sources }) {
   const p2Count = p2Sources.length;
   const p3Count = p3Sources.length;
 
-  // P1 = all daily, P2/P3 = rotation on remaining budget
+  // P1 = all daily, P2 = rotation, P3 = variable d'ajustement pour remplir jusqu'à 300
   const p1Credits = p1Sources.reduce((sum, s) => sum + creditCost(s), 0);
   const remainAfterP1 = Math.max(0, DAILY_LIMIT - p1Credits);
   const p2Max = p2Sources.reduce((sum, s) => sum + creditCost(s), 0);
@@ -54,6 +54,10 @@ function CreditGauge({ sources }) {
   const p3Max = p3Sources.reduce((sum, s) => sum + creditCost(s), 0);
   const p3Credits = Math.min(p3Max, remainAfterP2);
   const totalProjected = p1Credits + p2Credits + p3Credits;
+
+  // Rotation P3 : en combien de jours on écluse tout
+  const p3DailyBudget = remainAfterP2;
+  const p3RotationDays = p3Max > 0 && p3DailyBudget > 0 ? Math.ceil(p3Max / p3DailyBudget) : 0;
 
   // Historical: last 3 days
   const today = new Date();
@@ -76,39 +80,24 @@ function CreditGauge({ sources }) {
     <div className="bg-white rounded-lg shadow p-4 mb-4 sticky top-0 z-10">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-gray-700">Credits BeReach ({DAILY_LIMIT}/jour)</h3>
-        <div className="flex gap-3 text-xs">
-          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-red-400 inline-block" /> P1: {p1Count} sources ({p1Credits} cr.)</span>
-          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-yellow-400 inline-block" /> P2: {p2Count} sources (~{p2Credits} cr.)</span>
-          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-blue-400 inline-block" /> P3: {p3Count} sources (~{p3Credits} cr.)</span>
+        <div className="flex gap-4 text-xs">
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-red-400 inline-block" /> P1: {p1Count} sources ({p1Credits} cr/jour)</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-yellow-400 inline-block" /> P2: {p2Count} sources ({p2Max} cr. total)</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-gray-400 inline-block" /> P3: {p3Count} sources — rotation {p3RotationDays > 0 ? p3RotationDays + "j" : "—"}</span>
         </div>
       </div>
 
-      {/* Today: projected stacked bar */}
-      <div className="mb-3">
+      {/* Projected daily bar: P1 (fixed) + P2 (rotation) + P3 (fills remaining) */}
+      <div className="mb-1">
         <div className="flex justify-between items-baseline mb-1">
-          <span className="text-xs font-medium text-gray-600">Aujourd'hui (projection)</span>
+          <span className="text-xs font-medium text-gray-600">Projection journaliere</span>
           <span className="text-xs font-mono font-semibold text-gray-700">{totalProjected}/{DAILY_LIMIT}</span>
         </div>
         <div className="w-full bg-gray-200 rounded-full h-4 flex overflow-hidden">
-          {p1Credits > 0 && <div className="bg-red-400 h-4 transition-all" style={{ width: pct(p1Credits) + "%" }} />}
-          {p2Credits > 0 && <div className="bg-yellow-400 h-4 transition-all" style={{ width: pct(p2Credits) + "%" }} />}
-          {p3Credits > 0 && <div className="bg-blue-400 h-4 transition-all" style={{ width: pct(p3Credits) + "%" }} />}
+          {p1Credits > 0 && <div className="bg-red-400 h-4 transition-all" style={{ width: pct(p1Credits) + "%" }} title={"P1: " + p1Credits + " credits"} />}
+          {p2Credits > 0 && <div className="bg-yellow-400 h-4 transition-all" style={{ width: pct(p2Credits) + "%" }} title={"P2: " + p2Credits + " credits"} />}
+          {p3Credits > 0 && <div className="bg-gray-400 h-4 transition-all" style={{ width: pct(p3Credits) + "%" }} title={"P3: " + p3Credits + " credits"} />}
         </div>
-      </div>
-
-      {/* Historical: last 3 days */}
-      <div className="grid grid-cols-3 gap-3">
-        {hist.map((d) => (
-          <div key={d.day}>
-            <div className="flex justify-between items-baseline mb-1">
-              <span className="text-xs text-gray-400">{d.label}</span>
-              <span className="text-xs font-mono text-gray-400">{d.used}/{DAILY_LIMIT}</span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div className={`h-2 rounded-full transition-all ${d.used > 270 ? "bg-red-400" : d.used > 180 ? "bg-yellow-400" : "bg-green-400"}`} style={{ width: pct(d.used) + "%" }} />
-            </div>
-          </div>
-        ))}
       </div>
     </div>
   );
