@@ -36,7 +36,7 @@ export default function WatchlistTab() {
     const payload = {
       ...newEntry,
       keywords: newEntry.keywords
-        ? newEntry.keywords.split(",").map((k) => k.trim()).filter(Boolean)
+        ? [newEntry.keywords.trim()]
         : [],
       sequence_id: newEntry.sequence_id || null,
     };
@@ -53,7 +53,7 @@ export default function WatchlistTab() {
       id: editId,
       ...editData,
       keywords: typeof editData.keywords === "string"
-        ? editData.keywords.split(",").map((k) => k.trim()).filter(Boolean)
+        ? [editData.keywords.trim()]
         : editData.keywords,
       sequence_id: editData.sequence_id || null,
     };
@@ -74,7 +74,7 @@ export default function WatchlistTab() {
       source_type: entry.source_type,
       source_label: entry.source_label || "",
       source_url: entry.source_url || "",
-      keywords: Array.isArray(entry.keywords) ? entry.keywords.join(", ") : entry.keywords || "",
+      keywords: Array.isArray(entry.keywords) ? entry.keywords.join(" ") : entry.keywords || "",
       is_active: entry.is_active ?? true,
       sequence_id: entry.sequence_id || "",
     });
@@ -111,7 +111,7 @@ export default function WatchlistTab() {
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Label</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">URL</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Mots-cles</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Requete de recherche</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actif</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sequence</th>
               <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
@@ -150,7 +150,7 @@ export default function WatchlistTab() {
                 </td>
                 <td className="px-4 py-2">
                   <input
-                    placeholder="mot1, mot2, ..."
+                    placeholder="ex: CRM whatsapp omnicanal"
                     value={newEntry.keywords}
                     onChange={(e) => setNewEntry({ ...newEntry, keywords: e.target.value })}
                     className="w-full rounded border-gray-300 text-sm"
@@ -254,9 +254,7 @@ export default function WatchlistTab() {
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-700">
                       {Array.isArray(entry.keywords) && entry.keywords.length > 0
-                        ? entry.keywords.map((kw, i) => (
-                            <span key={i} className="inline-block bg-gray-100 text-gray-600 text-xs px-1.5 py-0.5 rounded mr-1 mb-1">{kw}</span>
-                          ))
+                        ? <span className="font-mono text-xs">{entry.keywords.join(" ")}</span>
                         : "—"}
                     </td>
                     <td className="px-4 py-3 text-center">
