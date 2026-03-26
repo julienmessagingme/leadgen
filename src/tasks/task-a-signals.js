@@ -260,6 +260,9 @@ module.exports = async function taskASignals(runId) {
           seniority_years: scoredLead.seniority_years || null,
           metadata: Object.assign({}, scoredLead.metadata || {}, {
             source_origin: scoredLead.source_origin || "bereach",
+            post_text: scoredLead.post_text || null,
+            post_url: scoredLead.post_url || null,
+            comment_text: scoredLead.comment_text || null,
           }),
           status: "new",
         };

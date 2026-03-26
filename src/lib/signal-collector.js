@@ -70,6 +70,9 @@ function formatSignals(profiles, signalType, signalCategory, source) {
       signal_date: new Date().toISOString(),
       sequence_id: source.sequence_id || null,
       source_origin: "bereach",
+      post_text: p.post_text || null,
+      post_url: p.post_url || null,
+      comment_text: p.comment_text || null,
     };
   });
 }
@@ -143,6 +146,7 @@ async function collectPageSignals(source, signalCategory, runId) {
   });
   var bestPost = newPosts[0];
   var postUrl = bestPost.postUrl || bestPost.url || bestPost.post_url;
+  var postText = (bestPost.text || "").substring(0, 300);
 
   // Mark as scraped
   var _sp = await supabase.from("scraped_posts").insert({ post_url: postUrl, source_id: source.id }); // ignore errors
@@ -152,6 +156,8 @@ async function collectPageSignals(source, signalCategory, runId) {
     var likers = await collectPostLikers(postUrl);
     await rateLimitDelay(1000, 3000);
     var likerProfiles = Array.isArray(likers) ? likers : (likers.items || likers.profiles || likers.results || []);
+    // Inject post context into each liker profile
+    likerProfiles.forEach(function(lp) { lp.post_text = postText; lp.post_url = postUrl; });
     var likerSignals = formatSignals(likerProfiles, "like", signalCategory, source);
     signals = signals.concat(likerSignals);
   } catch (err) {
@@ -164,6 +170,8 @@ async function collectPageSignals(source, signalCategory, runId) {
     var commenters = await collectPostCommenters(postUrl);
     await rateLimitDelay(1000, 3000);
     var commenterProfiles = Array.isArray(commenters) ? commenters : (commenters.items || commenters.profiles || commenters.results || []);
+    // Inject post context + comment text into each commenter
+    commenterProfiles.forEach(function(cp) { cp.post_text = postText; cp.post_url = postUrl; cp.comment_text = cp.text || cp.comment || null; });
     var commenterSignals = formatSignals(commenterProfiles, "comment", signalCategory, source);
     signals = signals.concat(commenterSignals);
   } catch (err) {
@@ -189,10 +197,11 @@ async function collectKeywordSignals(source, runId) {
 
   var posts = Array.isArray(result) ? result : (result.items || result.posts || result.results || []);
 
-  // Extract post authors as profiles
+  // Extract post authors as profiles, keeping post context
   var authors = posts
     .filter(function (p) { return p.author || p.profileUrl || p.profile_url; })
     .map(function (p) {
+      var postText = (p.text || "").substring(0, 300);
       return {
         profileUrl: p.author ? (p.author.profileUrl || p.author.url) : (p.profileUrl || p.profile_url),
         firstName: p.author ? (p.author.firstName || p.author.first_name) : (p.firstName || p.first_name),
@@ -200,6 +209,8 @@ async function collectKeywordSignals(source, runId) {
         name: p.author ? p.author.name : p.name,
         headline: p.author ? p.author.headline : p.headline,
         company: p.author ? p.author.company : p.company,
+        post_text: postText,
+        post_url: p.postUrl || p.url || p.post_url || null,
       };
     });
 

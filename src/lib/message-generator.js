@@ -122,6 +122,17 @@ function buildLeadContext(lead) {
     lines.push("Origine du signal: " + sanitizeForPrompt(signalCategory) + (signalSource ? " (" + sanitizeForPrompt(signalSource) + ")" : ""));
   }
 
+  // Post context — the actual content that triggered the signal
+  if (meta.post_text) {
+    lines.push("");
+    lines.push("Contenu du post qui a declenche le signal :");
+    lines.push("\"" + sanitizeForPrompt(meta.post_text, 300) + "\"");
+    if (meta.post_url) lines.push("URL du post: " + sanitizeForPrompt(meta.post_url));
+  }
+  if (meta.comment_text) {
+    lines.push("Commentaire du prospect sur ce post : \"" + sanitizeForPrompt(meta.comment_text, 200) + "\"");
+  }
+
   // Previous signals (re-engagements)
   var prevSignals = meta.previous_signals || [];
   if (prevSignals.length > 0) {
