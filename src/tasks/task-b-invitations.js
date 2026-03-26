@@ -135,7 +135,7 @@ module.exports = async function taskBInvitations(runId) {
       // LIN-09: Check if already connected (skip to follow-up)
       try {
         var profileData = await visitProfile(lead.linkedin_url);
-        var degree = profileData && (profileData.connectionDegree || profileData.degree || profileData.connection_degree);
+        var degree = profileData && (profileData.memberDistance || profileData.connectionDegree || profileData.degree);
         if (degree === 1 || degree === "1st" || degree === "DISTANCE_1") {
           await log(runId, "task-b-invitations", "info",
             "Lead already connected: " + (lead.full_name || lead.id) + " -> skip to follow-up");
