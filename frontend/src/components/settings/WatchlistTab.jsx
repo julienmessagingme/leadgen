@@ -34,17 +34,24 @@ function CreditGauge({ sources }) {
   const DAILY_LIMIT = 300;
 
   const active = (sources || []).filter((s) => s.is_active);
-  const p1Count = active.filter((s) => s.priority === "P1").length;
-  const p2Count = active.filter((s) => s.priority === "P2").length;
-  const p3Count = active.filter((s) => s.priority === "P3").length;
 
-  // P1 = 1 credit each (daily), P2/P3 = 3 credits each (rotation on remaining)
-  const p1Credits = p1Count * 1;
+  // Cost depends on source_type: keyword/job_keyword = 1 credit, influencer/competitor_page = 3 credits
+  const creditCost = (s) => (s.source_type === "keyword" || s.source_type === "job_keyword") ? 1 : 3;
+
+  const p1Sources = active.filter((s) => s.priority === "P1");
+  const p2Sources = active.filter((s) => s.priority === "P2");
+  const p3Sources = active.filter((s) => s.priority === "P3");
+  const p1Count = p1Sources.length;
+  const p2Count = p2Sources.length;
+  const p3Count = p3Sources.length;
+
+  // P1 = all daily, P2/P3 = rotation on remaining budget
+  const p1Credits = p1Sources.reduce((sum, s) => sum + creditCost(s), 0);
   const remainAfterP1 = Math.max(0, DAILY_LIMIT - p1Credits);
-  const p2Max = p2Count * 3;
+  const p2Max = p2Sources.reduce((sum, s) => sum + creditCost(s), 0);
   const p2Credits = Math.min(p2Max, remainAfterP1);
   const remainAfterP2 = Math.max(0, remainAfterP1 - p2Credits);
-  const p3Max = p3Count * 3;
+  const p3Max = p3Sources.reduce((sum, s) => sum + creditCost(s), 0);
   const p3Credits = Math.min(p3Max, remainAfterP2);
   const totalProjected = p1Credits + p2Credits + p3Credits;
 
