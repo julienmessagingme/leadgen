@@ -28,46 +28,80 @@ const emptyEntry = {
   priority: "P2",
 };
 
-function CreditGauge() {
-  const { data } = useBeReachCredits();
-  const days = Array.isArray(data) ? data : [];
+function CreditGauge({ sources }) {
+  const { data: histData } = useBeReachCredits();
+  const histDays = Array.isArray(histData) ? histData : [];
   const DAILY_LIMIT = 300;
 
-  // Pad to 4 days
+  const active = (sources || []).filter((s) => s.is_active);
+  const p1Count = active.filter((s) => s.priority === "P1").length;
+  const p2Count = active.filter((s) => s.priority === "P2").length;
+  const p3Count = active.filter((s) => s.priority === "P3").length;
+
+  // P1 = 1 credit each (daily), P2/P3 = 3 credits each (rotation on remaining)
+  const p1Credits = p1Count * 1;
+  const remainAfterP1 = Math.max(0, DAILY_LIMIT - p1Credits);
+  const p2Max = p2Count * 3;
+  const p2Credits = Math.min(p2Max, remainAfterP1);
+  const remainAfterP2 = Math.max(0, remainAfterP1 - p2Credits);
+  const p3Max = p3Count * 3;
+  const p3Credits = Math.min(p3Max, remainAfterP2);
+  const totalProjected = p1Credits + p2Credits + p3Credits;
+
+  // Historical: last 3 days
   const today = new Date();
-  const last4 = [];
-  for (let i = 3; i >= 0; i--) {
+  const hist = [];
+  for (let i = 3; i >= 1; i--) {
     const d = new Date(today);
     d.setDate(d.getDate() - i);
     const key = d.toISOString().substring(0, 10);
-    const found = days.find((x) => x.day === key);
-    last4.push({
+    const found = histDays.find((x) => x.day === key);
+    hist.push({
       day: key,
-      label: i === 0 ? "Aujourd'hui" : i === 1 ? "Hier" : d.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" }),
+      label: i === 1 ? "Hier" : d.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" }),
       used: found ? found.credits_used : 0,
-      budget: found ? found.budget : DAILY_LIMIT,
     });
   }
 
+  const pct = (v) => Math.min(100, (v / DAILY_LIMIT) * 100);
+
   return (
     <div className="bg-white rounded-lg shadow p-4 mb-4 sticky top-0 z-10">
-      <h3 className="text-sm font-semibold text-gray-700 mb-3">Credits BeReach (300/jour)</h3>
-      <div className="grid grid-cols-4 gap-3">
-        {last4.map((d) => {
-          const pct = Math.min(100, Math.round((d.used / DAILY_LIMIT) * 100));
-          const color = pct > 90 ? "bg-red-500" : pct > 60 ? "bg-yellow-500" : "bg-green-500";
-          return (
-            <div key={d.day}>
-              <div className="flex justify-between items-baseline mb-1">
-                <span className="text-xs text-gray-500">{d.label}</span>
-                <span className="text-xs font-mono font-semibold text-gray-700">{d.used}/{DAILY_LIMIT}</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-3">
-                <div className={`${color} h-3 rounded-full transition-all`} style={{ width: pct + "%" }} />
-              </div>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-semibold text-gray-700">Credits BeReach ({DAILY_LIMIT}/jour)</h3>
+        <div className="flex gap-3 text-xs">
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-red-400 inline-block" /> P1: {p1Count} sources ({p1Credits} cr.)</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-yellow-400 inline-block" /> P2: {p2Count} sources (~{p2Credits} cr.)</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-blue-400 inline-block" /> P3: {p3Count} sources (~{p3Credits} cr.)</span>
+        </div>
+      </div>
+
+      {/* Today: projected stacked bar */}
+      <div className="mb-3">
+        <div className="flex justify-between items-baseline mb-1">
+          <span className="text-xs font-medium text-gray-600">Aujourd'hui (projection)</span>
+          <span className="text-xs font-mono font-semibold text-gray-700">{totalProjected}/{DAILY_LIMIT}</span>
+        </div>
+        <div className="w-full bg-gray-200 rounded-full h-4 flex overflow-hidden">
+          {p1Credits > 0 && <div className="bg-red-400 h-4 transition-all" style={{ width: pct(p1Credits) + "%" }} />}
+          {p2Credits > 0 && <div className="bg-yellow-400 h-4 transition-all" style={{ width: pct(p2Credits) + "%" }} />}
+          {p3Credits > 0 && <div className="bg-blue-400 h-4 transition-all" style={{ width: pct(p3Credits) + "%" }} />}
+        </div>
+      </div>
+
+      {/* Historical: last 3 days */}
+      <div className="grid grid-cols-3 gap-3">
+        {hist.map((d) => (
+          <div key={d.day}>
+            <div className="flex justify-between items-baseline mb-1">
+              <span className="text-xs text-gray-400">{d.label}</span>
+              <span className="text-xs font-mono text-gray-400">{d.used}/{DAILY_LIMIT}</span>
             </div>
-          );
-        })}
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div className={`h-2 rounded-full transition-all ${d.used > 270 ? "bg-red-400" : d.used > 180 ? "bg-yellow-400" : "bg-green-400"}`} style={{ width: pct(d.used) + "%" }} />
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -154,7 +188,7 @@ export default function WatchlistTab() {
 
   return (
     <div>
-      <CreditGauge />
+      <CreditGauge sources={allEntries} />
 
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-gray-800">Sources & Mots-cles</h2>
