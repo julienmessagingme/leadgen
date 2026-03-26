@@ -33,8 +33,8 @@ async function selectLeads(runId) {
   var { data, error } = await supabase
     .from("leads")
     .select("id, full_name, first_name, last_name, linkedin_url, headline, company_name, signal_type, signal_category, signal_source, signal_detail, metadata, email, icp_score, tier, location, company_location, company_size, company_sector, seniority_years, connections_count")
-    .eq("status", "invitation_sent")
-    .lte("invitation_sent_at", cutoff)
+    .in("status", ["invitation_sent", "follow_up_sent"])
+    .or("invitation_sent_at.lte." + cutoff + ",follow_up_sent_at.lte." + cutoff)
     .is("email_sent_at", null)
     .in("tier", ["hot", "warm", "cold"])
     .order("icp_score", { ascending: false })
