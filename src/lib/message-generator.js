@@ -310,6 +310,17 @@ async function generateInMail(lead) {
   }
 }
 
+/**
+ * Check if a lead is a cold outbound lead (no warm signal, found via direct search).
+ * Cold leads have signal_category "cold" or no signal_category at all with no post context.
+ */
+function isColdLead(lead) {
+  if (!lead) return false;
+  if (lead.signal_category === "cold") return true;
+  if (!lead.signal_type && !lead.signal_category) return true;
+  return false;
+}
+
 module.exports = {
   loadTemplates,
   generateInvitationNote,
@@ -317,4 +328,5 @@ module.exports = {
   generateEmail,
   generateWhatsAppBody,
   generateInMail,
+  isColdLead,
 };
