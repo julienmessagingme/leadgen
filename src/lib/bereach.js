@@ -35,6 +35,28 @@ async function bereach(endpoint, body = {}) {
     body: JSON.stringify(body),
   });
 
+  if (res.status === 429) {
+    const body = await res.json().catch(() => ({}));
+    // If it's a per-minute rate limit (not daily exhausted), retry after delay
+    var daily = body.error && body.error.daily;
+    if (daily && daily.current >= daily.limit) {
+      throw new Error("BeReach daily limit exhausted (" + daily.current + "/" + daily.limit + ")");
+    }
+    var wait = (body.error && body.error.retryAfter) || 5;
+    await new Promise(function(r) { setTimeout(r, wait * 1000); });
+    // Retry once
+    var retry = await fetch(BEREACH_BASE + endpoint, {
+      method: "POST",
+      headers: { Authorization: "Bearer " + apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!retry.ok) {
+      var retryText = await retry.text();
+      throw new Error("BeReach " + endpoint + " failed after retry (" + retry.status + "): " + retryText);
+    }
+    return retry.json();
+  }
+
   if (!res.ok) {
     const text = await res.text();
     throw new Error("BeReach " + endpoint + " failed (" + res.status + "): " + text);

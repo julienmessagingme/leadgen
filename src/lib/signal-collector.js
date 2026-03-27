@@ -328,7 +328,7 @@ async function collectSignals(runId) {
   // Rotation oldest-first (last_scraped_at ASC).
   // ══════════════════════════════════════════════════════════════
 
-  var DAILY_SCRAPING_BUDGET = 70; // TEMP: P1 only (64 credits), will be 300 after scoring validation
+  var DAILY_SCRAPING_BUDGET = 300; // BeReach daily limit = 300 credits
   var creditsUsed = 0;
 
   // Load all active sources (with priority column from DB)
@@ -421,9 +421,9 @@ async function collectSignals(runId) {
       await supabase.from("watchlist").update({ last_scraped_at: new Date().toISOString() }).eq("id", source.id);
 
     } catch (err) {
-      if (err.message && err.message.includes("Rate limit")) {
+      if (err.message && err.message.includes("daily limit exhausted")) {
         await log(runId, "signal-collector", "warn",
-          "Rate limit hit during priority 1 after " + creditsUsed + " credits. Stopping.");
+          "BeReach daily limit reached after " + creditsUsed + " credits. Stopping collection.");
         return allSignals;
       }
       await log(runId, "signal-collector", "error",
@@ -461,9 +461,9 @@ async function collectSignals(runId) {
         await supabase.from("watchlist").update({ last_scraped_at: new Date().toISOString() }).eq("id", src.id);
 
       } catch (err) {
-        if (err.message && err.message.includes("Rate limit")) {
+        if (err.message && err.message.includes("daily limit exhausted")) {
           await log(runId, "signal-collector", "warn",
-            "Rate limit hit during " + label + " after " + creditsUsed + " credits. Stopping.");
+            "BeReach daily limit reached during " + label + " after " + creditsUsed + " credits. Stopping.");
           return processed;
         }
         await log(runId, "signal-collector", "error",

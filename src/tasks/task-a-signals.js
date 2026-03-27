@@ -159,24 +159,33 @@ module.exports = async function taskASignals(runId) {
     // ---------------------------------------------------------------
     try {
       var rawRows = rawSignals.map(function(s) {
+        // Sanitize text fields: remove lone surrogates that break JSON/Postgres
+        function clean(v, maxLen) {
+          if (!v) return null;
+          var t = String(v)
+            .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/g, "")
+            .replace(/(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "")
+            .replace(/\0/g, "");
+          return maxLen ? t.slice(0, maxLen) : t;
+        }
         return {
           run_id: runId,
-          linkedin_url: s.linkedin_url || null,
-          first_name: s.first_name || null,
-          last_name: s.last_name || null,
-          headline: s.headline || null,
-          company_name: s.company_name || null,
-          signal_type: s.signal_type || null,
-          signal_category: s.signal_category || null,
-          signal_source: s.signal_source || null,
-          signal_date: s.signal_date || null,
-          sequence_id: s.sequence_id || null,
+          linkedin_url: clean(s.linkedin_url) || null,
+          first_name: clean(s.first_name, 200) || null,
+          last_name: clean(s.last_name, 200) || null,
+          headline: clean(s.headline, 500) || null,
+          company_name: clean(s.company_name, 300) || null,
+          signal_type: clean(s.signal_type, 50) || null,
+          signal_category: clean(s.signal_category, 50) || null,
+          signal_source: clean(s.signal_source, 200) || null,
+          signal_date: s.signal_date && !isNaN(new Date(s.signal_date).getTime()) ? new Date(s.signal_date).toISOString() : null,
+          sequence_id: s.sequence_id ? Number(s.sequence_id) || null : null,
           source_origin: s.source_origin || "bereach",
-          post_text: s.post_text || null,
-          post_url: s.post_url || null,
-          comment_text: s.comment_text || null,
-          post_author_name: s.post_author_name || null,
-          post_author_headline: s.post_author_headline || null,
+          post_text: clean(s.post_text, 5000) || null,
+          post_url: clean(s.post_url) || null,
+          comment_text: clean(s.comment_text, 2000) || null,
+          post_author_name: clean(s.post_author_name, 200) || null,
+          post_author_headline: clean(s.post_author_headline, 500) || null,
         };
       });
       var { error: rawError } = await supabase.from("raw_signals").insert(rawRows);
