@@ -71,8 +71,60 @@ async function rateLimitDelay() {
  * @param {string} runId - UUID from registerTask wrapper
  */
 module.exports = async function taskASignals(runId) {
+  // Get today's date in Paris timezone for the lock
+  var todayParis = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Paris" });
+  var lockAcquired = false;
+
   try {
     await log(runId, "task-a-signals", "info", "Pipeline started");
+
+    // ---------------------------------------------------------------
+    // Step 0: Acquire daily lock (prevent duplicate runs)
+    // ---------------------------------------------------------------
+    var { data: existingLock, error: lockCheckErr } = await supabase
+      .from("task_locks")
+      .select("started_at, completed_at, run_id")
+      .eq("task_name", "task-a")
+      .eq("run_date", todayParis)
+      .single();
+
+    if (existingLock && !lockCheckErr) {
+      // Lock exists — check if it's a completed run or a stale crash
+      if (existingLock.completed_at) {
+        await log(runId, "task-a-signals", "info",
+          "Task A already completed today (run " + existingLock.run_id + "). Skipping.");
+        return;
+      }
+      // Check if lock is stale (>2 hours old = crashed)
+      var lockAge = Date.now() - new Date(existingLock.started_at).getTime();
+      if (lockAge < 2 * 60 * 60 * 1000) {
+        await log(runId, "task-a-signals", "info",
+          "Task A already running (run " + existingLock.run_id + ", started " +
+          Math.round(lockAge / 60000) + "min ago). Skipping.");
+        return;
+      }
+      // Stale lock — delete it and re-acquire
+      await log(runId, "task-a-signals", "warn",
+        "Stale lock found (run " + existingLock.run_id + ", " +
+        Math.round(lockAge / 3600000) + "h old). Removing and re-acquiring.");
+      await supabase.from("task_locks").delete()
+        .eq("task_name", "task-a").eq("run_date", todayParis);
+    }
+
+    // Try to acquire lock
+    var { error: lockErr } = await supabase.from("task_locks").insert({
+      task_name: "task-a",
+      run_date: todayParis,
+      run_id: runId,
+    });
+    if (lockErr) {
+      // Another process grabbed the lock between our check and insert (race condition)
+      await log(runId, "task-a-signals", "info",
+        "Lock already taken by another process. Skipping.");
+      return;
+    }
+    lockAcquired = true;
+    await log(runId, "task-a-signals", "info", "Daily lock acquired");
 
     // ---------------------------------------------------------------
     // Step 1: Check BeReach limits
@@ -378,5 +430,13 @@ module.exports = async function taskASignals(runId) {
       "Pipeline failed with unexpected error: " + err.message,
       { stack: err.stack });
     throw err; // Re-throw so registerTask wrapper also catches it
+  } finally {
+    // Release lock: mark as completed (even if crashed — so we know it ran)
+    if (lockAcquired) {
+      await supabase.from("task_locks")
+        .update({ completed_at: new Date().toISOString() })
+        .eq("task_name", "task-a")
+        .eq("run_date", todayParis);
+    }
   }
 };
