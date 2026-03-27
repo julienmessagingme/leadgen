@@ -13,7 +13,8 @@
 
 const { supabase } = require("../lib/supabase");
 const { collectSignals } = require("../lib/signal-collector");
-const { collectAllBrowserSignals } = require("../lib/browser-signal-collector");
+// Browser signal collector DISABLED — see CLAUDE.md
+// const { collectAllBrowserSignals } = require("../lib/browser-signal-collector");
 const { dedup } = require("../lib/dedup");
 const { enrichLead } = require("../lib/enrichment");
 const { gatherNewsEvidence } = require("../lib/news-evidence");
@@ -400,20 +401,6 @@ module.exports = async function taskASignals(runId) {
       errors: errors,
     };
 
-    var browserSummary = "";
-    if (browserStats) {
-      summaryMeta.browser_stats = browserStats;
-      browserSummary = " Browser: " +
-        (browserStats.competitor_page || 0) + " competitor, " +
-        (browserStats.influencer || 0) + " influencer, " +
-        (browserStats.keyword || 0) + " keyword, " +
-        (browserStats.job_keyword || 0) + " job, " +
-        (browserStats.pages_consumed || 0) + " pages.";
-      if (browserStats.error) {
-        browserSummary += " (" + browserStats.error + ")";
-      }
-    }
-
     await log(runId, "task-a-signals", "info",
       "Pipeline complete. " +
       "Collected: " + rawSignals.length + ", " +
@@ -421,8 +408,7 @@ module.exports = async function taskASignals(runId) {
       "Processed: " + toProcess.length + ", " +
       "Inserted (hot/warm): " + inserted + ", " +
       "Skipped (cold): " + skippedCold + ", " +
-      "Errors: " + errors + "." +
-      browserSummary, summaryMeta);
+      "Errors: " + errors + ".", summaryMeta);
 
   } catch (err) {
     // Top-level catch for unexpected pipeline errors
