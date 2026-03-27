@@ -328,7 +328,7 @@ async function collectSignals(runId) {
   // Rotation oldest-first (last_scraped_at ASC).
   // ══════════════════════════════════════════════════════════════
 
-  var DAILY_SCRAPING_BUDGET = 50; // TEMP: reduced to test scoring (was 280)
+  var DAILY_SCRAPING_BUDGET = 70; // TEMP: P1 only (64 credits), will be 300 after scoring validation
   var creditsUsed = 0;
 
   // Load all active sources (with priority column from DB)
