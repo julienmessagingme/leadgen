@@ -83,6 +83,13 @@ export default function SequenceTable({
                   sortOrder={sortOrder}
                   onSortChange={onSortChange}
                 />
+                <SortHeader
+                  label="Score le"
+                  field="scored_at"
+                  sortField={sortField}
+                  sortOrder={sortOrder}
+                  onSortChange={onSortChange}
+                />
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Etape
                 </th>
@@ -136,6 +143,11 @@ export default function SequenceTable({
                     </td>
                     <td className="px-4 py-3 text-sm font-semibold text-gray-800">
                       {lead.icp_score ?? "-"}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-500">
+                      {lead.scored_at
+                        ? new Date(lead.scored_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" })
+                        : "-"}
                     </td>
                     <td className="px-4 py-3">
                       <StepIndicator lead={lead} />

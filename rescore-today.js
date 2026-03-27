@@ -126,6 +126,7 @@ async function main() {
           rescored_from: "raw_signals",
         }),
         status: "new",
+        scored_at: new Date().toISOString(),
       };
 
       var { error: insertError } = await supabase.from("leads").insert(leadRow);

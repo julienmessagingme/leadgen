@@ -359,6 +359,7 @@ module.exports = async function taskASignals(runId) {
             post_author_headline: scoredLead.post_author_headline || null,
           }),
           status: "new",
+          scored_at: new Date().toISOString(),
         };
 
         var { error: insertError } = await supabase

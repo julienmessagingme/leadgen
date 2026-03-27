@@ -16,7 +16,7 @@ const PII_NULLS = {
   headline: null,
 };
 
-const VALID_SORTS = ["icp_score", "created_at", "signal_date", "status"];
+const VALID_SORTS = ["icp_score", "created_at", "signal_date", "status", "scored_at"];
 
 /**
  * ISO-8601 date validation helper.
