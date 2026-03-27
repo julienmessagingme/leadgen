@@ -92,7 +92,8 @@ module.exports = async function taskBInvitations(runId) {
     .from("leads")
     .select("id, full_name, first_name, last_name, linkedin_url, headline, company_name, signal_type, signal_category, signal_source, signal_detail, metadata, email, icp_score, tier, status, last_processed_run_id, location, company_location, company_size, company_sector, seniority_years, connections_count")
     .in("status", ["new", "enriched", "scored"])
-    .in("tier", ["hot", "warm", "cold"])
+    .in("tier", ["hot", "warm"])
+    .gte("icp_score", 50)
     .order("icp_score", { ascending: false })
     .limit(remaining);
 
