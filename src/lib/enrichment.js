@@ -11,7 +11,8 @@
  */
 
 const { visitProfile, visitCompany } = require("./bereach");
-const { enrichFromSalesNav } = require("./openclaw-browser");
+// OpenClaw Sales Nav DISABLED - bug #25920, see CLAUDE.md
+// const { enrichFromSalesNav } = require("./openclaw-browser");
 const { log } = require("./logger");
 
 /** Cache duration in hours for BeReach profile data. */
@@ -138,27 +139,10 @@ async function enrichLead(signal, runId) {
   }
 
   // ---------------------------------------------------------------
-  // 3. Sales Navigator enrichment via OpenClaw (ENR-04) -- optional
+  // 3. Sales Navigator enrichment via OpenClaw (ENR-04) -- DISABLED
+  //    Bug OpenClaw #25920 (HMAC-SHA256 token mismatch). Ne pas reactiver
+  //    tant que le bug n'est pas fixe. Voir CLAUDE.md pour details.
   // ---------------------------------------------------------------
-  try {
-    const salesNavData = await enrichFromSalesNav(signal.linkedin_url);
-    if (salesNavData) {
-      enriched.seniority_years = salesNavData.seniority_years || enriched.seniority_years;
-      enriched.metadata = {
-        ...(enriched.metadata || {}),
-        sales_nav_alerts: salesNavData.sales_nav_alerts,
-        sales_nav_tags: salesNavData.sales_nav_tags,
-        sales_nav_connections: salesNavData.sales_nav_connections,
-      };
-      await log(runId, "enrichment", "info",
-        "Sales Navigator data enriched via OpenClaw",
-        { linkedin_url: signal.linkedin_url, seniority_years: salesNavData.seniority_years });
-    }
-  } catch (err) {
-    await log(runId, "enrichment", "warn",
-      "Sales Navigator enrichment failed (non-critical): " + err.message,
-      { linkedin_url: signal.linkedin_url });
-  }
 
   return enriched;
 }

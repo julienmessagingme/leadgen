@@ -4,7 +4,13 @@ const { log } = require("./logger");
 
 function sanitizeForPrompt(value, maxLen = 200) {
   if (!value) return "";
-  return String(value).replace(/[\r\n]+/g, " ").trim().slice(0, maxLen);
+  return String(value)
+    .replace(/[\r\n]+/g, " ")
+    // Remove lone surrogates (cause JSON parse errors in Anthropic API)
+    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/g, "")
+    .replace(/(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "")
+    .trim()
+    .slice(0, maxLen);
 }
 
 /**
