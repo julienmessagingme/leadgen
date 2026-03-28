@@ -174,6 +174,8 @@ async function scoreLead(lead, newsEvidence, rules, runId) {
 
     // Step 2: Claude Haiku scoring (ICP-01)
     var prompt = buildScoringPrompt(lead, newsEvidence, rules);
+    // Global sanitize: remove ALL lone surrogates from the entire prompt
+    prompt = prompt.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/g, "").replace(/(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "");
 
     var response = await getAnthropicClient().messages.create({
       model: "claude-haiku-4-5-20251001",
