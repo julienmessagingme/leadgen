@@ -138,7 +138,7 @@ async function checkLimits() {
  * @param {string|null} note - Optional invitation note (max 280 chars)
  */
 async function connectProfile(profileUrl, note) {
-  const body = { url: profileUrl };
+  const body = { profile: profileUrl };
   if (note) {
     body.note = note.substring(0, 280);
   }
@@ -158,7 +158,7 @@ async function getSentInvitations() {
  * @param {string} text - Message text
  */
 async function sendMessage(profileUrl, text) {
-  return bereach("/message/linkedin", { url: profileUrl, text });
+  return bereach("/message/linkedin", { profile: profileUrl, text });
 }
 
 /**
