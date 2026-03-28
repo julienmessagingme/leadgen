@@ -46,8 +46,8 @@ module.exports = async function taskBInvitations(runId) {
     var limits = await checkLimits();
     await log(runId, "task-b-invitations", "info", "BeReach limits checked", { limits: limits });
   } catch (err) {
-    await log(runId, "task-b-invitations", "error", "BeReach limits check failed: " + err.message);
-    return;
+    await log(runId, "task-b-invitations", "warn", "BeReach limits check failed (non-blocking): " + err.message);
+    // Don't return — invitations use a different quota than scraping credits
   }
 
   // Step 2: Daily limit from settings table, env var fallback (LIN-03)
