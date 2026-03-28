@@ -70,7 +70,7 @@ async function bereach(endpoint, body = {}) {
  * @param {string} postUrl - LinkedIn post URL
  */
 async function collectPostLikers(postUrl) {
-  return bereach("/collect/linkedin/likes", { url: postUrl });
+  return bereach("/collect/linkedin/likes", { postUrl: postUrl });
 }
 
 /**
@@ -78,7 +78,7 @@ async function collectPostLikers(postUrl) {
  * @param {string} postUrl - LinkedIn post URL
  */
 async function collectPostCommenters(postUrl) {
-  return bereach("/collect/linkedin/comments", { url: postUrl });
+  return bereach("/collect/linkedin/comments", { postUrl: postUrl });
 }
 
 /**
