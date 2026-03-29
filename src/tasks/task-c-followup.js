@@ -2,7 +2,7 @@
  * Task C: LinkedIn Connection Follow-up Processor.
  * Detects accepted connections and sends follow-up messages via BeReach.
  *
- * Runs at 11h00 Mon-Fri via scheduler.
+ * Runs at 07h20 Mon-Fri via scheduler (before Task A at 07h30).
  * Receives runId from registerTask wrapper.
  *
  * LIN-06: Detect accepted connections by comparing pending invitations against invitation_sent leads
@@ -12,6 +12,7 @@
 
 const { supabase } = require("../lib/supabase");
 const { getSentInvitations, sendMessage, sleep } = require("../lib/bereach");
+const { enrichLead } = require("../lib/enrichment");
 const { isSuppressed } = require("../lib/suppression");
 const { generateFollowUpMessage, isColdLead, loadTemplates } = require("../lib/message-generator");
 const { log } = require("../lib/logger");
@@ -136,6 +137,30 @@ module.exports = async function taskCFollowup(runId) {
           await log(runId, "task-c-followup", "info", "Lead suppressed (RGPD): " + (connLead.full_name || connLead.id));
           skipped++;
           continue;
+        }
+
+        // Enrich lead with full profile + company data before generating message
+        // This gives Sonnet the complete context (posts, comments, company description, etc.)
+        try {
+          var enrichedConnLead = await enrichLead(connLead, runId);
+          // Persist enriched data back to leads table
+          await supabase.from("leads").update({
+            location: enrichedConnLead.location || connLead.location,
+            company_name: enrichedConnLead.company_name || connLead.company_name,
+            company_size: enrichedConnLead.company_size || connLead.company_size,
+            company_sector: enrichedConnLead.company_sector || connLead.company_sector,
+            company_location: enrichedConnLead.company_location || connLead.company_location,
+            email: enrichedConnLead.email || connLead.email,
+            seniority_years: enrichedConnLead.seniority_years || connLead.seniority_years,
+            connections_count: enrichedConnLead.connections_count || connLead.connections_count,
+            metadata: enrichedConnLead.metadata,
+          }).eq("id", connLead.id);
+          connLead = enrichedConnLead;
+          await log(runId, "task-c-followup", "info",
+            "Enriched " + (connLead.full_name || connLead.id) + " before message generation (2 credits)");
+        } catch (enrichErr) {
+          await log(runId, "task-c-followup", "warn",
+            "Enrichment failed for " + (connLead.full_name || connLead.id) + ": " + enrichErr.message + " — generating message with existing data");
         }
 
         // Generate follow-up message via Claude Sonnet

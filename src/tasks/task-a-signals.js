@@ -1,8 +1,9 @@
 /**
  * Task A: Signal Detection Pipeline.
- * Full pipeline: check limits -> check daily cap -> collect signals ->
- * dedup -> limit quota -> load ICP rules -> enrich + news + score each lead ->
- * filter cold -> insert hot/warm into Supabase.
+ * Full pipeline: check limits -> check daily cap -> collect signals (dynamic budget) ->
+ * dedup -> raw score ALL with Haiku -> select top 30 warm/hot ->
+ * enrich top 30 (visitProfile+visitCompany) -> re-score with enriched data ->
+ * HubSpot check -> insert hot/warm into Supabase (status: new or hubspot_existing).
  *
  * Runs at 07h30 Mon-Fri via scheduler.
  * Receives runId from registerTask wrapper.
@@ -13,10 +14,9 @@
 
 const { supabase } = require("../lib/supabase");
 const { collectSignals } = require("../lib/signal-collector");
-// Browser signal collector DISABLED — see CLAUDE.md
-// const { collectAllBrowserSignals } = require("../lib/browser-signal-collector");
 const { dedup } = require("../lib/dedup");
 const { enrichLead } = require("../lib/enrichment");
+const { existsInHubspot } = require("../lib/hubspot");
 const { gatherNewsEvidence } = require("../lib/news-evidence");
 const { scoreLead, loadIcpRules } = require("../lib/icp-scorer");
 const { checkLimits, sleep } = require("../lib/bereach");
@@ -187,9 +187,28 @@ module.exports = async function taskASignals(runId) {
       "Daily quota: " + todayCount + "/" + dailyLeadLimit + " used, " + remaining + " remaining");
 
     // ---------------------------------------------------------------
-    // Step 3: Collect Bereach signals
+    // Step 3: Calculate dynamic budget and collect signals
     // ---------------------------------------------------------------
-    var rawSignals = await collectSignals(runId);
+    // Reserve 60 credits for enriching top 30 leads (2 credits each)
+    var ENRICHMENT_RESERVE = 60;
+    var TOTAL_BUDGET = 300;
+
+    // Check how many credits Task C used today (follow-ups sent = 2 credits each)
+    var taskCCredits = 0;
+    try {
+      var { count: followUpCount } = await supabase
+        .from("leads")
+        .select("id", { count: "exact", head: true })
+        .not("follow_up_sent_at", "is", null)
+        .gte("follow_up_sent_at", todayStart);
+      taskCCredits = (followUpCount || 0) * 2;
+    } catch (e) { /* ignore */ }
+
+    var collectionBudget = TOTAL_BUDGET - taskCCredits - ENRICHMENT_RESERVE;
+    await log(runId, "task-a-signals", "info",
+      "Budget: " + TOTAL_BUDGET + " total - " + taskCCredits + " (Task C) - " + ENRICHMENT_RESERVE + " (enrichment reserve) = " + collectionBudget + " for collection");
+
+    var rawSignals = await collectSignals(runId, collectionBudget);
     await log(runId, "task-a-signals", "info",
       "Bereach collected " + rawSignals.length + " raw signals");
 
@@ -268,39 +287,73 @@ module.exports = async function taskASignals(runId) {
     }
 
     // ---------------------------------------------------------------
-    // Step 5: Limit to remaining daily quota
-    // ---------------------------------------------------------------
-    var toProcess = uniqueSignals.slice(0, remaining);
-    if (toProcess.length < uniqueSignals.length) {
-      await log(runId, "task-a-signals", "info",
-        "Limiting to " + toProcess.length + " signals (daily quota: " + remaining + " remaining)");
-    }
-
-    // ---------------------------------------------------------------
-    // Step 6: Load ICP rules once for the batch
+    // Step 5: Load ICP rules once for the batch
     // ---------------------------------------------------------------
     var rules = await loadIcpRules();
     await log(runId, "task-a-signals", "info",
       "Loaded " + rules.length + " ICP rules");
 
     // ---------------------------------------------------------------
-    // Step 7: Process each signal (sequential with rate limiting)
+    // Step 6: RAW SCORING — score ALL deduped signals with Haiku
+    //         No BeReach credits consumed, only Anthropic API
+    //         Haiku scores using headline + company_name from signal
+    // ---------------------------------------------------------------
+    var rawScored = [];
+    var rawCold = 0;
+    var rawErrors = 0;
+    await log(runId, "task-a-signals", "info",
+      "Starting raw scoring of " + uniqueSignals.length + " signals (no enrichment)");
+
+    for (var i = 0; i < uniqueSignals.length; i++) {
+      var signal = uniqueSignals[i];
+      try {
+        var scoredSignal = await scoreLead(signal, [], rules, runId);
+        if (scoredSignal.tier === "cold") {
+          rawCold++;
+        } else {
+          rawScored.push(scoredSignal);
+        }
+      } catch (err) {
+        rawErrors++;
+      }
+    }
+
+    await log(runId, "task-a-signals", "info",
+      "Raw scoring done: " + rawScored.length + " warm/hot, " + rawCold + " cold filtered, " + rawErrors + " errors");
+
+    if (rawScored.length === 0) {
+      await log(runId, "task-a-signals", "info",
+        "No warm/hot leads after raw scoring -- pipeline complete");
+      return;
+    }
+
+    // ---------------------------------------------------------------
+    // Step 7: SELECT TOP 30 warm/hot for enrichment
+    // ---------------------------------------------------------------
+    rawScored.sort(function(a, b) { return (b.icp_score || 0) - (a.icp_score || 0); });
+    var ENRICHMENT_BATCH_SIZE = 30;
+    var topLeads = rawScored.slice(0, ENRICHMENT_BATCH_SIZE);
+    await log(runId, "task-a-signals", "info",
+      "Selected top " + topLeads.length + " leads for enrichment (from " + rawScored.length + " warm/hot)");
+
+    // ---------------------------------------------------------------
+    // Step 8: ENRICH top 30 (visitProfile + visitCompany = 2 credits each)
+    //         Then RE-SCORE with enriched data + news evidence
     // ---------------------------------------------------------------
     var inserted = 0;
     var skippedCold = 0;
+    var skippedHubspot = 0;
     var errors = 0;
 
-    for (var i = 0; i < toProcess.length; i++) {
-      var signal = toProcess[i];
+    for (var j = 0; j < topLeads.length; j++) {
+      var lead = topLeads[j];
       try {
-        // 7a. Enrich lead (profile + company + Sales Nav)
-        var enrichedLead = await enrichLead(signal, runId);
+        // 8a. Enrich (visitProfile + visitCompany)
+        var enrichedLead = await enrichLead(lead, runId);
         await rateLimitDelay();
 
-        // 7b. Gather news evidence
+        // 8b. Gather news evidence
         var newsEvidence = await gatherNewsEvidence(enrichedLead, runId);
-
-        // Store news titles in metadata for Sonnet prompt
         if (newsEvidence && newsEvidence.length > 0) {
           enrichedLead.metadata = enrichedLead.metadata || {};
           enrichedLead.metadata.news_titles = newsEvidence
@@ -309,19 +362,42 @@ module.exports = async function taskASignals(runId) {
             .slice(0, 5);
         }
 
-        // 7c. Score lead via ICP scoring
+        // 8c. Re-score with enriched data
         var scoredLead = await scoreLead(enrichedLead, newsEvidence, rules, runId);
 
-        // 7d. Filter cold leads
+        // 8d. Filter cold leads (may have dropped after enrichment reveals bad geo/size)
         if (scoredLead.tier === "cold") {
           await log(runId, "task-a-signals", "info",
-            "Skipping cold lead: " + (scoredLead.first_name || "") + " " + (scoredLead.last_name || "") +
+            "Lead dropped to cold after enrichment: " + (scoredLead.first_name || "") + " " + (scoredLead.last_name || "") +
             " (score: " + scoredLead.icp_score + ")");
           skippedCold++;
           continue;
         }
 
-        // 7e. Insert hot/warm lead into Supabase
+        // 8e. HubSpot check — insert with special status if found
+        var leadStatus = "new";
+        try {
+          if (scoredLead.first_name && scoredLead.last_name) {
+            var inHubspot = await existsInHubspot(
+              scoredLead.first_name,
+              scoredLead.last_name,
+              scoredLead.company_name || null
+            );
+            if (inHubspot) {
+              leadStatus = "hubspot_existing";
+              skippedHubspot++;
+              await log(runId, "task-a-signals", "info",
+                "HubSpot contact: " + scoredLead.first_name + " " + scoredLead.last_name +
+                " — inserting with status hubspot_existing");
+            }
+          }
+        } catch (hubErr) {
+          // HubSpot check fails open — insert as "new"
+          await log(runId, "task-a-signals", "warn",
+            "HubSpot check failed: " + hubErr.message);
+        }
+
+        // 8f. Insert lead
         var leadRow = {
           linkedin_url: scoredLead.linkedin_url,
           linkedin_url_canonical: scoredLead.linkedin_url_canonical || null,
@@ -358,7 +434,7 @@ module.exports = async function taskASignals(runId) {
             post_author_name: scoredLead.post_author_name || null,
             post_author_headline: scoredLead.post_author_headline || null,
           }),
-          status: "new",
+          status: leadStatus,
           scored_at: new Date().toISOString(),
         };
 
@@ -376,40 +452,42 @@ module.exports = async function taskASignals(runId) {
 
         inserted++;
         await log(runId, "task-a-signals", "info",
-          "Inserted " + scoredLead.tier + " lead: " +
+          "Inserted " + scoredLead.tier + " lead (" + leadStatus + "): " +
           (scoredLead.first_name || "") + " " + (scoredLead.last_name || "") +
           " (score: " + scoredLead.icp_score + ")",
-          { tier: scoredLead.tier, company: scoredLead.company_name });
+          { tier: scoredLead.tier, company: scoredLead.company_name, status: leadStatus });
 
       } catch (err) {
-        // Error isolation: one lead failing does not crash the batch
         await log(runId, "task-a-signals", "error",
           "Lead processing failed: " + err.message,
-          { linkedin_url: signal.linkedin_url, index: i });
+          { linkedin_url: lead.linkedin_url, index: j });
         errors++;
       }
     }
 
     // ---------------------------------------------------------------
-    // Step 8: Summary log
+    // Step 9: Summary log
     // ---------------------------------------------------------------
     var summaryMeta = {
       raw_signals: rawSignals.length,
       unique_signals: uniqueSignals.length,
-      processed: toProcess.length,
+      raw_scored_warm_hot: rawScored.length,
+      raw_scored_cold: rawCold,
+      enriched: topLeads.length,
       inserted: inserted,
-      skipped_cold: skippedCold,
-      errors: errors,
+      skipped_cold_after_enrichment: skippedCold,
+      hubspot_existing: skippedHubspot,
+      errors: errors + rawErrors,
     };
 
     await log(runId, "task-a-signals", "info",
       "Pipeline complete. " +
       "Collected: " + rawSignals.length + ", " +
-      "After dedup: " + uniqueSignals.length + ", " +
-      "Processed: " + toProcess.length + ", " +
-      "Inserted (hot/warm): " + inserted + ", " +
-      "Skipped (cold): " + skippedCold + ", " +
-      "Errors: " + errors + ".", summaryMeta);
+      "Deduped: " + uniqueSignals.length + ", " +
+      "Raw scored warm/hot: " + rawScored.length + " (cold: " + rawCold + "), " +
+      "Enriched top: " + topLeads.length + ", " +
+      "Inserted: " + inserted + " (HubSpot: " + skippedHubspot + "), " +
+      "Errors: " + (errors + rawErrors) + ".", summaryMeta);
 
   } catch (err) {
     // Top-level catch for unexpected pipeline errors

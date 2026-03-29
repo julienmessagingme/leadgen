@@ -314,7 +314,7 @@ async function collectJobSignals(source, runId) {
  * @param {string} runId - UUID for this pipeline run
  * @returns {Promise<Array>} All collected signals
  */
-async function collectSignals(runId) {
+async function collectSignals(runId, budgetOverride) {
   // ══════════════════════════════════════════════════════════════
   // SMART COLLECTION STRATEGY (priority from DB column `priority`)
   // ══════════════════════════════════════════════════════════════
@@ -328,7 +328,7 @@ async function collectSignals(runId) {
   // Rotation oldest-first (last_scraped_at ASC).
   // ══════════════════════════════════════════════════════════════
 
-  var DAILY_SCRAPING_BUDGET = 300; // BeReach daily limit = 300 credits
+  var DAILY_SCRAPING_BUDGET = (budgetOverride && budgetOverride > 0) ? budgetOverride : 300;
   var creditsUsed = 0;
 
   // Load all active sources (with priority column from DB)

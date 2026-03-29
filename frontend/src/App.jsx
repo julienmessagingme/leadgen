@@ -7,6 +7,7 @@ import Pipeline from "./pages/Pipeline";
 import Sequences from "./pages/Sequences";
 import Settings from "./pages/Settings";
 import ColdOutbound from "./pages/ColdOutbound";
+import HubspotSignals from "./pages/HubspotSignals";
 
 const queryClient = new QueryClient();
 
@@ -78,6 +79,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <Sequences />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/hubspot-signals"
+        element={
+          <ProtectedRoute>
+            <HubspotSignals />
           </ProtectedRoute>
         }
       />

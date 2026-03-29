@@ -10,6 +10,7 @@ const STATUS_MAP = {
   whatsapp_sent: { label: "WhatsApp", colors: "bg-green-100 text-green-700" },
   replied: { label: "Gagne", colors: "bg-emerald-100 text-emerald-700" },
   meeting_booked: { label: "Gagne", colors: "bg-emerald-100 text-emerald-700" },
+  hubspot_existing: { label: "HubSpot", colors: "bg-orange-100 text-orange-700" },
   disqualified: { label: "Exclu", colors: "bg-red-100 text-red-700" },
 };
 

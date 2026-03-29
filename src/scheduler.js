@@ -41,12 +41,12 @@ function registerTask(name, cronExpression, taskFn) {
 }
 
 // Register all 6 pipeline tasks (Mon-Fri only)
+registerTask("task-c-followup",   "20 7 * * 1-5",      taskCFollowup);    // 07h20 (enrich + message BEFORE Task A)
 registerTask("task-a-signals",    "30 7 * * 1-5",      taskASignals);     // 07h30
 registerTask("task-f-briefing",   "30 8 * * 1-5",      taskFBriefing);    // 08h30
 registerTask("task-b-invitations","0 9 * * 1-5",       taskBInvitations); // 09h00
 registerTask("task-d-email",      "0 10 * * 1-5",      taskDEmail);       // 10h00
 registerTask("task-e-whatsapp",   "30 10 * * 1-5",     taskEWhatsapp);    // 10h30
-registerTask("task-c-followup",   "0 11 * * 1-5",      taskCFollowup);    // 11h00
 
 // WhatsApp template approval polling (every 15 min, Mon-Fri 9h-17h)
 registerTask("whatsapp-poll",     "*/15 9-18 * * 1-5", whatsappPoll);     // every 15 min

@@ -235,15 +235,15 @@ router.get("/:id", async (req, res) => {
 });
 
 /**
- * PATCH /:id/action -- Individual lead action (pause/resume/exclude)
+ * PATCH /:id/action -- Individual lead action (pause/resume/exclude/convert_from_hubspot)
  */
 router.patch("/:id/action", async (req, res) => {
   try {
     const { id } = req.params;
     const { action } = req.body;
 
-    if (!["pause", "resume", "exclude"].includes(action)) {
-      return res.status(400).json({ error: "Invalid action. Allowed: pause, resume, exclude" });
+    if (!["pause", "resume", "exclude", "convert_from_hubspot"].includes(action)) {
+      return res.status(400).json({ error: "Invalid action. Allowed: pause, resume, exclude, convert_from_hubspot" });
     }
 
     // Fetch current lead
@@ -331,6 +331,22 @@ router.patch("/:id/action", async (req, res) => {
       }
 
       return res.json({ ok: true, action: "excluded" });
+    }
+
+    if (action === "convert_from_hubspot") {
+      metadata.converted_from_hubspot = true;
+      metadata.converted_at = new Date().toISOString();
+
+      const { error: updateErr } = await supabase
+        .from("leads")
+        .update({ status: "new", metadata })
+        .eq("id", id);
+
+      if (updateErr) {
+        console.error("Leads PATCH /:id/action convert error:", updateErr.message);
+        return res.status(500).json({ error: "Internal server error" });
+      }
+      return res.json({ ok: true, action: "converted" });
     }
   } catch (err) {
     console.error("Leads PATCH /:id/action error:", err.message);

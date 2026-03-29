@@ -10,7 +10,6 @@
  */
 
 const { supabase } = require("./supabase");
-const { existsInHubspot } = require("./hubspot");
 const { canonicalizeLinkedInUrl } = require("./url-utils");
 const { log } = require("./logger");
 
@@ -28,7 +27,6 @@ async function dedup(signals, runId) {
   let skippedCanonical = 0;
   let skippedBatch = 0;
   let skippedSupabase = 0;
-  let skippedHubspot = 0;
   let errors = 0;
 
   for (const signal of signals) {
@@ -97,22 +95,7 @@ async function dedup(signals, runId) {
         continue;
       }
 
-      // Stage 4: HubSpot dedup (SIG-07)
-      if (signal.first_name && signal.last_name) {
-        const inHubspot = await existsInHubspot(
-          signal.first_name,
-          signal.last_name,
-          signal.company_name || null
-        );
-        if (inHubspot) {
-          await log(runId, "dedup", "info",
-            "Skipping " + signal.first_name + " " + signal.last_name + " - exists in HubSpot",
-            { canonical }
-          );
-          skippedHubspot++;
-          continue;
-        }
-      }
+      // HubSpot check moved to Task A post-scoring (only on top 30 leads)
 
       // Passed all checks: add canonical URL and keep signal
       unique.push({ ...signal, linkedin_url_canonical: canonical });
@@ -131,7 +114,6 @@ async function dedup(signals, runId) {
     " (canonical:" + skippedCanonical +
     " batch:" + skippedBatch +
     " supabase:" + skippedSupabase +
-    " hubspot:" + skippedHubspot +
     " errors:" + errors + ")"
   );
 
