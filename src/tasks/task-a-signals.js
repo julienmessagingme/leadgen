@@ -193,7 +193,7 @@ module.exports = async function taskASignals(runId) {
     var ENRICHMENT_RESERVE = 60;
     var TOTAL_BUDGET = 300;
 
-    // Check how many credits Task C used today (follow-ups sent = 2 credits each)
+    // Check how many credits Task C used today (follow-ups = 2 credits each)
     var taskCCredits = 0;
     try {
       var { count: followUpCount } = await supabase
@@ -204,9 +204,20 @@ module.exports = async function taskASignals(runId) {
       taskCCredits = (followUpCount || 0) * 2;
     } catch (e) { /* ignore */ }
 
-    var collectionBudget = TOTAL_BUDGET - taskCCredits - ENRICHMENT_RESERVE;
+    // Check how many credits Task B used today (invitations = 1 credit each)
+    var taskBCredits = 0;
+    try {
+      var { count: invitationCount } = await supabase
+        .from("leads")
+        .select("id", { count: "exact", head: true })
+        .not("invitation_sent_at", "is", null)
+        .gte("invitation_sent_at", todayStart);
+      taskBCredits = invitationCount || 0;
+    } catch (e) { /* ignore */ }
+
+    var collectionBudget = TOTAL_BUDGET - taskCCredits - taskBCredits - ENRICHMENT_RESERVE;
     await log(runId, "task-a-signals", "info",
-      "Budget: " + TOTAL_BUDGET + " total - " + taskCCredits + " (Task C) - " + ENRICHMENT_RESERVE + " (enrichment reserve) = " + collectionBudget + " for collection");
+      "Budget: " + TOTAL_BUDGET + " - " + taskCCredits + " (Task C) - " + taskBCredits + " (Task B) - " + ENRICHMENT_RESERVE + " (enrichment) = " + collectionBudget + " for collection");
 
     var rawSignals = await collectSignals(runId, collectionBudget);
     await log(runId, "task-a-signals", "info",
