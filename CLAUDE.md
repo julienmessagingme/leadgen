@@ -74,6 +74,12 @@ Domaine = **api.berea.ch** (PAS bereach.io). Budget = **300 credits/jour** (rese
 - **Browser Collector (Playwright)** : cookies expirees, code desactive. NE PAS reimplementer.
 - **OpenClaw/Sales Nav** : bug #25920, code commente dans enrichment.js. NE PAS re-essayer.
 
+## TODO — a faire prochaine session
+- **Analyse stats sources** : apres le run du matin, faire un tableau source → nb signaux → nb hot/warm/cold → taux conversion. Objectif : identifier les sources qui generent du cold pour les virer/baisser, et concentrer le budget sur les meilleures.
+- **Pre-filtre mecanique avant Haiku** : exclure par regex les stagiaires, freelances, concurrents, nous-memes → reduire les appels Haiku de ~4000 a ~1500/jour (~$4 au lieu de $12).
+- **Partoo = concurrent** : ajouter en competitor_page dans la watchlist.
+- **Contacts HubSpot signaux chauds** : inserer avec status hubspot_existing, scorer + generer message Sonnet mais PAS d'envoi auto. Section dediee dans l'interface.
+
 ## Doc detaillee
 - Pipeline complet : `docs/PIPELINE.md`
 - Plans et historique : `.planning/milestones/` (v1.0 a v1.3)
