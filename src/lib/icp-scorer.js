@@ -28,6 +28,111 @@ async function loadIcpRules() {
 }
 
 /**
+ * Pre-filter signals mechanically before sending to Haiku.
+ * Rejects obvious cold leads (freelances, students, wrong geo, competitors)
+ * to save Anthropic API tokens (~75% reduction in Haiku calls).
+ * @param {Array} signals - Deduped signals
+ * @param {Array} rules - ICP rules from Supabase
+ * @returns {{ passed: Array, filtered: number }} Signals that pass + count filtered
+ */
+function preFilterSignals(signals, rules) {
+  // Build exclusion patterns from ICP rules
+  var negativeTitles = rules
+    .filter(function(r) { return r.category === "title_negative"; })
+    .map(function(r) { return r.value.toLowerCase(); });
+
+  // Build competitor list from rules (loaded from watchlist)
+  var competitors = rules
+    .filter(function(r) { return r.category === "competitor"; })
+    .map(function(r) { return r.value.toLowerCase(); });
+
+  // Hardcoded exclusions (always cold, no need for Haiku)
+  var excludedHeadlinePatterns = [
+    "freelance", "self-employed", "self employed", "solopreneur",
+    "independent consultant", "looking for", "seeking", "en recherche",
+    "open to work", "opentowork", "#opentowork",
+    "student", "étudiant", "etudiante", "stagiaire", "intern ",
+    "alternant", "alternance", "apprenti",
+    "bénévole", "volunteer", "benevolat",
+    "retired", "retraité", "retraitee",
+  ];
+
+  // Merge with DB negative titles
+  negativeTitles.forEach(function(t) {
+    if (excludedHeadlinePatterns.indexOf(t) === -1) {
+      excludedHeadlinePatterns.push(t);
+    }
+  });
+
+  // Geo exclusion — if headline or company clearly indicates non-target geo
+  // We DON'T filter on geo here because headline rarely contains location
+  // Haiku handles geo from enriched data. We only filter obvious patterns.
+  var excludedGeoPatterns = [
+    "nigeria", "lagos", "nairobi", "kenya",
+    "delhi", "mumbai", "bangalore", "bengaluru", "hyderabad", "chennai", "pune", "kolkata",
+    "dhaka", "bangladesh", "karachi", "pakistan", "lahore",
+    "manila", "philippines",
+  ];
+
+  var filtered = 0;
+  var passed = [];
+
+  for (var i = 0; i < signals.length; i++) {
+    var s = signals[i];
+    var headline = (s.headline || "").toLowerCase();
+    var company = (s.company_name || "").toLowerCase();
+    var fullName = ((s.first_name || "") + " " + (s.last_name || "")).toLowerCase();
+
+    // 1. Skip if headline matches exclusion pattern
+    var excluded = false;
+    for (var j = 0; j < excludedHeadlinePatterns.length; j++) {
+      if (headline.indexOf(excludedHeadlinePatterns[j]) !== -1) {
+        excluded = true;
+        break;
+      }
+    }
+
+    // 2. Skip if company is a known competitor
+    if (!excluded && company) {
+      for (var k = 0; k < competitors.length; k++) {
+        if (company.indexOf(competitors[k]) !== -1 || competitors[k].indexOf(company) !== -1) {
+          excluded = true;
+          break;
+        }
+      }
+    }
+
+    // 3. Skip if headline contains excluded geo
+    if (!excluded) {
+      for (var g = 0; g < excludedGeoPatterns.length; g++) {
+        if (headline.indexOf(excludedGeoPatterns[g]) !== -1) {
+          excluded = true;
+          break;
+        }
+      }
+    }
+
+    // 4. Skip if no headline AND no company (nothing for Haiku to score on)
+    if (!excluded && !headline && !company) {
+      excluded = true;
+    }
+
+    // 5. Skip if it's our own company
+    if (!excluded && (company === "messagingme" || company === "messaging me")) {
+      excluded = true;
+    }
+
+    if (excluded) {
+      filtered++;
+    } else {
+      passed.push(s);
+    }
+  }
+
+  return { passed: passed, filtered: filtered };
+}
+
+/**
  * Build the scoring prompt in French for Claude Haiku.
  * @param {object} lead - Lead data
  * @param {Array} newsEvidence - News evidence array
@@ -319,4 +424,4 @@ function getNumericRuleValue(rules, key, defaultValue) {
   return defaultValue;
 }
 
-module.exports = { scoreLead, loadIcpRules };
+module.exports = { scoreLead, loadIcpRules, preFilterSignals };

@@ -18,7 +18,7 @@ const { dedup } = require("../lib/dedup");
 const { enrichLead } = require("../lib/enrichment");
 const { existsInHubspot } = require("../lib/hubspot");
 const { gatherNewsEvidence } = require("../lib/news-evidence");
-const { scoreLead, loadIcpRules } = require("../lib/icp-scorer");
+const { scoreLead, loadIcpRules, preFilterSignals } = require("../lib/icp-scorer");
 const { checkLimits, sleep } = require("../lib/bereach");
 const { log } = require("../lib/logger");
 
@@ -301,11 +301,41 @@ module.exports = async function taskASignals(runId) {
     // Step 5: Load ICP rules once for the batch
     // ---------------------------------------------------------------
     var rules = await loadIcpRules();
+
+    // Load competitor names from watchlist for pre-filter
+    try {
+      var { data: competitorSources } = await supabase
+        .from("watchlist")
+        .select("source_label")
+        .eq("source_type", "competitor_page")
+        .eq("is_active", true);
+      if (competitorSources) {
+        competitorSources.forEach(function(c) {
+          rules.push({ category: "competitor", value: c.source_label });
+        });
+      }
+    } catch (e) { /* ignore */ }
+
     await log(runId, "task-a-signals", "info",
-      "Loaded " + rules.length + " ICP rules");
+      "Loaded " + rules.length + " ICP rules (incl. competitors)");
 
     // ---------------------------------------------------------------
-    // Step 6: RAW SCORING — score ALL deduped signals with Haiku
+    // Step 5b: PRE-FILTER — mechanical filtering before Haiku
+    //          Saves ~75% of Anthropic API tokens
+    // ---------------------------------------------------------------
+    var preFilter = preFilterSignals(uniqueSignals, rules);
+    var signalsToScore = preFilter.passed;
+    await log(runId, "task-a-signals", "info",
+      "Pre-filter: " + preFilter.filtered + " filtered mechanically, " + signalsToScore.length + " sent to Haiku (saved ~" + preFilter.filtered + " API calls)");
+
+    if (signalsToScore.length === 0) {
+      await log(runId, "task-a-signals", "info",
+        "All signals filtered by pre-filter -- pipeline complete");
+      return;
+    }
+
+    // ---------------------------------------------------------------
+    // Step 6: RAW SCORING — score pre-filtered signals with Haiku
     //         No BeReach credits consumed, only Anthropic API
     //         Haiku scores using headline + company_name from signal
     // ---------------------------------------------------------------
@@ -313,10 +343,10 @@ module.exports = async function taskASignals(runId) {
     var rawCold = 0;
     var rawErrors = 0;
     await log(runId, "task-a-signals", "info",
-      "Starting raw scoring of " + uniqueSignals.length + " signals (no enrichment)");
+      "Starting raw scoring of " + signalsToScore.length + " signals (no enrichment)");
 
-    for (var i = 0; i < uniqueSignals.length; i++) {
-      var signal = uniqueSignals[i];
+    for (var i = 0; i < signalsToScore.length; i++) {
+      var signal = signalsToScore[i];
       try {
         var scoredSignal = await scoreLead(signal, [], rules, runId);
         if (scoredSignal.tier === "cold") {
