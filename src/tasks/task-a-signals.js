@@ -189,8 +189,8 @@ module.exports = async function taskASignals(runId) {
     // ---------------------------------------------------------------
     // Step 3: Calculate dynamic budget and collect signals
     // ---------------------------------------------------------------
-    // Reserve 60 credits for enriching top 30 leads (2 credits each)
-    var ENRICHMENT_RESERVE = 60;
+    // Reserve 30 credits for enriching top 30 leads (visitCompany only = 1 credit each)
+    var ENRICHMENT_RESERVE = 30;
     var TOTAL_BUDGET = 300;
 
     // Check how many credits Task C used today (follow-ups = 2 credits each)
@@ -201,7 +201,7 @@ module.exports = async function taskASignals(runId) {
         .select("id", { count: "exact", head: true })
         .not("follow_up_sent_at", "is", null)
         .gte("follow_up_sent_at", todayStart);
-      taskCCredits = (followUpCount || 0) * 2;
+      taskCCredits = 1 + (followUpCount || 0) * 2; // 1 = getSentInvitations + 2 per follow-up
     } catch (e) { /* ignore */ }
 
     // Check how many credits Task B used today (invitations = 1 credit each)
