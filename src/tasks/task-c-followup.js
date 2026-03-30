@@ -183,7 +183,7 @@ module.exports = async function taskCFollowup(runId) {
         await supabase
           .from("leads")
           .update({
-            status: "follow_up_sent",
+            status: "messaged",
             follow_up_sent_at: new Date().toISOString(),
             metadata: updatedMetadata,
             last_processed_run_id: runId,

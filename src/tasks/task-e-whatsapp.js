@@ -36,7 +36,7 @@ module.exports = async function taskEWhatsapp(runId) {
     var { data: invitationLeads, error: err2 } = await supabase
       .from("leads")
       .select("id, full_name, first_name, last_name, linkedin_url, phone, headline, company_name, signal_type, signal_category, signal_source, signal_detail, metadata, email, icp_score, tier, location, company_location, company_size, company_sector, seniority_years, connections_count")
-      .in("status", ["invitation_sent", "follow_up_sent"])
+      .in("status", ["invitation_sent", "messaged"])
       .or("invitation_sent_at.lte." + fourteenDaysAgo + ",follow_up_sent_at.lte." + fourteenDaysAgo)
       .is("whatsapp_template_created_at", null)
       .not("phone", "is", null)
