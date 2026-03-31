@@ -60,6 +60,15 @@ Domaine = **api.berea.ch** (PAS bereach.io). Budget = **300 credits/jour** (rese
 - 5 regles : concurrents=cold, geo FR/GCC, taille 10+, pertinence metier, doute=conservateur
 - Score final = Haiku + signal_bonus + news + activite - fraicheur
 - Unicode sanitize global sur le prompt
+- **BATCH SCORING actif** (depuis 31/03) : 5 signaux par appel Haiku au lieu de 1 → -65% tokens
+  - Fonction `scoreLeadsBatch()` dans `icp-scorer.js`, appelee depuis `task-a-signals.js`
+  - Schema JSON force : `{ results: [{ index, icp_score, tier, reasoning }] }`
+  - Fallback : si batch echoue → rawErrors += batch.length, pipeline continue
+  - **A VERIFIER demain 01/04** dans les logs Task A :
+    1. Log "Starting batch scoring of X signals (batches of 5)" present ?
+    2. Nombre de warm/hot coherent avec avant (~1000+) ?
+    3. Pas d'explosion de rawErrors ?
+    4. Cout Anthropic console < $2/jour (objectif $1) ?
 
 ### Messages (Sonnet claude-sonnet-4-20250514)
 - Regles N1 (signal chaud), N2 (conseil en complement), N3 (concurrent=complement), N4 (adapter au contexte)
@@ -75,10 +84,10 @@ Domaine = **api.berea.ch** (PAS bereach.io). Budget = **300 credits/jour** (rese
 - **OpenClaw/Sales Nav** : bug #25920, code commente dans enrichment.js. NE PAS re-essayer.
 
 ## TODO — a faire prochaine session
-- **Analyse stats sources** : apres le run du matin, faire un tableau source → nb signaux → nb hot/warm/cold → taux conversion. Objectif : identifier les sources qui generent du cold pour les virer/baisser, et concentrer le budget sur les meilleures.
-- **Pre-filtre mecanique avant Haiku** : exclure par regex les stagiaires, freelances, concurrents, nous-memes → reduire les appels Haiku de ~4000 a ~1500/jour (~$4 au lieu de $12).
+- **VERIFIER batch scoring demain 01/04** : voir section "BATCH SCORING actif" ci-dessus
+- **Virer sources watchlist a 0%** : Alcmeon x5, WATI, sinch x3, Respond.io x2, Spoki, Superchat, SIMIO, Trengo, MESSAGE+, Brevo, GETKANAL, Green Bureau, smsmodeinflu1/2/3 → libere ~2000 signaux/jour de garbage + BeReach credits
 - **Partoo = concurrent** : ajouter en competitor_page dans la watchlist.
-- **Contacts HubSpot signaux chauds** : inserer avec status hubspot_existing, scorer + generer message Sonnet mais PAS d'envoi auto. Section dediee dans l'interface.
+- **Analyse stats sources** : continuer a suivre source → taux hot/warm apres virement des mauvaises sources
 
 ## Doc detaillee
 - Pipeline complet : `docs/PIPELINE.md`

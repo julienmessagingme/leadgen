@@ -149,44 +149,7 @@ function preFilterSignals(signals, rules) {
       excluded = true;
     }
 
-    // 6. WHITELIST: if headline exists but has no positive title keyword → skip
-    //    Exceptions (these pass regardless of title):
-    //    - Concurrent signals: likers of competitor posts, already qualified by engagement
-    //    - Comment signals: commenter = stronger active intent than passive liker
-    //    - Keyword/topic signals (signal_category "sujet"): person posted about the topic = already interested
-    if (!excluded && headline && positiveTitleKeywords.length > 0) {
-      var isConcurrentSignal = (s.signal_category === "concurrent");
-      var isComment = (s.signal_type === "comment");
-      var isTopicSignal = (s.signal_category === "sujet");  // keyword search hit
-      if (!isConcurrentSignal && !isComment && !isTopicSignal) {
-        // Extend with common French/feminine titles not always in DB rules
-        var extraPositive = [
-          "fondatrice", "co-fondatrice", "cofondatrice",
-          "présidente", "presidente", "vice-présidente",
-          "dirigeante", "dirigeant",
-          "pdg", "dg ", " dg", "dga",
-          "gérante", "gérant", "gerante", "gerant",
-          "associée", "associé",
-          "partner", "associat",
-          "manager", "management",
-          "digital", "e-commerce", "ecommerce",
-          "marketing", "crm", "relation client", "customer",
-          "commercial", "sales", "vente",
-          "operations", "opérations",
-        ];
-        var allPositive = positiveTitleKeywords.concat(extraPositive);
-        var hasPositiveTitle = false;
-        for (var p = 0; p < allPositive.length; p++) {
-          if (headline.indexOf(allPositive[p]) !== -1) {
-            hasPositiveTitle = true;
-            break;
-          }
-        }
-        if (!hasPositiveTitle) {
-          excluded = true;
-        }
-      }
-    }
+    // (No whitelist — too many false negatives. Blacklist above is sufficient.)
 
     if (excluded) {
       filtered++;
