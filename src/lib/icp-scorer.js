@@ -254,7 +254,7 @@ function buildScoringPrompt(lead, newsEvidence, rules) {
     "- hot (>=70): decideur senior dans une entreprise cible, en zone geographique cible, qui ACHETERAIT du messaging\n" +
     "- warm (40-69): profil interessant mais informations incompletes ou localisation incertaine\n" +
     "- cold (<40): concurrent, hors zone, pas de potentiel d'achat, ou profil non pertinent\n\n" +
-    "Reponds avec ton evaluation et un raisonnement concis.";
+    "Reponds UNIQUEMENT en JSON valide, sans texte avant ni apres :\n{\"icp_score\": 0, \"tier\": \"cold\", \"reasoning\": \"...\"}";
 }
 
 /**
@@ -309,24 +309,10 @@ async function scoreLead(lead, newsEvidence, rules, runId) {
       model: "claude-haiku-4-5-20251001",
       max_tokens: 512,
       messages: [{ role: "user", content: prompt }],
-      output_config: {
-        format: {
-          type: "json_schema",
-          schema: {
-            type: "object",
-            properties: {
-              icp_score: { type: "number" },
-              tier: { type: "string", enum: ["hot", "warm", "cold"] },
-              reasoning: { type: "string" },
-            },
-            required: ["icp_score", "tier", "reasoning"],
-            additionalProperties: false,
-          },
-        },
-      },
     });
 
-    var haikuResult = JSON.parse(response.content[0].text);
+    var rawText = response.content[0].text.trim().replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
+    var haikuResult = JSON.parse(rawText);
     var haikuScore = Math.max(0, Math.min(100, haikuResult.icp_score));
 
     // Step 3: Signal weight bonus (ICP-03)

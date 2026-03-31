@@ -219,6 +219,12 @@ module.exports = async function taskASignals(runId) {
     await log(runId, "task-a-signals", "info",
       "Budget: " + TOTAL_BUDGET + " - " + taskCCredits + " (Task C) - " + taskBCredits + " (Task B) - " + ENRICHMENT_RESERVE + " (enrichment) = " + collectionBudget + " for collection");
 
+    if (collectionBudget <= 0) {
+      await log(runId, "task-a-signals", "warn",
+        "Collection budget epuise ou negatif (" + collectionBudget + ") — Task A interrompue");
+      return;
+    }
+
     var rawSignals = await collectSignals(runId, collectionBudget);
     await log(runId, "task-a-signals", "info",
       "Bereach collected " + rawSignals.length + " raw signals");
