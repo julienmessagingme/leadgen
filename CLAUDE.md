@@ -25,7 +25,7 @@ Domaine = **api.berea.ch** (PAS bereach.io). Budget = **300 credits/jour** (rese
 **NE PAS utiliser `url` comme nom de parametre** :
 - `/collect/linkedin/likes` : `{ postUrl }` | `/collect/linkedin/comments` : `{ postUrl }`
 - `/collect/linkedin/posts` : `{ profileUrl }` (uniquement /in/, pas /company/)
-- `/connect/linkedin/profile` : `{ profile }` | `/message/linkedin` : `{ profile, text }`
+- `/connect/linkedin/profile` : `{ profile }` | `/message/linkedin` : `{ profile, message }`
 - `/visit/linkedin/profile` : `{ profile }` | `/visit/linkedin/company` : `{ companyUrl }`
 - `/search/linkedin/posts` : `{ keywords }` | `/search/linkedin/jobs` : `{ keywords }`
 

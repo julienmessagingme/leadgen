@@ -11,7 +11,11 @@ const MODEL = "claude-sonnet-4-20250514";
 
 function sanitizeForPrompt(value, maxLen = 200) {
   if (!value) return "";
-  return String(value).replace(/[\r\n]+/g, " ").trim().slice(0, maxLen);
+  return String(value)
+    .replace(/[\uD800-\uDFFF]/g, "")  // remove lone surrogates (invalid Unicode)
+    .replace(/[\r\n]+/g, " ")
+    .trim()
+    .slice(0, maxLen);
 }
 
 /**
@@ -79,7 +83,10 @@ async function callClaude(systemPrompt, userPrompt, maxTokens) {
     system: systemPrompt,
     messages: [{ role: "user", content: userPrompt }],
   });
-  return JSON.parse(response.content[0].text);
+  var raw = response.content[0].text;
+  // Strip markdown code fences if Sonnet wraps its response
+  raw = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+  return JSON.parse(raw);
 }
 
 var SYSTEM = "Tu es Julien, expert en strategie conversationnelle et messaging (WhatsApp, RCS, SMS). Tu diriges MessagingMe (messagingme.app), a la fois cabinet de conseil et plateforme techno." +

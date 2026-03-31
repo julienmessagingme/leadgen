@@ -158,7 +158,7 @@ async function getSentInvitations() {
  * @param {string} text - Message text
  */
 async function sendMessage(profileUrl, text) {
-  return bereach("/message/linkedin", { profile: profileUrl, text });
+  return bereach("/message/linkedin", { profile: profileUrl, message: text });
 }
 
 /**
