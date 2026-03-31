@@ -18,7 +18,7 @@ const { dedup } = require("../lib/dedup");
 const { enrichLead } = require("../lib/enrichment");
 const { existsInHubspot } = require("../lib/hubspot");
 const { gatherNewsEvidence } = require("../lib/news-evidence");
-const { scoreLead, loadIcpRules, preFilterSignals } = require("../lib/icp-scorer");
+const { scoreLead, scoreLeadsBatch, loadIcpRules, preFilterSignals } = require("../lib/icp-scorer");
 const { checkLimits, sleep } = require("../lib/bereach");
 const { log } = require("../lib/logger");
 
@@ -342,20 +342,24 @@ module.exports = async function taskASignals(runId) {
     var rawScored = [];
     var rawCold = 0;
     var rawErrors = 0;
+    var BATCH_SIZE = 5;
     await log(runId, "task-a-signals", "info",
-      "Starting raw scoring of " + signalsToScore.length + " signals (no enrichment)");
+      "Starting batch scoring of " + signalsToScore.length + " signals (batches of " + BATCH_SIZE + ")");
 
-    for (var i = 0; i < signalsToScore.length; i++) {
-      var signal = signalsToScore[i];
+    for (var i = 0; i < signalsToScore.length; i += BATCH_SIZE) {
+      var batch = signalsToScore.slice(i, i + BATCH_SIZE);
       try {
-        var scoredSignal = await scoreLead(signal, [], rules, runId);
-        if (scoredSignal.tier === "cold") {
-          rawCold++;
-        } else {
-          rawScored.push(scoredSignal);
+        var batchResults = await scoreLeadsBatch(batch, rules, runId);
+        for (var b = 0; b < batchResults.length; b++) {
+          if (batchResults[b].tier === "cold") {
+            rawCold++;
+          } else {
+            rawScored.push(batchResults[b]);
+          }
         }
       } catch (err) {
-        rawErrors++;
+        rawErrors += batch.length;
+        await log(runId, "task-a-signals", "error", "Batch scoring error: " + err.message);
       }
     }
 

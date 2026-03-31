@@ -46,6 +46,11 @@ function preFilterSignals(signals, rules) {
     .filter(function(r) { return r.category === "competitor"; })
     .map(function(r) { return r.value.toLowerCase(); });
 
+  // Positive title whitelist from DB rules
+  var positiveTitleKeywords = rules
+    .filter(function(r) { return r.category === "title_positive" && r.value; })
+    .map(function(r) { return r.value.toLowerCase(); });
+
   // Hardcoded exclusions (always cold, no need for Haiku)
   var excludedHeadlinePatterns = [
     "freelance", "self-employed", "self employed", "solopreneur",
@@ -55,6 +60,14 @@ function preFilterSignals(signals, rules) {
     "alternant", "alternance", "apprenti",
     "bénévole", "volunteer", "benevolat",
     "retired", "retraité", "retraitee",
+    "coach", "formateur", "formatrice", "speaker", "conférencier",
+    "auteur", "écrivain", "podcaster", "influenceur", "content creator",
+    "recruiter", "recruteur", "talent acquisition", "rh ", " rh ", "human resources",
+    "developer", "développeur", "developpeur", "software engineer", "data scientist",
+    "designer", "graphiste", "ui/ux", "ux designer",
+    "comptable", "accountant", "finance analyst", "analyste financier",
+    "juriste", "avocat", "lawyer", "notaire",
+    "médecin", "infirmier", "pharmacien", "kinesitherapie",
   ];
 
   // Merge with DB negative titles
@@ -64,14 +77,28 @@ function preFilterSignals(signals, rules) {
     }
   });
 
-  // Geo exclusion — if headline or company clearly indicates non-target geo
-  // We DON'T filter on geo here because headline rarely contains location
-  // Haiku handles geo from enriched data. We only filter obvious patterns.
+  // Geo exclusion — filter signals from irrelevant geographies based on headline keywords
   var excludedGeoPatterns = [
-    "nigeria", "lagos", "nairobi", "kenya",
+    // Afrique
+    "nigeria", "lagos", "nairobi", "kenya", "ghana", "accra", "dakar", "senegal",
+    "abidjan", "ivory coast", "côte d'ivoire", "cote d'ivoire", "cameroon", "cameroun",
+    "ethiopia", "tanzania", "uganda", "rwanda", "angola", "mozambique",
+    // Afrique du Nord (hors cible)
+    "egypt", "cairo", "algeri", "tunis", "morocco", "casablanca", "rabat",
+    // Asie du Sud
     "delhi", "mumbai", "bangalore", "bengaluru", "hyderabad", "chennai", "pune", "kolkata",
-    "dhaka", "bangladesh", "karachi", "pakistan", "lahore",
-    "manila", "philippines",
+    "dhaka", "bangladesh", "karachi", "pakistan", "lahore", "india", "indian",
+    "sri lanka", "nepal", "myanmar",
+    // Asie du Sud-Est
+    "manila", "philippines", "jakarta", "indonesia", "vietnam", "hanoi",
+    "malaysia", "kuala lumpur", "thailand", "bangkok",
+    // Asie de l'Est
+    "beijing", "shanghai", "guangzhou", "shenzhen", "china ", "chinese",
+    // Amérique Latine
+    "brazil", "brasil", "são paulo", "sao paulo", "rio de janeiro",
+    "mexico", "colombia", "bogota", "argentina", "buenos aires", "chile",
+    // Europe de l'Est (hors cible)
+    "ukraine", "kyiv", "bucharest", "romania", "bulgaria",
   ];
 
   var filtered = 0;
@@ -120,6 +147,26 @@ function preFilterSignals(signals, rules) {
     // 5. Skip if it's our own company
     if (!excluded && (company === "messagingme" || company === "messaging me")) {
       excluded = true;
+    }
+
+    // 6. WHITELIST: if headline exists but has no positive title keyword → skip
+    //    Exception: keep competitor signals (signal_category === "concurrent") — already qualified by engagement
+    //    Exception: keep comment signals (commenter = stronger intent than liker)
+    if (!excluded && headline && positiveTitleKeywords.length > 0) {
+      var isConcurrentSignal = (s.signal_category === "concurrent");
+      var isComment = (s.signal_type === "comment");
+      if (!isConcurrentSignal && !isComment) {
+        var hasPositiveTitle = false;
+        for (var p = 0; p < positiveTitleKeywords.length; p++) {
+          if (headline.indexOf(positiveTitleKeywords[p]) !== -1) {
+            hasPositiveTitle = true;
+            break;
+          }
+        }
+        if (!hasPositiveTitle) {
+          excluded = true;
+        }
+      }
     }
 
     if (excluded) {
@@ -424,4 +471,152 @@ function getNumericRuleValue(rules, key, defaultValue) {
   return defaultValue;
 }
 
-module.exports = { scoreLead, loadIcpRules, preFilterSignals };
+/**
+ * Build the ICP rules section shared by all prompts (extracted once for batching).
+ */
+function buildIcpRulesHeader(rules) {
+  const positiveTitles = rules.filter((r) => r.category === "title_positive").map((r) => r.value);
+  const negativeTitles = rules.filter((r) => r.category === "title_negative").map((r) => r.value);
+  const targetSectors = rules.filter((r) => r.category === "sector").map((r) => r.value);
+  const targetGeos = rules.filter((r) => r.category === "geo_positive").map((r) => r.value);
+  const sizeRules = rules.filter((r) => r.category === "company_size");
+  var sizeMin = sizeRules.find((r) => r.key === "min");
+  var sizeMax = sizeRules.find((r) => r.key === "max");
+
+  return "Tu es un expert en qualification B2B pour MessagingMe (plateforme messaging WhatsApp/RCS). On cherche des ACHETEURS, PAS des concurrents.\n\n" +
+    "ICP:\n" +
+    "Titres positifs: " + positiveTitles.join(", ") + "\n" +
+    "Titres negatifs: " + negativeTitles.join(", ") + "\n" +
+    "Secteurs cibles: " + targetSectors.join(", ") + "\n" +
+    "Zones cibles: " + targetGeos.join(", ") + "\n" +
+    "Taille: " + (sizeMin ? sizeMin.value : "10") + "+" + " employes\n\n" +
+    "REGLES: (1) Concurrent = cold <20. (2) Hors zone + pas d entreprise credible = cold. " +
+    "(3) Freelance/solo/consultant = cold. (4) Pas acheteur messaging B2C = cold. (5) Doute = warm 40-50 max.\n";
+}
+
+/**
+ * Score a batch of up to 5 leads in a single Haiku API call.
+ * Reduces token cost by ~65% vs individual calls (shared ICP rules header).
+ *
+ * @param {Array} leads - Array of up to 5 lead objects
+ * @param {Array} rules - ICP rules
+ * @param {string} runId - Run ID for logging
+ * @returns {Array} Array of scored leads with icp_score, tier, scoring_metadata
+ */
+async function scoreLeadsBatch(leads, rules, runId) {
+  if (!leads || leads.length === 0) return [];
+
+  // Build freshness data and deterministic bonuses per lead (before API call)
+  var signalWeightRules = rules.filter((r) => r.category === "signal_weights");
+  var signalWeights = {
+    concurrent: getNumericRuleValue(signalWeightRules, "concurrent", 10),
+    influenceur: getNumericRuleValue(signalWeightRules, "influenceur", 5),
+    sujet: getNumericRuleValue(signalWeightRules, "sujet", 5),
+    job: getNumericRuleValue(signalWeightRules, "job", 5),
+  };
+  var freshnessRules = rules.filter((r) => r.category === "freshness");
+  var skipDays = getNumericRuleValue(freshnessRules, "skip_days", 15);
+  var malusDays = getNumericRuleValue(freshnessRules, "malus_days", 10);
+  var warnDays = getNumericRuleValue(freshnessRules, "warn_days", 5);
+
+  // Per-lead deterministic data
+  var leadMeta = leads.map(function(lead) {
+    var signalAge = lead.signal_date
+      ? Math.floor((Date.now() - new Date(lead.signal_date).getTime()) / (1000 * 60 * 60 * 24))
+      : 0;
+    var freshnessMalus = signalAge > malusDays ? -15 : signalAge > warnDays ? -5 : 0;
+    var signalBonus = signalWeights[lead.signal_category] || 0;
+    var meta = lead.metadata || {};
+    var hasPosts = meta.prospect_posts && meta.prospect_posts.length > 0;
+    var hasComments = meta.prospect_comments && meta.prospect_comments.length > 0;
+    var activityBonus = (hasPosts && hasComments) ? 10 : (hasPosts || hasComments) ? 5 : 0;
+    return { signalAge: signalAge, freshnessMalus: freshnessMalus, signalBonus: signalBonus, activityBonus: activityBonus, skip: signalAge > skipDays };
+  });
+
+  // Build batch prompt
+  var header = buildIcpRulesHeader(rules);
+  var prospectsBlock = leads.map(function(lead, idx) {
+    return "Prospect " + (idx + 1) + ":\n" +
+      "- Nom: " + (sanitizeForPrompt(lead.full_name) || ((lead.first_name || "") + " " + (lead.last_name || "")).trim() || "inconnu") + "\n" +
+      "- Titre: " + (sanitizeForPrompt(lead.headline) || "inconnu") + "\n" +
+      "- Entreprise: " + (sanitizeForPrompt(lead.company_name) || "inconnue") + "\n" +
+      "- Secteur: " + (sanitizeForPrompt(lead.company_sector) || "inconnu") + "\n" +
+      "- Localisation: " + (sanitizeForPrompt(lead.location || lead.company_location) || "inconnue") + "\n" +
+      "- Taille: " + (sanitizeForPrompt(lead.company_size) || "inconnue") + "\n" +
+      "- Signal: " + (lead.signal_type || "?") + " sur " + (lead.signal_source || "?");
+  }).join("\n\n");
+
+  var prompt = header + "\nEvalue ces " + leads.length + " prospects. Pour chacun, donne icp_score (0-100), tier (hot/warm/cold), reasoning (1 phrase).\n\n" + prospectsBlock;
+  prompt = prompt.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/g, "").replace(/(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "");
+
+  var results;
+  try {
+    var response = await getAnthropicClient().messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 256 * leads.length,
+      messages: [{ role: "user", content: prompt }],
+      output_config: {
+        format: {
+          type: "json_schema",
+          schema: {
+            type: "object",
+            properties: {
+              results: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    index: { type: "number" },
+                    icp_score: { type: "number" },
+                    tier: { type: "string", enum: ["hot", "warm", "cold"] },
+                    reasoning: { type: "string" },
+                  },
+                  required: ["index", "icp_score", "tier", "reasoning"],
+                  additionalProperties: false,
+                },
+              },
+            },
+            required: ["results"],
+            additionalProperties: false,
+          },
+        },
+      },
+    });
+    results = JSON.parse(response.content[0].text).results;
+  } catch (err) {
+    // Batch call failed — return all as cold
+    await log(runId, "icp-scorer", "error", "Batch scoring failed: " + err.message);
+    return leads.map(function(lead) {
+      return Object.assign({}, lead, { icp_score: 0, tier: "cold", scoring_metadata: { reasoning: "batch error", error: err.message } });
+    });
+  }
+
+  // Apply deterministic adjustments and return scored leads
+  return leads.map(function(lead, idx) {
+    var meta = leadMeta[idx];
+    var r = results.find(function(x) { return x.index === idx + 1; }) || results[idx] || {};
+
+    if (meta.skip) {
+      return Object.assign({}, lead, { icp_score: 0, tier: "cold", scoring_metadata: { reasoning: "signal trop ancien", skipped: true } });
+    }
+
+    var haikuScore = Math.max(0, Math.min(100, r.icp_score || 0));
+    var finalScore = Math.max(0, Math.min(100, haikuScore + meta.signalBonus + meta.freshnessMalus + meta.activityBonus));
+    var finalTier = finalScore >= 70 ? "hot" : finalScore >= 40 ? "warm" : "cold";
+
+    return Object.assign({}, lead, {
+      icp_score: finalScore,
+      tier: finalTier,
+      scoring_metadata: {
+        reasoning: r.reasoning || "",
+        haiku_score: haikuScore,
+        signal_bonus: meta.signalBonus,
+        freshness_malus: meta.freshnessMalus,
+        activity_bonus: meta.activityBonus,
+        final_score: finalScore,
+      },
+    });
+  });
+}
+
+module.exports = { scoreLead, scoreLeadsBatch, loadIcpRules, preFilterSignals };
