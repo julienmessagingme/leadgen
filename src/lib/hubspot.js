@@ -1,7 +1,7 @@
 /**
  * HubSpot CRM contact search for dedup.
  * Checks whether a contact already exists in HubSpot by name + company.
- * Fails open: returns false on any error so the pipeline is not blocked.
+ * Fails open: returns { found: false } on any error so the pipeline is not blocked.
  */
 
 const hubspot = require("@hubspot/api-client");
@@ -23,20 +23,19 @@ function getClient() {
 
 /**
  * Check if a contact exists in HubSpot by first name, last name, and optional company.
- * Fails open: returns false on any error.
+ * Fails open: returns { found: false, contactId: null } on any error.
  *
  * @param {string} firstName
  * @param {string} lastName
  * @param {string|null} companyName
- * @returns {Promise<boolean>} true if contact found in HubSpot
+ * @returns {Promise<{found: boolean, contactId: string|null}>}
  */
 async function existsInHubspot(firstName, lastName, companyName) {
-  // Cannot search without a name
-  if (!firstName || !lastName) return false;
+  if (!firstName || !lastName) return { found: false, contactId: null };
 
   try {
     const client = getClient();
-    if (!client) return false;
+    if (!client) return { found: false, contactId: null };
 
     const filters = [
       { propertyName: "firstname", operator: "EQ", value: firstName },
@@ -53,28 +52,30 @@ async function existsInHubspot(firstName, lastName, companyName) {
       limit: 1,
     });
 
-    return response.total > 0;
+    if (response.total > 0) {
+      return { found: true, contactId: response.results[0].id };
+    }
+    return { found: false, contactId: null };
   } catch (err) {
-    // Fail open: if HubSpot is down or token invalid, do not block the pipeline
     console.error("HubSpot check failed:", err.message);
-    return false;
+    return { found: false, contactId: null };
   }
 }
 
 
 /**
  * Check if a contact exists in HubSpot by email address.
- * Fails open: returns false on any error.
+ * Fails open: returns { found: false, contactId: null } on any error.
  *
  * @param {string} email - Email address to search
- * @returns {Promise<boolean>} true if contact found in HubSpot
+ * @returns {Promise<{found: boolean, contactId: string|null}>}
  */
 async function existsInHubspotByEmail(email) {
-  if (!email) return false;
+  if (!email) return { found: false, contactId: null };
 
   try {
     const client = getClient();
-    if (!client) return false;
+    if (!client) return { found: false, contactId: null };
 
     const response = await client.crm.contacts.searchApi.doSearch({
       filterGroups: [{
@@ -86,10 +87,13 @@ async function existsInHubspotByEmail(email) {
       limit: 1,
     });
 
-    return response.total > 0;
+    if (response.total > 0) {
+      return { found: true, contactId: response.results[0].id };
+    }
+    return { found: false, contactId: null };
   } catch (err) {
     console.error("HubSpot email check failed:", err.message);
-    return false;
+    return { found: false, contactId: null };
   }
 }
 

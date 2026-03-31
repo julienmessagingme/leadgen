@@ -79,12 +79,26 @@ export default function HubspotSignals() {
                   const meta = lead.metadata || {};
                   const signalDesc =
                     (lead.signal_type || "") + " — " + (lead.signal_source || "");
+                  const portalId = import.meta.env.VITE_HUBSPOT_PORTAL_ID;
+                  const hubspotUrl = portalId && meta.hubspot_contact_id
+                    ? `https://app.hubspot.com/contacts/${portalId}/contact/${meta.hubspot_contact_id}`
+                    : null;
 
                   return (
                     <tr key={lead.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3">
                         <div className="text-sm font-medium text-gray-900">{displayName}</div>
                         <div className="text-xs text-gray-500">{lead.headline || ""}</div>
+                        <div className="flex gap-2 mt-1">
+                          {lead.linkedin_url && (
+                            <a href={lead.linkedin_url} target="_blank" rel="noopener noreferrer"
+                              className="text-xs text-blue-500 hover:underline">LinkedIn</a>
+                          )}
+                          {hubspotUrl && (
+                            <a href={hubspotUrl} target="_blank" rel="noopener noreferrer"
+                              className="text-xs text-orange-500 hover:underline">HubSpot ↗</a>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600">
                         {lead.company_name || "-"}

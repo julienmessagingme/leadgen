@@ -417,19 +417,21 @@ module.exports = async function taskASignals(runId) {
 
         // 8e. HubSpot check — insert with special status if found
         var leadStatus = "new";
+        var hubspotContactId = null;
         try {
           if (scoredLead.first_name && scoredLead.last_name) {
-            var inHubspot = await existsInHubspot(
+            var hubspotResult = await existsInHubspot(
               scoredLead.first_name,
               scoredLead.last_name,
               scoredLead.company_name || null
             );
-            if (inHubspot) {
+            if (hubspotResult.found) {
               leadStatus = "hubspot_existing";
+              hubspotContactId = hubspotResult.contactId;
               skippedHubspot++;
               await log(runId, "task-a-signals", "info",
                 "HubSpot contact: " + scoredLead.first_name + " " + scoredLead.last_name +
-                " — inserting with status hubspot_existing");
+                " — inserting with status hubspot_existing (id: " + hubspotContactId + ")");
             }
           }
         } catch (hubErr) {
@@ -474,6 +476,7 @@ module.exports = async function taskASignals(runId) {
             comment_text: scoredLead.comment_text || null,
             post_author_name: scoredLead.post_author_name || null,
             post_author_headline: scoredLead.post_author_headline || null,
+            hubspot_contact_id: hubspotContactId || null,
           }),
           status: leadStatus,
           scored_at: new Date().toISOString(),
