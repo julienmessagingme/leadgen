@@ -46,11 +46,6 @@ function preFilterSignals(signals, rules) {
     .filter(function(r) { return r.category === "competitor"; })
     .map(function(r) { return r.value.toLowerCase(); });
 
-  // Positive title whitelist from DB rules
-  var positiveTitleKeywords = rules
-    .filter(function(r) { return r.category === "title_positive" && r.value; })
-    .map(function(r) { return r.value.toLowerCase(); });
-
   // Hardcoded exclusions (always cold, no need for Haiku)
   var excludedHeadlinePatterns = [
     "freelance", "self-employed", "self employed", "solopreneur",
@@ -527,43 +522,19 @@ async function scoreLeadsBatch(leads, rules, runId) {
       "- Signal: " + (lead.signal_type || "?") + " sur " + (lead.signal_source || "?");
   }).join("\n\n");
 
-  var prompt = header + "\nEvalue ces " + leads.length + " prospects. Pour chacun, donne icp_score (0-100), tier (hot/warm/cold), reasoning (1 phrase).\n\n" + prospectsBlock;
+  var prompt = header + "\nEvalue ces " + leads.length + " prospects. Pour chacun, donne icp_score (0-100), tier (hot/warm/cold), reasoning (1 phrase).\n\n" + prospectsBlock +
+    "\n\nReponds UNIQUEMENT en JSON valide, sans texte avant ni apres, au format exact :\n{\"results\":[{\"index\":1,\"icp_score\":0,\"tier\":\"cold\",\"reasoning\":\"...\"},...]}";
   prompt = prompt.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/g, "").replace(/(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "");
 
   var results;
   try {
     var response = await getAnthropicClient().messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 256 * leads.length,
+      max_tokens: Math.max(512, 300 * leads.length),
       messages: [{ role: "user", content: prompt }],
-      output_config: {
-        format: {
-          type: "json_schema",
-          schema: {
-            type: "object",
-            properties: {
-              results: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    index: { type: "number" },
-                    icp_score: { type: "number" },
-                    tier: { type: "string", enum: ["hot", "warm", "cold"] },
-                    reasoning: { type: "string" },
-                  },
-                  required: ["index", "icp_score", "tier", "reasoning"],
-                  additionalProperties: false,
-                },
-              },
-            },
-            required: ["results"],
-            additionalProperties: false,
-          },
-        },
-      },
     });
-    results = JSON.parse(response.content[0].text).results;
+    var rawText = response.content[0].text.trim().replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
+    results = JSON.parse(rawText).results;
   } catch (err) {
     // Batch call failed — return all as cold
     await log(runId, "icp-scorer", "error", "Batch scoring failed: " + err.message);

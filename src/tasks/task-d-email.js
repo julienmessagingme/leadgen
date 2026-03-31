@@ -99,7 +99,7 @@ async function checkEmail(lead, runId) {
 async function checkHubSpot(email, lead, runId) {
   var exists = await existsInHubspotByEmail(email);
 
-  if (exists) {
+  if (exists.found) {
     await log(runId, TASK_NAME, "info", "Lead email exists in HubSpot, skipping",
       { lead_id: lead.id, email: email });
     return true;

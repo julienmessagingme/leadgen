@@ -366,21 +366,29 @@ module.exports = async function taskASignals(runId) {
     }
 
     // Persiste les scores Haiku dans raw_signals pour analyse source/qualite
+    // Batch par 100 pour eviter N requetes sequentielles
     try {
-      for (var si = 0; si < allScoredForPersist.length; si++) {
-        var sc = allScoredForPersist[si];
-        if (!sc.linkedin_url) continue;
-        await supabase.from("raw_signals")
-          .update({
-            icp_score: sc.icp_score || 0,
-            tier: sc.tier || "cold",
-            reasoning: sc.scoring_metadata && sc.scoring_metadata.reasoning ? sc.scoring_metadata.reasoning.slice(0, 500) : null,
-          })
-          .eq("run_id", runId)
-          .eq("linkedin_url", sc.linkedin_url);
+      var PERSIST_BATCH = 100;
+      var persistCount = 0;
+      for (var pi = 0; pi < allScoredForPersist.length; pi += PERSIST_BATCH) {
+        var persistBatch = allScoredForPersist.slice(pi, pi + PERSIST_BATCH);
+        var persistPromises = persistBatch
+          .filter(function(sc) { return !!sc.linkedin_url; })
+          .map(function(sc) {
+            return supabase.from("raw_signals")
+              .update({
+                icp_score: sc.icp_score || 0,
+                tier: sc.tier || "cold",
+                reasoning: sc.scoring_metadata && sc.scoring_metadata.reasoning ? sc.scoring_metadata.reasoning.slice(0, 500) : null,
+              })
+              .eq("run_id", runId)
+              .eq("linkedin_url", sc.linkedin_url);
+          });
+        await Promise.all(persistPromises);
+        persistCount += persistBatch.length;
       }
       await log(runId, "task-a-signals", "info",
-        "Persisted " + allScoredForPersist.length + " Haiku scores to raw_signals");
+        "Persisted " + persistCount + " Haiku scores to raw_signals");
     } catch (persistErr) {
       await log(runId, "task-a-signals", "warn", "Failed to persist scores to raw_signals: " + persistErr.message);
     }
