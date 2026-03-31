@@ -340,6 +340,7 @@ module.exports = async function taskASignals(runId) {
     //         Haiku scores using headline + company_name from signal
     // ---------------------------------------------------------------
     var rawScored = [];
+    var allScoredForPersist = []; // tous les scores (hot+warm+cold) pour analyse
     var rawCold = 0;
     var rawErrors = 0;
     var BATCH_SIZE = 5;
@@ -351,6 +352,7 @@ module.exports = async function taskASignals(runId) {
       try {
         var batchResults = await scoreLeadsBatch(batch, rules, runId);
         for (var b = 0; b < batchResults.length; b++) {
+          allScoredForPersist.push(batchResults[b]);
           if (batchResults[b].tier === "cold") {
             rawCold++;
           } else {
@@ -361,6 +363,26 @@ module.exports = async function taskASignals(runId) {
         rawErrors += batch.length;
         await log(runId, "task-a-signals", "error", "Batch scoring error: " + err.message);
       }
+    }
+
+    // Persiste les scores Haiku dans raw_signals pour analyse source/qualite
+    try {
+      for (var si = 0; si < allScoredForPersist.length; si++) {
+        var sc = allScoredForPersist[si];
+        if (!sc.linkedin_url) continue;
+        await supabase.from("raw_signals")
+          .update({
+            icp_score: sc.icp_score || 0,
+            tier: sc.tier || "cold",
+            reasoning: sc.scoring_metadata && sc.scoring_metadata.reasoning ? sc.scoring_metadata.reasoning.slice(0, 500) : null,
+          })
+          .eq("run_id", runId)
+          .eq("linkedin_url", sc.linkedin_url);
+      }
+      await log(runId, "task-a-signals", "info",
+        "Persisted " + allScoredForPersist.length + " Haiku scores to raw_signals");
+    } catch (persistErr) {
+      await log(runId, "task-a-signals", "warn", "Failed to persist scores to raw_signals: " + persistErr.message);
     }
 
     await log(runId, "task-a-signals", "info",
