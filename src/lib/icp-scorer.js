@@ -83,8 +83,7 @@ function preFilterSignals(signals, rules) {
     "nigeria", "lagos", "nairobi", "kenya", "ghana", "accra", "dakar", "senegal",
     "abidjan", "ivory coast", "côte d'ivoire", "cote d'ivoire", "cameroon", "cameroun",
     "ethiopia", "tanzania", "uganda", "rwanda", "angola", "mozambique",
-    // Afrique du Nord (hors cible)
-    "egypt", "cairo", "algeri", "tunis", "morocco", "casablanca", "rabat",
+    // Afrique du Nord — laissé passer (marché potentiel)
     // Asie du Sud
     "delhi", "mumbai", "bangalore", "bengaluru", "hyderabad", "chennai", "pune", "kolkata",
     "dhaka", "bangladesh", "karachi", "pakistan", "lahore", "india", "indian",
