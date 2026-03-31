@@ -64,11 +64,14 @@ Domaine = **api.berea.ch** (PAS bereach.io). Budget = **300 credits/jour** (rese
   - Fonction `scoreLeadsBatch()` dans `icp-scorer.js`, appelee depuis `task-a-signals.js`
   - Schema JSON force : `{ results: [{ index, icp_score, tier, reasoning }] }`
   - Fallback : si batch echoue → rawErrors += batch.length, pipeline continue
-  - **A VERIFIER demain 01/04** dans les logs Task A :
+  - **A VERIFIER 01/04** dans les logs Task A :
     1. Log "Starting batch scoring of X signals (batches of 5)" present ?
-    2. Nombre de warm/hot coherent avec avant (~1000+) ?
+    2. Log "Persisted X Haiku scores to raw_signals" present ?
     3. Pas d'explosion de rawErrors ?
-    4. Cout Anthropic console < $2/jour (objectif $1) ?
+    4. Cout Anthropic console (objectif < $5/jour, ideal < $2)
+- **Scores persistes dans raw_signals** (depuis 31/03) : colonnes icp_score, tier, reasoning
+  - Permet analyse qualite par source apres chaque run
+  - Requete analyse : SELECT signal_source, COUNT(*), AVG(icp_score), COUNT(*) FILTER (WHERE tier='hot') FROM raw_signals WHERE run_id = '...' GROUP BY signal_source ORDER BY AVG(icp_score) DESC
 
 ### Messages (Sonnet claude-sonnet-4-20250514)
 - Regles N1 (signal chaud), N2 (conseil en complement), N3 (concurrent=complement), N4 (adapter au contexte)
@@ -84,10 +87,15 @@ Domaine = **api.berea.ch** (PAS bereach.io). Budget = **300 credits/jour** (rese
 - **OpenClaw/Sales Nav** : bug #25920, code commente dans enrichment.js. NE PAS re-essayer.
 
 ## TODO — a faire prochaine session
-- **VERIFIER batch scoring demain 01/04** : voir section "BATCH SCORING actif" ci-dessus
-- **Virer sources watchlist a 0%** : Alcmeon x5, WATI, sinch x3, Respond.io x2, Spoki, Superchat, SIMIO, Trengo, MESSAGE+, Brevo, GETKANAL, Green Bureau, smsmodeinflu1/2/3 → libere ~2000 signaux/jour de garbage + BeReach credits
-- **Partoo = concurrent** : ajouter en competitor_page dans la watchlist.
-- **Analyse stats sources** : continuer a suivre source → taux hot/warm apres virement des mauvaises sources
+- **VERIFIER 01/04 matin** :
+  1. Batch scoring OK ? Log "Persisted X Haiku scores to raw_signals" present ?
+  2. Scores persistes dans raw_signals ? (SELECT COUNT(*) FROM raw_signals WHERE icp_score IS NOT NULL)
+  3. Cout Anthropic console
+  4. Keywords P1 — combien scorés warm/hot ? (requete raw_signals + watchlist source_type='keyword')
+- **Virer sources watchlist a 0%** : Alcmeon x5, WATI, sinch x3, Respond.io x2, Spoki, Superchat, SIMIO, Trengo, MESSAGE+, Brevo, GETKANAL, Green Bureau, smsmodeinflu1/2/3
+- **Partoo = concurrent** : ajouter en competitor_page dans la watchlist
+- **Lien HubSpot** dans onglet Signaux HubSpot : modifier existsInHubspot() pour retourner contact_id, stocker dans metadata, construire URL https://app-eu1.hubspot.com/contacts/139615673/contact/{id}
+- **Afrique du Nord** : laissee passer (Maroc, Algerie, Tunisie, Egypte = marche potentiel)
 
 ## Doc detaillee
 - Pipeline complet : `docs/PIPELINE.md`
