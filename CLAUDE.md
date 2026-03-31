@@ -96,6 +96,7 @@ Domaine = **api.berea.ch** (PAS bereach.io). Budget = **300 credits/jour** (rese
 - **Partoo = concurrent** : ajouter en competitor_page dans la watchlist
 - **Lien HubSpot** dans onglet Signaux HubSpot : modifier existsInHubspot() pour retourner contact_id, stocker dans metadata, construire URL https://app-eu1.hubspot.com/contacts/139615673/contact/{id}
 - **Afrique du Nord** : laissee passer (Maroc, Algerie, Tunisie, Egypte = marche potentiel)
+- **BeReach cold outreach** : tester endpoint People Search (probablement /search/linkedin/people) pour cold prospection par criteres ICP (titre, secteur, geo) — doc sur https://registry.scalar.com/@bereach/apis/bereach-api/latest, domaine a verifier api.bereach.ai vs api.berea.ch
 
 ## Doc detaillee
 - Pipeline complet : `docs/PIPELINE.md`
