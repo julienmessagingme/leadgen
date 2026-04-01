@@ -238,7 +238,7 @@ async function generateFollowUpMessage(lead, templates) {
     var instructions = tpl.template_followup || DEFAULT_FOLLOWUP_TEMPLATE;
 
     var firstName = (lead.full_name || "").split(" ")[0];
-    var prefill = '{"message": "Bonjour ' + firstName + ', ';
+    var prefill = '{"message": "Bonjour ' + firstName + ',';
     var result = await callClaude(SYSTEM,
       instructions + "\n\n" +
       buildLeadContext(lead) + "\n\n" +
