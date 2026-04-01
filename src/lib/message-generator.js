@@ -249,9 +249,11 @@ async function generateFollowUpMessage(lead, templates) {
     var core = (result.message || "").trim();
     // Strip any opener Sonnet might have added anyway
     core = core.replace(/^(bonjour\s+\w+[\s,!]*|merci pour la connexion[\s!]*|salut\s+\w+[\s,!]*)/i, "").trim();
-    // Strip any MessagingMe mention
-    core = core.replace(/\s*(chez|via|avec|pour)\s+MessagingMe/gi, "").trim();
+    // Strip any MessagingMe mention (including dangling "Je dirige" / "je fondé" left behind)
+    core = core.replace(/\s*(chez|via|avec|pour|de)\s+MessagingMe/gi, "").trim();
     core = core.replace(/\bMessagingMe\b/g, "").trim();
+    core = core.replace(/\bje\s+dirige\s+[,.]?\s*/gi, "").trim();
+    core = core.replace(/\s{2,}/g, " ").trim();
     return core ? "Bonjour " + firstName + ", " + core : null;
   } catch (err) {
     console.warn("generateFollowUpMessage failed:", err.message);
