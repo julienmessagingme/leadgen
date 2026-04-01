@@ -237,10 +237,12 @@ async function generateFollowUpMessage(lead, templates) {
     var tpl = templates || (await loadTemplates());
     var instructions = tpl.template_followup || DEFAULT_FOLLOWUP_TEMPLATE;
 
+    var firstName = (lead.full_name || "").split(" ")[0];
+    var prefill = '{"message": "Bonjour ' + firstName + ', ';
     var result = await callClaude(SYSTEM,
       instructions + "\n\n" +
       buildLeadContext(lead) + "\n\n" +
-      'Reponds en JSON: {"message": "..."}', 512, '{"message": "');
+      'Reponds en JSON: {"message": "..."}', 512, prefill);
 
     return result.message || null;
   } catch (err) {
