@@ -237,14 +237,19 @@ async function generateFollowUpMessage(lead, templates) {
     var tpl = templates || (await loadTemplates());
     var instructions = tpl.template_followup || DEFAULT_FOLLOWUP_TEMPLATE;
 
+    // Two-step: generate core content only (no opener), then prepend "Bonjour [prénom], "
+    // This prevents Sonnet from inserting "Merci pour la connexion" between the opener and the substance
     var firstName = (lead.full_name || "").split(" ")[0];
-    var prefill = '{"message": "Bonjour ' + firstName + ',';
     var result = await callClaude(SYSTEM,
       instructions + "\n\n" +
       buildLeadContext(lead) + "\n\n" +
-      'Reponds en JSON: {"message": "..."}', 512, prefill);
+      "Reponds en JSON: {\"message\": \"...\"}\n" +
+      "IMPORTANT : le champ message NE COMMENCE PAS par 'Bonjour', 'Merci' ou une formule d intro. Il commence DIRECTEMENT par le fond (observation, question, constat sur leur metier). Le 'Bonjour [prenom]' sera ajoute automatiquement avant ton texte.", 512);
 
-    return result.message || null;
+    var core = (result.message || "").trim();
+    // Strip any opener Sonnet might have added anyway
+    core = core.replace(/^(bonjour\s+\w+[\s,!]*|merci pour la connexion[\s!]*|salut\s+\w+[\s,!]*)/i, "").trim();
+    return core ? "Bonjour " + firstName + ", " + core : null;
   } catch (err) {
     console.warn("generateFollowUpMessage failed:", err.message);
     return null;
