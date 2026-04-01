@@ -171,35 +171,25 @@ module.exports = async function taskCFollowup(runId) {
           continue;
         }
 
-        // Send message via BeReach
-        await sendMessage(connLead.linkedin_url, message);
-
-        // Update lead with follow-up info
+        // VALIDATION MODE : save draft, do NOT send via BeReach
+        // Julien reviews and approves manually from the frontend
         var updatedMetadata = Object.assign({}, connLead.metadata || {}, {
-          follow_up_message: message,
-          follow_up_run_id: runId,
+          draft_message: message,
+          draft_run_id: runId,
+          draft_generated_at: new Date().toISOString(),
         });
 
         await supabase
           .from("leads")
           .update({
-            status: "messaged",
-            follow_up_sent_at: new Date().toISOString(),
+            status: "message_pending",
             metadata: updatedMetadata,
             last_processed_run_id: runId,
           })
           .eq("id", connLead.id);
 
-        var isCold = isColdLead(connLead);
-        await log(runId, "task-c-followup", "info", "Follow-up sent to " + (connLead.full_name || connLead.id) + (isCold ? " (cold)" : ""));
+        await log(runId, "task-c-followup", "info", "Draft message saved for " + (connLead.full_name || connLead.id) + " — awaiting manual approval");
         messagesSent++;
-
-        // Rate limiting: 60-120s between messages (same as Task B)
-        if (j < connectedLeads.length - 1) {
-          var delayMs = 60000 + Math.floor(Math.random() * 60000);
-          await log(runId, "task-c-followup", "debug", "Sleeping " + Math.round(delayMs / 1000) + "s before next follow-up");
-          await sleep(delayMs);
-        }
       } catch (err) {
         errors++;
         await log(runId, "task-c-followup", "error", "Failed to follow up with " + (connLead.full_name || connLead.id) + ": " + err.message);

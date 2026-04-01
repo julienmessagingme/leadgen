@@ -440,4 +440,78 @@ router.post("/bulk-action", async (req, res) => {
   }
 });
 
+/**
+ * POST /:id/approve-message -- Send approved draft message via BeReach
+ * Body: { message: "..." } (optional — uses draft_message if not provided)
+ */
+router.post("/:id/approve-message", async (req, res) => {
+  try {
+    const { sendMessage } = require("../lib/bereach");
+
+    const { data: lead, error: fetchErr } = await supabase
+      .from("leads")
+      .select("*")
+      .eq("id", req.params.id)
+      .single();
+
+    if (fetchErr || !lead) return res.status(404).json({ error: "Lead not found" });
+    if (lead.status !== "message_pending") return res.status(400).json({ error: "Lead is not in message_pending status" });
+
+    const message = (req.body.message || "").trim() || lead.metadata?.draft_message;
+    if (!message) return res.status(400).json({ error: "No message to send" });
+
+    await sendMessage(lead.linkedin_url, message);
+
+    const updatedMetadata = Object.assign({}, lead.metadata || {}, {
+      follow_up_message: message,
+      follow_up_run_id: lead.metadata?.draft_run_id || null,
+      draft_message: null,
+    });
+
+    await supabase
+      .from("leads")
+      .update({
+        status: "messaged",
+        follow_up_sent_at: new Date().toISOString(),
+        metadata: updatedMetadata,
+      })
+      .eq("id", lead.id);
+
+    res.json({ ok: true, message });
+  } catch (err) {
+    console.error("POST /leads/:id/approve-message error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /:id/reject-message -- Discard draft, put lead back to connected
+ */
+router.post("/:id/reject-message", async (req, res) => {
+  try {
+    const { data: lead, error: fetchErr } = await supabase
+      .from("leads")
+      .select("id, status, metadata")
+      .eq("id", req.params.id)
+      .single();
+
+    if (fetchErr || !lead) return res.status(404).json({ error: "Lead not found" });
+
+    const updatedMetadata = Object.assign({}, lead.metadata || {});
+    delete updatedMetadata.draft_message;
+    delete updatedMetadata.draft_run_id;
+    delete updatedMetadata.draft_generated_at;
+
+    await supabase
+      .from("leads")
+      .update({ status: "connected", metadata: updatedMetadata })
+      .eq("id", lead.id);
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("POST /leads/:id/reject-message error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
