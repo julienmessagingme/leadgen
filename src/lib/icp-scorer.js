@@ -522,11 +522,9 @@ async function scoreLeadsBatch(leads, rules, runId) {
     var rawText = response.content[0].text.trim().replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
     results = JSON.parse(rawText).results;
   } catch (err) {
-    // Batch call failed — return all as cold
+    // Batch call failed — throw so task-a-signals.js increments rawErrors correctly
     await log(runId, "icp-scorer", "error", "Batch scoring failed: " + err.message);
-    return leads.map(function(lead) {
-      return Object.assign({}, lead, { icp_score: 0, tier: "cold", scoring_metadata: { reasoning: "batch error", error: err.message } });
-    });
+    throw err;
   }
 
   // Apply deterministic adjustments and return scored leads

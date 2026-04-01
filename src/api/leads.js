@@ -496,6 +496,7 @@ router.post("/:id/reject-message", async (req, res) => {
       .single();
 
     if (fetchErr || !lead) return res.status(404).json({ error: "Lead not found" });
+    if (lead.status !== "message_pending") return res.status(400).json({ error: "Lead is not in message_pending status" });
 
     const updatedMetadata = Object.assign({}, lead.metadata || {});
     delete updatedMetadata.draft_message;

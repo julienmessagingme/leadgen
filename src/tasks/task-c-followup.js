@@ -11,7 +11,7 @@
  */
 
 const { supabase } = require("../lib/supabase");
-const { getSentInvitations, sendMessage, sleep } = require("../lib/bereach");
+const { getSentInvitations, sleep } = require("../lib/bereach");
 const { enrichLead } = require("../lib/enrichment");
 const { isSuppressed } = require("../lib/suppression");
 const { generateFollowUpMessage, isColdLead, loadTemplates } = require("../lib/message-generator");
@@ -25,7 +25,7 @@ module.exports = async function taskCFollowup(runId) {
   await log(runId, "task-c-followup", "info", "Task C started");
 
   var connectionsDetected = 0;
-  var messagesSent = 0;
+  var draftsSaved = 0;
   var skipped = 0;
   var errors = 0;
 
@@ -189,7 +189,7 @@ module.exports = async function taskCFollowup(runId) {
           .eq("id", connLead.id);
 
         await log(runId, "task-c-followup", "info", "Draft message saved for " + (connLead.full_name || connLead.id) + " — awaiting manual approval");
-        messagesSent++;
+        draftsSaved++;
       } catch (err) {
         errors++;
         await log(runId, "task-c-followup", "error", "Failed to follow up with " + (connLead.full_name || connLead.id) + ": " + err.message);
@@ -198,5 +198,5 @@ module.exports = async function taskCFollowup(runId) {
   }
 
   // Summary log
-  await log(runId, "task-c-followup", "info", "Task C completed: " + connectionsDetected + " connections detected, " + messagesSent + " follow-ups sent, " + skipped + " skipped, " + errors + " errors");
+  await log(runId, "task-c-followup", "info", "Task C completed: " + connectionsDetected + " connections detected, " + draftsSaved + " drafts saved (awaiting approval — 0 BeReach credits used), " + skipped + " skipped, " + errors + " errors");
 };
