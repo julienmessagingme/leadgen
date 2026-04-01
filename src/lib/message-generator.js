@@ -69,15 +69,19 @@ async function loadTemplates() {
 
 /**
  * Helper: call Claude and parse JSON response.
+ * @param {string} prefill - Optional assistant prefill to force response start
  */
-async function callClaude(systemPrompt, userPrompt, maxTokens) {
+async function callClaude(systemPrompt, userPrompt, maxTokens, prefill) {
+  var messages = [{ role: "user", content: userPrompt }];
+  if (prefill) messages.push({ role: "assistant", content: prefill });
+
   var response = await getAnthropicClient().messages.create({
     model: MODEL,
     max_tokens: maxTokens,
     system: systemPrompt,
-    messages: [{ role: "user", content: userPrompt }],
+    messages: messages,
   });
-  var raw = response.content[0].text;
+  var raw = (prefill || "") + response.content[0].text;
   // Strip markdown code fences if Sonnet wraps its response
   raw = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
   return JSON.parse(raw);
@@ -236,7 +240,7 @@ async function generateFollowUpMessage(lead, templates) {
     var result = await callClaude(SYSTEM,
       instructions + "\n\n" +
       buildLeadContext(lead) + "\n\n" +
-      'Reponds en JSON: {"message": "..."}', 512);
+      'Reponds en JSON: {"message": "..."}', 512, '{"message": "');
 
     return result.message || null;
   } catch (err) {
