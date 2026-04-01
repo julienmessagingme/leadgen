@@ -131,9 +131,9 @@ function buildLeadContext(lead) {
   lines.push("");
   var signalCategory = lead.signal_category || lead.metadata?.signal_category || "";
   var signalSource = lead.signal_source || lead.metadata?.signal_source || "";
-  lines.push("Signal principal: " + (sanitizeForPrompt(lead.signal_type) || "inconnu") + " - " + sanitizeForPrompt(lead.signal_detail));
+  // NE PAS passer le nom de la source (signalSource/signalDetail) à Sonnet — il le citerait dans le message
   if (signalCategory === "concurrent") {
-    lines.push("ATTENTION : Ce signal vient d un post d un CONCURRENT (" + sanitizeForPrompt(signalSource) + "). Le prospect est potentiellement deja en contact avec eux. Applique la REGLE N3.");
+    lines.push("Contexte : ce prospect evolue dans l ecosysteme messaging/conversationnel, il connait probablement deja le sujet. Pas besoin d expliquer ce qu est WhatsApp ou le messaging. Applique la REGLE N3.");
   } else if (signalCategory) {
     lines.push("Origine du signal: " + sanitizeForPrompt(signalCategory) + (signalSource ? " (" + sanitizeForPrompt(signalSource) + ")" : ""));
   }
