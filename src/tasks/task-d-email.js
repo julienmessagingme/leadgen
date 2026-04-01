@@ -201,6 +201,13 @@ module.exports = async function taskDEmail(runId) {
     var lead = leads[i];
 
     try {
+      // Skip if manually flagged (e.g. bad message was sent)
+      if (lead.metadata && lead.metadata.skip_email) {
+        await log(runId, TASK_NAME, "info", "Skipping " + (lead.full_name || lead.id) + " — skip_email flag set");
+        skipped.suppressed++;
+        continue;
+      }
+
       // Step 1: FullEnrich email enrichment
       var email = await checkEmail(lead, runId);
       if (!email) {
