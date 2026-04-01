@@ -3,16 +3,12 @@ import NavBar from "../components/shared/NavBar";
 import TierBadge from "../components/shared/TierBadge";
 import { useLeads } from "../hooks/useLeads";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiFetch } from "../lib/api";
+import { api } from "../api/client";
 
 function useApproveMessage() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, message }) =>
-      apiFetch(`/leads/${id}/approve-message`, {
-        method: "POST",
-        body: JSON.stringify({ message }),
-      }),
+    mutationFn: ({ id, message }) => api.post(`/leads/${id}/approve-message`, { message }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["leads"] }),
   });
 }
@@ -20,8 +16,7 @@ function useApproveMessage() {
 function useRejectMessage() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id }) =>
-      apiFetch(`/leads/${id}/reject-message`, { method: "POST" }),
+    mutationFn: ({ id }) => api.post(`/leads/${id}/reject-message`, {}),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["leads"] }),
   });
 }
