@@ -35,29 +35,30 @@ module.exports = async function taskCFollowup(runId) {
 
   try {
     // Get pending sent invitations from BeReach
+    // API returns { success: true, invitations: [...], total: N }
     var pendingResult = await getSentInvitations();
-    var pendingInvitations = pendingResult || [];
+    var pendingInvitations = (pendingResult && Array.isArray(pendingResult.invitations))
+      ? pendingResult.invitations
+      : Array.isArray(pendingResult) ? pendingResult : [];
 
     // Normalize: extract LinkedIn URLs from pending invitations
-    // BeReach may return profileUrl or url field
     var pendingUrls = new Set();
-    if (Array.isArray(pendingInvitations)) {
-      for (var p = 0; p < pendingInvitations.length; p++) {
-        var inv = pendingInvitations[p];
-        var url = inv.profileUrl || inv.profile_url || inv.url || "";
-        if (url) {
-          pendingUrls.add(url.toLowerCase().replace(/\/$/, ""));
-        }
+    for (var p = 0; p < pendingInvitations.length; p++) {
+      var inv = pendingInvitations[p];
+      var url = inv.profileUrl || inv.profile_url || inv.url || inv.profile || "";
+      if (url) {
+        pendingUrls.add(url.toLowerCase().replace(/\/$/, ""));
       }
     }
 
-    await log(runId, "task-c-followup", "info", "Found " + pendingUrls.size + " pending invitations from BeReach");
+    var totalPending = pendingResult && pendingResult.total != null ? pendingResult.total : pendingInvitations.length;
+    await log(runId, "task-c-followup", "info", "Found " + pendingUrls.size + " pending invitations from BeReach (total reported: " + totalPending + ")");
 
-    // SAFETY GUARD: if BeReach returns 0 pending invitations, it likely means the API
-    // returned an empty/failed response — skip detection to avoid false positives.
-    // Without this, ALL invitation_sent leads would be wrongly marked as connected.
+    // SAFETY GUARD: if BeReach returns 0 pending invitations, skip detection.
+    // Could mean all were accepted OR the API is broken — either way don't mark everyone as connected.
+    // Connection detection is now primarily manual via the Invitations page.
     if (pendingUrls.size === 0) {
-      await log(runId, "task-c-followup", "warn", "BeReach returned 0 pending invitations — skipping connection detection to avoid false positives");
+      await log(runId, "task-c-followup", "warn", "BeReach returned 0 pending invitations — skipping connection detection (use Invitations page for manual confirmation)");
     } else {
     // Get leads with status 'invitation_sent'
     var { data: invitedLeads, error: invitedErr } = await supabase
