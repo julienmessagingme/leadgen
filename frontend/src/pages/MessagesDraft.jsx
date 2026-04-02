@@ -23,6 +23,8 @@ function useRejectMessage() {
 
 export default function MessagesDraft() {
   const [editedMessages, setEditedMessages] = useState({});
+  const [pendingIds, setPendingIds] = useState({});
+  const [errors, setErrors] = useState({});
   const { data, isLoading, refetch } = useLeads({
     status: "message_pending",
     sort: "icp_score",
@@ -36,11 +38,32 @@ export default function MessagesDraft() {
 
   const handleApprove = (lead) => {
     const message = editedMessages[lead.id] ?? lead.metadata?.draft_message ?? "";
-    approve.mutate({ id: lead.id, message }, { onSuccess: () => refetch() });
+    setPendingIds((p) => ({ ...p, [lead.id]: "approving" }));
+    setErrors((e) => ({ ...e, [lead.id]: null }));
+    approve.mutate(
+      { id: lead.id, message },
+      {
+        onSuccess: () => { setPendingIds((p) => { const n = { ...p }; delete n[lead.id]; return n; }); refetch(); },
+        onError: (err) => {
+          setPendingIds((p) => { const n = { ...p }; delete n[lead.id]; return n; });
+          setErrors((e) => ({ ...e, [lead.id]: err?.response?.data?.error || err?.message || "Erreur inconnue" }));
+        },
+      }
+    );
   };
 
   const handleReject = (lead) => {
-    reject.mutate({ id: lead.id }, { onSuccess: () => refetch() });
+    setPendingIds((p) => ({ ...p, [lead.id]: "rejecting" }));
+    reject.mutate(
+      { id: lead.id },
+      {
+        onSuccess: () => { setPendingIds((p) => { const n = { ...p }; delete n[lead.id]; return n; }); refetch(); },
+        onError: (err) => {
+          setPendingIds((p) => { const n = { ...p }; delete n[lead.id]; return n; });
+          setErrors((e) => ({ ...e, [lead.id]: err?.response?.data?.error || err?.message || "Erreur inconnue" }));
+        },
+      }
+    );
   };
 
   return (
@@ -68,8 +91,9 @@ export default function MessagesDraft() {
           {leads.map((lead) => {
             const draft = editedMessages[lead.id] ?? lead.metadata?.draft_message ?? "";
             const postText = lead.metadata?.post_text;
-            const isApproving = approve.isPending;
-            const isRejecting = reject.isPending;
+            const isApproving = pendingIds[lead.id] === "approving";
+            const isRejecting = pendingIds[lead.id] === "rejecting";
+            const errorMsg = errors[lead.id];
 
             return (
               <div key={lead.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
@@ -109,6 +133,13 @@ export default function MessagesDraft() {
                     setEditedMessages((prev) => ({ ...prev, [lead.id]: e.target.value }))
                   }
                 />
+
+                {/* Error */}
+                {errorMsg && (
+                  <div className="mt-2 text-xs text-red-600 bg-red-50 rounded px-3 py-2 border border-red-200">
+                    ⚠ {errorMsg}
+                  </div>
+                )}
 
                 {/* Actions */}
                 <div className="flex gap-2 mt-3">
