@@ -53,6 +53,12 @@ module.exports = async function taskCFollowup(runId) {
 
     await log(runId, "task-c-followup", "info", "Found " + pendingUrls.size + " pending invitations from BeReach");
 
+    // SAFETY GUARD: if BeReach returns 0 pending invitations, it likely means the API
+    // returned an empty/failed response — skip detection to avoid false positives.
+    // Without this, ALL invitation_sent leads would be wrongly marked as connected.
+    if (pendingUrls.size === 0) {
+      await log(runId, "task-c-followup", "warn", "BeReach returned 0 pending invitations — skipping connection detection to avoid false positives");
+    } else {
     // Get leads with status 'invitation_sent'
     var { data: invitedLeads, error: invitedErr } = await supabase
       .from("leads")
@@ -92,6 +98,7 @@ module.exports = async function taskCFollowup(runId) {
     }
 
     await log(runId, "task-c-followup", "info", "Connection detection complete: " + connectionsDetected + " new connections found");
+    } // end pendingUrls.size > 0 guard
   } catch (err) {
     await log(runId, "task-c-followup", "error", "Connection detection failed: " + err.message);
     // Continue to follow-up phase -- some connections may already have status 'connected'
