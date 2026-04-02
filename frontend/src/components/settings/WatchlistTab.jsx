@@ -88,7 +88,7 @@ function CreditGauge({ sources }) {
       </div>
 
       {/* Projected daily bar: P1 (fixed) + P2 (rotation) + P3 (fills remaining) */}
-      <div className="mb-1">
+      <div className="mb-3">
         <div className="flex justify-between items-baseline mb-1">
           <span className="text-xs font-medium text-gray-600">Projection journaliere</span>
           <span className="text-xs font-mono font-semibold text-gray-700">{totalProjected}/{DAILY_LIMIT}</span>
@@ -99,6 +99,26 @@ function CreditGauge({ sources }) {
           {p3Credits > 0 && <div className="bg-gray-400 h-4 transition-all" style={{ width: pct(p3Credits) + "%" }} title={"P3: " + p3Credits + " credits"} />}
         </div>
       </div>
+
+      {/* Historical: last 3 days */}
+      {hist.some((h) => h.used > 0) && (
+        <div className="border-t border-gray-100 pt-2">
+          <p className="text-xs font-medium text-gray-500 mb-1.5">Historique (credits hors collection)</p>
+          <div className="flex gap-3">
+            {hist.map((h) => (
+              <div key={h.day} className="flex-1">
+                <div className="flex justify-between text-xs text-gray-500 mb-0.5">
+                  <span>{h.label}</span>
+                  <span className="font-mono">{h.used}</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="bg-indigo-400 h-2 rounded-full transition-all" style={{ width: pct(h.used) + "%" }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

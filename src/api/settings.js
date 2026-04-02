@@ -373,22 +373,24 @@ router.get("/bereach-credits", async (req, res) => {
       const { data: logs, error: logErr } = await supabase
         .from("logs")
         .select("created_at, message")
-        .like("message", "%credits:%")
+        .like("message", "%for collection%")
         .gte("created_at", new Date(Date.now() - 4 * 86400000).toISOString())
         .order("created_at", { ascending: false });
 
       if (logErr) return res.status(500).json({ error: logErr.message });
 
-      // Parse credit values from log messages and group by day
+      // Parse credit values from Task A budget log:
+      // "Budget: 300 - X (Task C) - Y (Task B) - Z (mark-connected) - 30 (enrichment) = W for collection"
       const days = {};
       (logs || []).forEach((l) => {
         const day = l.created_at.substring(0, 10);
-        const match = l.message.match(/credits: (\d+)\/(\d+)/);
+        const match = l.message.match(/Budget: (\d+) - .* = (\d+) for collection/);
         if (match) {
-          const used = parseInt(match[1]);
-          const budget = parseInt(match[2]);
-          if (!days[day] || used > days[day].credits_used) {
-            days[day] = { day, credits_used: used, budget };
+          const total = parseInt(match[1]);
+          const collectionBudget = parseInt(match[2]);
+          const credits_used = total - collectionBudget; // taskC + taskB + markConnected + enrichReserve
+          if (!days[day] || credits_used > days[day].credits_used) {
+            days[day] = { day, credits_used, budget: total };
           }
         }
       });

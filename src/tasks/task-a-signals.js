@@ -194,6 +194,7 @@ module.exports = async function taskASignals(runId) {
     var TOTAL_BUDGET = 300;
 
     // Check how many credits Task C used today (follow-ups = 2 credits each)
+    // Note: getSentInvitations() is still called in Task C (1 credit) even when BeReach returns 0
     var taskCCredits = 0;
     try {
       var { count: followUpCount } = await supabase
@@ -201,7 +202,7 @@ module.exports = async function taskASignals(runId) {
         .select("id", { count: "exact", head: true })
         .not("follow_up_sent_at", "is", null)
         .gte("follow_up_sent_at", todayStart);
-      taskCCredits = 1 + (followUpCount || 0) * 2; // 1 = getSentInvitations + 2 per follow-up
+      taskCCredits = (followUpCount || 0) * 2; // 2 credits per follow-up sent (getSentInvitations removed — broken endpoint)
     } catch (e) { /* ignore */ }
 
     // Check how many credits Task B used today (invitations = 1 credit each)
@@ -215,9 +216,20 @@ module.exports = async function taskASignals(runId) {
       taskBCredits = invitationCount || 0;
     } catch (e) { /* ignore */ }
 
-    var collectionBudget = TOTAL_BUDGET - taskCCredits - taskBCredits - ENRICHMENT_RESERVE;
+    // Check credits used by manual mark-connected today (enrichment = 2 credits each)
+    var markConnectedCredits = 0;
+    try {
+      var { count: connectedCount } = await supabase
+        .from("leads")
+        .select("id", { count: "exact", head: true })
+        .not("connected_at", "is", null)
+        .gte("connected_at", todayStart);
+      markConnectedCredits = (connectedCount || 0) * 2;
+    } catch (e) { /* ignore */ }
+
+    var collectionBudget = TOTAL_BUDGET - taskCCredits - taskBCredits - markConnectedCredits - ENRICHMENT_RESERVE;
     await log(runId, "task-a-signals", "info",
-      "Budget: " + TOTAL_BUDGET + " - " + taskCCredits + " (Task C) - " + taskBCredits + " (Task B) - " + ENRICHMENT_RESERVE + " (enrichment) = " + collectionBudget + " for collection");
+      "Budget: " + TOTAL_BUDGET + " - " + taskCCredits + " (Task C) - " + taskBCredits + " (Task B) - " + markConnectedCredits + " (mark-connected) - " + ENRICHMENT_RESERVE + " (enrichment) = " + collectionBudget + " for collection");
 
     if (collectionBudget <= 0) {
       await log(runId, "task-a-signals", "warn",
