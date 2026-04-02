@@ -9,6 +9,7 @@ import Settings from "./pages/Settings";
 import ColdOutbound from "./pages/ColdOutbound";
 import HubspotSignals from "./pages/HubspotSignals";
 import MessagesDraft from "./pages/MessagesDraft";
+import Invitations from "./pages/Invitations";
 
 const queryClient = new QueryClient();
 
@@ -88,6 +89,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <HubspotSignals />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/invitations"
+        element={
+          <ProtectedRoute>
+            <Invitations />
           </ProtectedRoute>
         }
       />

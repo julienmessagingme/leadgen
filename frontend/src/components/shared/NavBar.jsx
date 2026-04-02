@@ -5,6 +5,7 @@ const navItems = [
   { to: "/", label: "Dashboard", end: true },
   { to: "/pipeline", label: "Pipeline" },
   { to: "/sequences", label: "Sequences" },
+  { to: "/invitations", label: "🔗 Invitations" },
   { to: "/messages-draft", label: "✉ À valider" },
   { to: "/hubspot-signals", label: "Signaux HubSpot" },
   { to: "/cold-outbound", label: "Cold Outbound" },

@@ -16,7 +16,7 @@ const PII_NULLS = {
   headline: null,
 };
 
-const VALID_SORTS = ["icp_score", "created_at", "signal_date", "status", "scored_at"];
+const VALID_SORTS = ["icp_score", "created_at", "signal_date", "status", "scored_at", "invitation_sent_at"];
 
 /**
  * ISO-8601 date validation helper.
@@ -511,6 +511,70 @@ router.post("/:id/reject-message", async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error("POST /leads/:id/reject-message error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /:id/mark-connected -- Manual: Julien confirms invitation was accepted.
+ * Marks as connected, enriches, generates draft message → status message_pending.
+ */
+router.post("/:id/mark-connected", async (req, res) => {
+  try {
+    const { enrichLead } = require("../lib/enrichment");
+    const { generateFollowUpMessage, loadTemplates } = require("../lib/message-generator");
+
+    const { data: lead, error: fetchErr } = await supabase
+      .from("leads")
+      .select("*")
+      .eq("id", req.params.id)
+      .single();
+
+    if (fetchErr || !lead) return res.status(404).json({ error: "Lead not found" });
+    if (lead.status !== "invitation_sent") return res.status(400).json({ error: "Lead is not in invitation_sent status" });
+
+    await supabase.from("leads").update({
+      status: "connected",
+      connected_at: new Date().toISOString(),
+    }).eq("id", lead.id);
+
+    // Enrich with fresh profile + company data
+    let enrichedLead = { ...lead, status: "connected" };
+    try {
+      enrichedLead = await enrichLead(enrichedLead, "manual-connect");
+      await supabase.from("leads").update({
+        location: enrichedLead.location || lead.location,
+        company_name: enrichedLead.company_name || lead.company_name,
+        company_size: enrichedLead.company_size || lead.company_size,
+        company_sector: enrichedLead.company_sector || lead.company_sector,
+        company_location: enrichedLead.company_location || lead.company_location,
+        email: enrichedLead.email || lead.email,
+        seniority_years: enrichedLead.seniority_years || lead.seniority_years,
+        connections_count: enrichedLead.connections_count || lead.connections_count,
+        metadata: enrichedLead.metadata,
+      }).eq("id", lead.id);
+    } catch (enrichErr) {
+      console.warn("mark-connected: enrichment failed for", lead.full_name, enrichErr.message);
+    }
+
+    const templates = await loadTemplates();
+    const message = await generateFollowUpMessage(enrichedLead, templates);
+    if (!message) return res.status(500).json({ error: "Failed to generate message" });
+
+    const updatedMetadata = Object.assign({}, enrichedLead.metadata || {}, {
+      draft_message: message,
+      draft_run_id: "manual-connect-" + Date.now(),
+      draft_generated_at: new Date().toISOString(),
+    });
+
+    await supabase.from("leads").update({
+      status: "message_pending",
+      metadata: updatedMetadata,
+    }).eq("id", lead.id);
+
+    res.json({ ok: true, message });
+  } catch (err) {
+    console.error("POST /leads/:id/mark-connected error:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
