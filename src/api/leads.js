@@ -505,7 +505,7 @@ router.post("/:id/reject-message", async (req, res) => {
 
     await supabase
       .from("leads")
-      .update({ status: "connected", metadata: updatedMetadata })
+      .update({ status: "disqualified", metadata: updatedMetadata })
       .eq("id", lead.id);
 
     res.json({ ok: true });
