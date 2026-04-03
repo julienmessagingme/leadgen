@@ -68,6 +68,26 @@ async function rateLimitDelay() {
 }
 
 /**
+ * Recursively sanitize all string values in an object/array for Postgres JSONB.
+ * Removes lone surrogates and null bytes that cause "invalid json" errors.
+ */
+function sanitizeForDb(val) {
+  if (typeof val === "string") {
+    return val
+      .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/g, "")   // lone high surrogate
+      .replace(/(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "")   // lone low surrogate
+      .replace(/\0/g, "");                                     // null bytes
+  }
+  if (Array.isArray(val)) return val.map(sanitizeForDb);
+  if (val && typeof val === "object") {
+    var out = {};
+    Object.keys(val).forEach(function(k) { out[k] = sanitizeForDb(val[k]); });
+    return out;
+  }
+  return val;
+}
+
+/**
  * Task A: Full signal detection pipeline.
  * @param {string} runId - UUID from registerTask wrapper
  */
@@ -536,7 +556,7 @@ module.exports = async function taskASignals(runId) {
 
         var { error: insertError } = await supabase
           .from("leads")
-          .insert(leadRow);
+          .insert(sanitizeForDb(leadRow));
 
         if (insertError) {
           await log(runId, "task-a-signals", "warn",
