@@ -44,13 +44,9 @@ async function rateLimitDelay(min, max) {
 function formatSignals(profiles, signalType, signalCategory, source) {
   if (!Array.isArray(profiles)) return [];
 
-  return profiles.reduce(function (acc, p) {
+  return profiles.map(function (p) {
     // Handle various field naming from BeReach responses
     var linkedinUrl = p.profileUrl || p.profile_url || p.url || p.linkedin_url || null;
-
-    // Rejeter les URLs de type ACoAAA... (IDs internes LinkedIn) — BeReach ne peut pas
-    // les résoudre pour /visit ou /connect → 404/403 systématique
-    if (linkedinUrl && /\/in\/ACoA/i.test(linkedinUrl)) return acc;
 
     var firstName = p.firstName || p.first_name || null;
     var lastName = p.lastName || p.last_name || null;
@@ -79,9 +75,8 @@ function formatSignals(profiles, signalType, signalCategory, source) {
       comment_text: p.comment_text || null,
       post_author_name: p.post_author_name || null,
       post_author_headline: p.post_author_headline || null,
-    });
-    return acc;
-  }, []);
+    };
+  });
 }
 
 /**
