@@ -411,12 +411,12 @@ router.get("/bereach-credits", async (req, res) => {
 
 router.get("/cron", (req, res) => {
   res.json([
-    { task: "task-c-followup", label: "C - Follow-up", cron: "20 7 * * *", time: "07h20", days: "7j/7" },
-    { task: "task-b-invitations", label: "B - Invitations", cron: "25 7 * * *", time: "07h25", days: "7j/7" },
-    { task: "task-a-signals", label: "A - Signaux", cron: "30 7 * * *", time: "07h30", days: "7j/7" },
-    { task: "task-d-email", label: "D - Email", cron: "0 10 * * *", time: "10h00", days: "7j/7" },
-    { task: "task-e-whatsapp", label: "E - WhatsApp", cron: "30 10 * * *", time: "10h30", days: "7j/7" },
-    { task: "whatsapp-poll", label: "WhatsApp Poll", cron: "*/15 9-18 * * *", time: "Toutes les 15min", days: "7j/7 9h-18h" },
+    { task: "task-c-followup", label: "C - Follow-up", cron: "20 7 * * 1-6", time: "07h20", days: "Lun-Sam" },
+    { task: "task-b-invitations", label: "B - Invitations", cron: "25 7 * * 1-6", time: "07h25", days: "Lun-Sam" },
+    { task: "task-a-signals", label: "A - Signaux", cron: "30 7 * * 1-6", time: "07h30", days: "Lun-Sam" },
+    { task: "task-d-email", label: "D - Email", cron: "0 10 * * 1-6", time: "10h00", days: "Lun-Sam" },
+    { task: "task-e-whatsapp", label: "E - WhatsApp", cron: "30 10 * * 1-6", time: "10h30", days: "Lun-Sam" },
+    { task: "whatsapp-poll", label: "WhatsApp Poll", cron: "*/15 9-18 * * 1-6", time: "Toutes les 15min", days: "Lun-Sam 9h-18h" },
   ]);
 });
 

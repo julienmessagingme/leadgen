@@ -40,17 +40,17 @@ function registerTask(name, cronExpression, taskFn) {
   );
 }
 
-// Register all pipeline tasks (7 days/week)
-registerTask("task-c-followup",   "20 7 * * *",      taskCFollowup);    // 07h20 (enrich + follow-up messages)
-registerTask("task-b-invitations","25 7 * * *",      taskBInvitations); // 07h25 (invitations BEFORE Task A)
-registerTask("task-a-signals",    "30 7 * * *",      taskASignals);     // 07h30 (collect + score + enrich top 30)
+// Register all pipeline tasks (lun-sam, pas de dimanche)
+registerTask("task-c-followup",   "20 7 * * 1-6",      taskCFollowup);    // 07h20
+registerTask("task-b-invitations","25 7 * * 1-6",      taskBInvitations); // 07h25
+registerTask("task-a-signals",    "30 7 * * 1-6",      taskASignals);     // 07h30
 // Task F (morning InMail brief) DISABLED — replaced by 10-day InMail validation queue (à implémenter)
-// registerTask("task-f-briefing",   "30 8 * * *",      taskFBriefing);    // 08h30
-registerTask("task-d-email",      "0 10 * * *",      taskDEmail);       // 10h00
-registerTask("task-e-whatsapp",   "30 10 * * *",     taskEWhatsapp);    // 10h30
+// registerTask("task-f-briefing",   "30 8 * * 1-6",      taskFBriefing);    // 08h30
+registerTask("task-d-email",      "0 10 * * 1-6",      taskDEmail);       // 10h00
+registerTask("task-e-whatsapp",   "30 10 * * 1-6",     taskEWhatsapp);    // 10h30
 
-// WhatsApp template approval polling (every 15 min, 9h-18h, 7j/7)
-registerTask("whatsapp-poll",     "*/15 9-18 * * *", whatsappPoll);     // every 15 min
+// WhatsApp template approval polling (every 15 min, 9h-18h, lun-sam)
+registerTask("whatsapp-poll",     "*/15 9-18 * * 1-6", whatsappPoll);     // every 15 min
 
 // Log cleanup -- delete logs older than 30 days (daily at 02:00, every day including weekends)
 registerTask("log-cleanup", "0 2 * * *", async (runId) => {
@@ -63,4 +63,4 @@ registerTask("log-cleanup", "0 2 * * *", async (runId) => {
   console.log("Log cleanup completed: deleted " + (count || 0) + " logs older than 30 days");
 });
 
-console.log("Scheduler started: 7 tasks registered (7j/7 pipeline, daily log-cleanup, Europe/Paris)");
+console.log("Scheduler started: 7 tasks registered (lun-sam pipeline, daily log-cleanup, Europe/Paris)");
