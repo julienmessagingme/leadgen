@@ -1,4 +1,5 @@
 const { getAnthropicClient } = require("./anthropic");
+const { generateText } = require("./gemini");
 const { supabase } = require("./supabase");
 const { log } = require("./logger");
 
@@ -514,12 +515,8 @@ async function scoreLeadsBatch(leads, rules, runId) {
 
   var results;
   try {
-    var response = await getAnthropicClient().messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: Math.max(512, 300 * leads.length),
-      messages: [{ role: "user", content: prompt }],
-    });
-    var rawText = response.content[0].text.trim().replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
+    var rawText = await generateText(prompt, Math.max(512, 300 * leads.length));
+    rawText = rawText.trim().replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
     results = JSON.parse(rawText).results;
   } catch (err) {
     // Batch call failed — throw so task-a-signals.js increments rawErrors correctly
