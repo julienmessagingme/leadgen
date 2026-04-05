@@ -21,10 +21,12 @@ function getGeminiClient() {
  */
 async function generateText(prompt, maxTokens) {
   const model = getGeminiClient().getGenerativeModel({
-    model: "gemini-2.5-flash-preview-04-17",
+    model: "gemini-2.5-flash",
     generationConfig: {
-      maxOutputTokens: maxTokens || 512,
+      // Thinking tokens consomment le budget output — multiplier par 5 pour compenser
+      maxOutputTokens: (maxTokens || 512) * 5,
       temperature: 0,
+      thinkingConfig: { thinkingBudget: 0 },
     },
   });
   const result = await model.generateContent(prompt);
