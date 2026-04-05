@@ -21,7 +21,7 @@ function getGeminiClient() {
  */
 async function generateText(prompt, maxTokens) {
   const model = getGeminiClient().getGenerativeModel({
-    model: "gemini-2.0-flash-lite",
+    model: "gemini-2.5-flash-preview-04-17",
     generationConfig: {
       maxOutputTokens: maxTokens || 512,
       temperature: 0,
