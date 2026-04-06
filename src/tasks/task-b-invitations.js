@@ -107,7 +107,25 @@ module.exports = async function taskBInvitations(runId) {
     return;
   }
 
-  await log(runId, "task-b-invitations", "info", "Selected " + leads.length + " leads for invitation");
+  // Filter out leads that have failed 3+ times (broken ACoA session, deleted profiles, etc.)
+  var beforeFilter = leads.length;
+  leads = leads.filter(function (l) {
+    var failures = (l.metadata && l.metadata.invitation_failures) || 0;
+    return failures < 3;
+  });
+  var filteredOut = beforeFilter - leads.length;
+
+  // Sort: slug URLs first (non-ACoA), then ACoA — slug URLs are more likely to succeed
+  leads.sort(function (a, b) {
+    var aIsAcoa = a.linkedin_url && a.linkedin_url.includes("/ACoA") ? 1 : 0;
+    var bIsAcoa = b.linkedin_url && b.linkedin_url.includes("/ACoA") ? 1 : 0;
+    if (aIsAcoa !== bIsAcoa) return aIsAcoa - bIsAcoa;
+    return (b.icp_score || 0) - (a.icp_score || 0); // within same type, keep score order
+  });
+
+  await log(runId, "task-b-invitations", "info",
+    "Selected " + leads.length + " leads for invitation" +
+    (filteredOut > 0 ? " (" + filteredOut + " skipped: 3+ prior failures)" : ""));
 
   // Cache templates once before lead loop (PERF-08)
   var templates = await loadTemplates();
@@ -188,6 +206,19 @@ module.exports = async function taskBInvitations(runId) {
     } catch (err) {
       errors++;
       await log(runId, "task-b-invitations", "error", "Failed to invite " + (lead.full_name || lead.id) + ": " + err.message);
+
+      // Track failure count so we stop retrying broken leads
+      var prevFailures = (lead.metadata && lead.metadata.invitation_failures) || 0;
+      await supabase.from("leads").update({
+        metadata: Object.assign({}, lead.metadata || {}, {
+          invitation_failures: prevFailures + 1,
+          last_invitation_error: err.message.substring(0, 200),
+        }),
+        last_processed_run_id: runId,
+      }).eq("id", lead.id);
+
+      // Sleep after error to avoid hammering BeReach (5-10s)
+      await sleep(5000 + Math.floor(Math.random() * 5000));
     }
   }
 
