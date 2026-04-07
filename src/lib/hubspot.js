@@ -97,4 +97,46 @@ async function existsInHubspotByEmail(email) {
   }
 }
 
-module.exports = { existsInHubspot, existsInHubspotByEmail };
+/**
+ * Find a contact's email in HubSpot by first name, last name, and optional company.
+ * Used to avoid calling Fullenrich when we already have the email in HubSpot.
+ * Fails open: returns null on any error.
+ *
+ * @param {string} firstName
+ * @param {string} lastName
+ * @param {string|null} companyName
+ * @returns {Promise<string|null>} Email address or null
+ */
+async function findEmailInHubspot(firstName, lastName, companyName) {
+  if (!firstName || !lastName) return null;
+
+  try {
+    const client = getClient();
+    if (!client) return null;
+
+    const filters = [
+      { propertyName: "firstname", operator: "EQ", value: firstName },
+      { propertyName: "lastname", operator: "EQ", value: lastName },
+    ];
+
+    if (companyName) {
+      filters.push({ propertyName: "company", operator: "EQ", value: companyName });
+    }
+
+    const response = await client.crm.contacts.searchApi.doSearch({
+      filterGroups: [{ filters }],
+      properties: ["email", "firstname", "lastname", "company"],
+      limit: 1,
+    });
+
+    if (response.total > 0 && response.results[0].properties.email) {
+      return response.results[0].properties.email;
+    }
+    return null;
+  } catch (err) {
+    console.error("HubSpot findEmail failed:", err.message);
+    return null;
+  }
+}
+
+module.exports = { existsInHubspot, existsInHubspotByEmail, findEmailInHubspot };

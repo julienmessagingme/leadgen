@@ -14,7 +14,7 @@
 
 const { supabase } = require("../lib/supabase");
 const { enrichContactInfo } = require("../lib/fullenrich");
-const { existsInHubspotByEmail } = require("../lib/hubspot");
+const { existsInHubspotByEmail, findEmailInHubspot } = require("../lib/hubspot");
 const { searchInbox, sleep } = require("../lib/bereach");
 const { isSuppressed } = require("../lib/suppression");
 const { generateEmail, isColdLead, loadTemplates } = require("../lib/message-generator");
@@ -208,8 +208,26 @@ module.exports = async function taskDEmail(runId) {
         continue;
       }
 
-      // Step 1: FullEnrich email enrichment
-      var email = await checkEmail(lead, runId);
+      // Step 0: Check HubSpot first for existing email (avoids wasting Fullenrich credits)
+      var hubspotEmail = await findEmailInHubspot(
+        lead.first_name, lead.last_name, lead.company_name
+      );
+      if (hubspotEmail) {
+        lead.email = hubspotEmail;
+        lead.metadata = Object.assign({}, lead.metadata || {}, {
+          email_verified: true,
+          email_source: "hubspot",
+        });
+        await supabase.from("leads").update({
+          email: hubspotEmail,
+          metadata: lead.metadata,
+        }).eq("id", lead.id);
+        await log(runId, TASK_NAME, "info", "Email found in HubSpot for " + (lead.full_name || lead.id) + " — skipping Fullenrich",
+          { lead_id: lead.id, email: hubspotEmail });
+      }
+
+      // Step 1: FullEnrich email enrichment (only if no HubSpot email)
+      var email = hubspotEmail || await checkEmail(lead, runId);
       if (!email) {
         skipped.no_email++;
         continue;
