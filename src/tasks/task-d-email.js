@@ -61,7 +61,11 @@ async function checkEmail(lead, runId) {
     return lead.email;
   }
 
-  var result = await enrichContactInfo(lead.linkedin_url, runId);
+  var result = await enrichContactInfo(lead.linkedin_url, runId, {
+    firstName: lead.first_name,
+    lastName: lead.last_name,
+    companyName: lead.company_name,
+  });
 
   if (!result || !result.email) {
     await log(runId, TASK_NAME, "info", "FullEnrich returned no email",

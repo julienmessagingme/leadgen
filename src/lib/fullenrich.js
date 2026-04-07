@@ -1,38 +1,29 @@
 /**
  * FullEnrich async email/phone enrichment module.
- * Submits a LinkedIn profile URL for enrichment, then polls for results.
- * Returns verified email/phone only if confidence is high or medium.
- *
- * ENR-06: Enrichissement email/phone via FullEnrich
- *
- * FullEnrich is async: submit request, then poll until complete.
- * Webhook is not used -- polling is simpler for this use case.
- *
- * This module is created now (Phase 2) for the enrichment pipeline,
- * but is actively used before email outreach (Phase 3).
+ * Uses the bulk enrichment endpoint (single contact per call).
+ * Submits a LinkedIn profile URL + optional name/company, then polls for results.
+ * Returns verified email/phone only if status is DELIVERABLE.
  */
 
 const { log } = require("./logger");
 
-/** FullEnrich API base URL. */
-const FULLENRICH_BASE = "https://api.fullenrich.com/api/v1";
+/** FullEnrich API base URL (app.fullenrich.com, NOT api.fullenrich.com). */
+const FULLENRICH_BASE = "https://app.fullenrich.com/api/v1";
 
 /** Polling interval in milliseconds (30 seconds). */
 const POLL_INTERVAL_MS = 30000;
 
-/** Maximum number of polling attempts (10 attempts = 5 minutes max). */
-const MAX_POLL_ATTEMPTS = 10;
-
-/** Accepted confidence levels for returning results. */
-const ACCEPTED_CONFIDENCE = ["high", "medium"];
+/** Maximum number of polling attempts (6 attempts = 3 minutes max). */
+const MAX_POLL_ATTEMPTS = 6;
 
 /**
  * Enrich a lead's contact info (email/phone) via FullEnrich.
  * @param {string} linkedinUrl - LinkedIn profile URL to enrich
  * @param {string} runId - UUID for this pipeline run
+ * @param {object} [extra] - Optional { firstName, lastName, companyName } to improve match rate
  * @returns {Promise<object|null>} { email, phone, confidence } or null
  */
-async function enrichContactInfo(linkedinUrl, runId) {
+async function enrichContactInfo(linkedinUrl, runId, extra) {
   var apiKey = process.env.FULLENRICH_API_KEY;
   if (!apiKey) {
     await log(runId, "fullenrich", "warn",
@@ -44,16 +35,28 @@ async function enrichContactInfo(linkedinUrl, runId) {
     return null;
   }
 
+  // Build contact object — linkedin_url is the primary input
+  var contact = {
+    linkedin_url: linkedinUrl,
+    enrich_fields: ["contact.emails"],
+  };
+  if (extra) {
+    if (extra.firstName) contact.firstname = extra.firstName;
+    if (extra.lastName) contact.lastname = extra.lastName;
+    if (extra.companyName) contact.company_name = extra.companyName;
+  }
+
   try {
-    // Step 1: Submit enrichment request
-    var submitRes = await fetch(FULLENRICH_BASE + "/enrich", {
+    // Step 1: Submit bulk enrichment (single contact)
+    var submitRes = await fetch(FULLENRICH_BASE + "/contact/enrich/bulk", {
       method: "POST",
       headers: {
         "Authorization": "Bearer " + apiKey,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        linkedin_url: linkedinUrl,
+        name: "leadgen-" + Date.now(),
+        datas: [contact],
       }),
     });
 
@@ -66,11 +69,11 @@ async function enrichContactInfo(linkedinUrl, runId) {
     }
 
     var submitData = await submitRes.json();
-    var enrichmentId = submitData.id || submitData.enrichment_id;
+    var enrichmentId = submitData.enrichment_id;
 
     if (!enrichmentId) {
       await log(runId, "fullenrich", "warn",
-        "FullEnrich did not return an enrichment ID",
+        "FullEnrich did not return an enrichment_id",
         { linkedin_url: linkedinUrl, response: submitData });
       return null;
     }
@@ -83,7 +86,7 @@ async function enrichContactInfo(linkedinUrl, runId) {
     for (var attempt = 1; attempt <= MAX_POLL_ATTEMPTS; attempt++) {
       await sleep(POLL_INTERVAL_MS);
 
-      var pollRes = await fetch(FULLENRICH_BASE + "/enrich/" + enrichmentId, {
+      var pollRes = await fetch(FULLENRICH_BASE + "/contact/enrich/bulk/" + enrichmentId, {
         method: "GET",
         headers: {
           "Authorization": "Bearer " + apiKey,
@@ -99,42 +102,61 @@ async function enrichContactInfo(linkedinUrl, runId) {
 
       var pollData = await pollRes.json();
 
-      // Check if enrichment is complete
-      if (pollData.status === "completed" || pollData.status === "done") {
-        var confidence = (pollData.confidence || pollData.email_confidence || "").toLowerCase();
-
-        // Only return if confidence is high or medium
-        if (ACCEPTED_CONFIDENCE.includes(confidence)) {
+      if (pollData.status === "FINISHED") {
+        // Extract first contact result
+        var datas = pollData.datas;
+        if (!datas || datas.length === 0 || !datas[0].contact) {
           await log(runId, "fullenrich", "info",
-            "FullEnrich returned verified contact info",
-            { linkedin_url: linkedinUrl, confidence: confidence, has_email: !!pollData.email, has_phone: !!pollData.phone });
-
-          return {
-            email: pollData.email || null,
-            phone: pollData.phone || pollData.mobile_phone || null,
-            confidence: confidence,
-          };
-        } else {
-          await log(runId, "fullenrich", "info",
-            "FullEnrich result confidence too low: " + confidence,
-            { linkedin_url: linkedinUrl, confidence: confidence });
+            "FullEnrich finished but no contact data returned",
+            { linkedin_url: linkedinUrl, enrichment_id: enrichmentId });
           return null;
         }
+
+        var c = datas[0].contact;
+        var email = c.most_probable_email || null;
+        var emailStatus = (c.most_probable_email_status || "").toUpperCase();
+        var phone = c.most_probable_phone || null;
+        var credits = pollData.cost ? pollData.cost.credits : 0;
+
+        // Only return if email is DELIVERABLE
+        if (email && emailStatus === "DELIVERABLE") {
+          await log(runId, "fullenrich", "info",
+            "FullEnrich returned verified email (" + credits + " credits)",
+            { linkedin_url: linkedinUrl, email: email, has_phone: !!phone, credits: credits });
+
+          return {
+            email: email,
+            phone: phone,
+            confidence: "high",
+          };
+        }
+
+        // Email found but not deliverable
+        if (email) {
+          await log(runId, "fullenrich", "info",
+            "FullEnrich email not deliverable: " + emailStatus + " (" + credits + " credits)",
+            { linkedin_url: linkedinUrl, email: email, status: emailStatus });
+        } else {
+          await log(runId, "fullenrich", "info",
+            "FullEnrich found no email (" + credits + " credits)",
+            { linkedin_url: linkedinUrl });
+        }
+        return null;
       }
 
       // Still processing
-      if (pollData.status === "pending" || pollData.status === "processing") {
+      if (pollData.status === "IN_PROGRESS" || pollData.status === "PENDING") {
         continue;
       }
 
-      // Unknown status -- likely an error
+      // Unknown/error status
       await log(runId, "fullenrich", "warn",
         "FullEnrich unexpected status: " + pollData.status,
         { enrichment_id: enrichmentId, status: pollData.status });
       return null;
     }
 
-    // Timeout: exhausted all poll attempts
+    // Timeout
     await log(runId, "fullenrich", "warn",
       "FullEnrich polling timed out after " + MAX_POLL_ATTEMPTS + " attempts",
       { linkedin_url: linkedinUrl, enrichment_id: enrichmentId });
@@ -148,10 +170,6 @@ async function enrichContactInfo(linkedinUrl, runId) {
   }
 }
 
-/**
- * Sleep helper for polling delay.
- * @param {number} ms - Milliseconds to wait
- */
 function sleep(ms) {
   return new Promise(function(resolve) { setTimeout(resolve, ms); });
 }
