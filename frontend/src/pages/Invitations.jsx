@@ -25,6 +25,7 @@ export default function Invitations() {
   const [pendingIds, setPendingIds] = useState({});
   const [doneIds, setDoneIds] = useState({});
   const [errors, setErrors] = useState({});
+  const [search, setSearch] = useState("");
 
   const { data, isLoading } = useLeads({
     status: "invitation_sent",
@@ -34,7 +35,15 @@ export default function Invitations() {
   });
 
   const markConnected = useMarkConnected();
-  const leads = data?.leads ?? [];
+  const allLeads = data?.leads ?? [];
+  const q = search.toLowerCase().trim();
+  const leads = q
+    ? allLeads.filter((l) =>
+        (l.full_name || "").toLowerCase().includes(q) ||
+        (l.company_name || "").toLowerCase().includes(q) ||
+        (l.headline || "").toLowerCase().includes(q)
+      )
+    : allLeads;
 
   const handleAccepted = (lead) => {
     setPendingIds((p) => ({ ...p, [lead.id]: true }));
@@ -62,7 +71,7 @@ export default function Invitations() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Invitations envoyées</h1>
             <p className="text-sm text-gray-500 mt-1">
-              {leads.length} invitation{leads.length !== 1 ? "s" : ""} en attente — marque ceux qui ont accepté sur LinkedIn
+              {leads.length}{q ? ` / ${allLeads.length}` : ""} invitation{leads.length !== 1 ? "s" : ""} en attente — marque ceux qui ont accepté sur LinkedIn
             </p>
           </div>
           {doneCount > 0 && (
@@ -73,6 +82,22 @@ export default function Invitations() {
               Voir les {doneCount} draft{doneCount > 1 ? "s" : ""} à valider →
             </button>
           )}
+        </div>
+
+        {/* Search bar */}
+        <div className="mb-4 relative">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Rechercher par nom, entreprise, titre..."
+            className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
+          />
         </div>
 
         {isLoading && (

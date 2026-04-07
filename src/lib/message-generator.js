@@ -19,6 +19,62 @@ function sanitizeForPrompt(value, maxLen = 200) {
 }
 
 /**
+ * Detect whether the prospect likely speaks English based on their profile.
+ * Checks headline, location, company name for English-language signals.
+ * GCC region (Dubai, KSA, Qatar, UAE) → always English.
+ * Non-French location + English headline → English.
+ */
+function detectLanguage(lead) {
+  var location = ((lead.location || "") + " " + (lead.company_location || "")).toLowerCase();
+  var headline = (lead.headline || "").toLowerCase();
+  var name = (lead.full_name || "").toLowerCase();
+
+  // GCC / Middle East → English
+  var gccPatterns = ["dubai", "abu dhabi", "uae", "united arab", "saudi", "ksa", "qatar", "doha", "bahrain", "oman", "kuwait", "riyadh", "jeddah"];
+  for (var i = 0; i < gccPatterns.length; i++) {
+    if (location.includes(gccPatterns[i])) return "en";
+  }
+
+  // Explicitly French-speaking countries → French
+  var frPatterns = ["france", "paris", "lyon", "marseille", "toulouse", "bordeaux", "lille", "nantes", "strasbourg", "belgique", "belgium", "bruxelles", "brussels", "suisse", "switzerland", "geneve", "geneva", "lausanne", "luxembourg", "montreal", "quebec"];
+  var isFrenchLocation = false;
+  for (var j = 0; j < frPatterns.length; j++) {
+    if (location.includes(frPatterns[j])) { isFrenchLocation = true; break; }
+  }
+
+  // If location is French-speaking, default to French
+  if (isFrenchLocation) return "fr";
+
+  // English-speaking headline keywords (job titles typically in English)
+  var enHeadlinePatterns = ["head of", "chief", "ceo", "cto", "cmo", "coo", "vp ", "vice president", "director", "manager", "lead", "officer", "founder", "co-founder", "partner", "consultant", "advisor", "engineer", "developer", "product", "growth", "marketing", "sales", "business development", "customer success", "digital", "strategy"];
+  var frHeadlinePatterns = ["directeur", "directrice", "responsable", "chef de", "gerant", "fondateur", "fondatrice", "charge", "chargee", "conseiller", "conseillere", "adjoint", "adjointe", "ingenieur"];
+
+  var enScore = 0;
+  var frScore = 0;
+  for (var k = 0; k < enHeadlinePatterns.length; k++) {
+    if (headline.includes(enHeadlinePatterns[k])) enScore++;
+  }
+  for (var m = 0; m < frHeadlinePatterns.length; m++) {
+    if (headline.includes(frHeadlinePatterns[m])) frScore++;
+  }
+
+  // Non-French location + English headline → English
+  if (!isFrenchLocation && enScore > 0 && frScore === 0) return "en";
+
+  // English-speaking countries → English
+  var enLocations = ["united states", "usa", "uk", "united kingdom", "london", "new york", "canada", "australia", "singapore", "hong kong", "india", "mumbai", "delhi", "bangalore", "hyderabad", "chennai", "pune", "germany", "berlin", "munich", "netherlands", "amsterdam", "spain", "madrid", "barcelona", "italy", "milan", "rome", "portugal", "lisbon", "ireland", "dublin", "sweden", "stockholm", "norway", "oslo", "denmark", "copenhagen", "finland", "helsinki", "poland", "warsaw", "japan", "tokyo", "korea", "seoul", "nigeria", "lagos", "south africa", "johannesburg", "kenya", "nairobi"];
+  for (var n = 0; n < enLocations.length; n++) {
+    if (location.includes(enLocations[n])) return "en";
+  }
+
+  // If no location but headline is clearly English → English
+  if (!location.trim() && enScore > 0 && frScore === 0) return "en";
+
+  // Default: French
+  return "fr";
+}
+
+/**
  * Default template instructions (used as fallback when settings table is unavailable).
  */
 var DEFAULT_INVITATION_TEMPLATE =
@@ -36,8 +92,9 @@ var DEFAULT_EMAIL_TEMPLATE =
   "2. APPORTER DE LA VALEUR : Partager un insight, une tendance, un retour d'experience concret sur le sujet du signal. Pas un pitch produit.\n" +
   "3. SI SIGNAL CONCURRENT : Se positionner comme consultant en strategie conversationnelle. On aide a choisir les bons canaux, la bonne approche. Notre techno vient en complement.\n" +
   "4. CTA LEGER : Proposer un echange rapide (15 min), pas un 'demo produit'. Lien Calendly : {calendlyUrl}\n" +
-  "5. FORMAT : Objet court et accrocheur (pas 'Relance' ou 'Suite a'). Corps : 4-6 phrases. HTML simple. Signature : juste 'Julien' (PAS de titre, PAS de 'DG', PAS de 'Fondateur').\n" +
-  "6. EN FRANCAIS si le prospect est en France, EN ANGLAIS si zone GCC/international.";
+  "5. FORMAT : Objet court et accrocheur (pas 'Relance' ou 'Suite a'). Corps : 4-6 phrases. HTML simple.\n" +
+  "6. SIGNATURE : Terminer TOUJOURS par cette signature exacte (en HTML) :\\n<br><br>Julien Dumas<br>CEO MessagingMe<br><a href=\\\"https://www.messagingme.fr\\\">www.messagingme.fr</a>\n" +
+  "7. EN FRANCAIS si le prospect est en France, EN ANGLAIS si zone GCC/international.";
 
 var DEFAULT_WHATSAPP_TEMPLATE =
   "Redige un message WhatsApp pour ce prospect.\n\n" +
@@ -236,25 +293,35 @@ async function generateFollowUpMessage(lead, templates) {
   try {
     var tpl = templates || (await loadTemplates());
     var instructions = tpl.template_followup || DEFAULT_FOLLOWUP_TEMPLATE;
+    var lang = detectLanguage(lead);
 
-    // Two-step: generate core content only (no opener), then prepend "Bonjour [prénom], "
-    // This prevents Sonnet from inserting "Merci pour la connexion" between the opener and the substance
     var firstName = (lead.full_name || "").split(" ")[0];
+
+    // Adapt instructions based on detected language
+    var langInstruction = lang === "en"
+      ? "\n\nIMPORTANT: This prospect is NOT French-speaking. Write the message ENTIRELY IN ENGLISH. Use 'you' (informal professional tone). Do NOT use French words. The greeting 'Hi [firstname]' will be added automatically."
+      : "";
+
+    var jsonInstruction = lang === "en"
+      ? 'Reply in JSON: {"message": "..."}\nIMPORTANT: the message field does NOT start with "Hi", "Hey", "Thanks for connecting" or any greeting. It starts DIRECTLY with the substance (observation, question, insight about their work). The "Hi [firstname], " will be added automatically before your text.'
+      : "Reponds en JSON: {\"message\": \"...\"}\nIMPORTANT : le champ message NE COMMENCE PAS par 'Bonjour', 'Merci' ou une formule d intro. Il commence DIRECTEMENT par le fond (observation, question, constat sur leur metier). Le 'Bonjour [prenom]' sera ajoute automatiquement avant ton texte.";
+
     var result = await callClaude(SYSTEM,
-      instructions + "\n\n" +
+      instructions + langInstruction + "\n\n" +
       buildLeadContext(lead) + "\n\n" +
-      "Reponds en JSON: {\"message\": \"...\"}\n" +
-      "IMPORTANT : le champ message NE COMMENCE PAS par 'Bonjour', 'Merci' ou une formule d intro. Il commence DIRECTEMENT par le fond (observation, question, constat sur leur metier). Le 'Bonjour [prenom]' sera ajoute automatiquement avant ton texte.", 512);
+      jsonInstruction, 512);
 
     var core = (result.message || "").trim();
-    // Strip any opener Sonnet might have added anyway
-    core = core.replace(/^(bonjour\s+\w+[\s,!]*|merci pour la connexion[\s!]*|salut\s+\w+[\s,!]*)/i, "").trim();
+    // Strip any opener Sonnet might have added anyway (French or English)
+    core = core.replace(/^(bonjour\s+\w+[\s,!]*|merci pour la connexion[\s!]*|salut\s+\w+[\s,!]*|hi\s+\w+[\s,!]*|hey\s+\w+[\s,!]*|hello\s+\w+[\s,!]*|thanks for connecting[\s!]*)/i, "").trim();
     // Strip any MessagingMe mention (including dangling "Je dirige" / "je fondé" left behind)
     core = core.replace(/\s*(chez|via|avec|pour|de)\s+MessagingMe/gi, "").trim();
     core = core.replace(/\bMessagingMe\b/g, "").trim();
     core = core.replace(/\bje\s+dirige\s+[,.]?\s*/gi, "").trim();
     core = core.replace(/\s{2,}/g, " ").trim();
-    return core ? "Bonjour " + firstName + ", " + core : null;
+
+    var greeting = lang === "en" ? "Hi " + firstName + ", " : "Bonjour " + firstName + ", ";
+    return core ? greeting + core : null;
   } catch (err) {
     console.warn("generateFollowUpMessage failed:", err.message);
     return null;
@@ -271,14 +338,30 @@ async function generateEmail(lead, templates) {
     var calendlyUrl = process.env.CALENDLY_URL || "https://calendly.com/julien-messagingme";
     var tpl = templates || (await loadTemplates());
     var instructions = (tpl.template_email || DEFAULT_EMAIL_TEMPLATE).replace("{calendlyUrl}", calendlyUrl);
+    var lang = detectLanguage(lead);
+
+    var langInstruction = lang === "en"
+      ? "\n\nIMPORTANT: This prospect is NOT French-speaking. Write the ENTIRE email (subject + body) IN ENGLISH. Professional but warm tone."
+      : "";
 
     var result = await callClaude(SYSTEM,
-      instructions + "\n\n" +
+      instructions + langInstruction + "\n\n" +
       buildLeadContext(lead) + "\n" +
       "Email: " + sanitizeForPrompt(lead.email) + "\n\n" +
       'Reponds en JSON: {"subject": "...", "body": "<html>...</html>"}', 1024);
 
     if (!result.subject || !result.body) return null;
+
+    // Ensure signature is present at the end of the body
+    var signature = '<br><br>Julien Dumas<br>CEO MessagingMe<br><a href="https://www.messagingme.fr">www.messagingme.fr</a>';
+    if (!result.body.includes("Julien Dumas")) {
+      // Insert before closing </html> or </body> or at end
+      result.body = result.body.replace(/<\/(body|html)>/i, signature + "</$1>");
+      if (!result.body.includes("Julien Dumas")) {
+        result.body = result.body + signature;
+      }
+    }
+
     return { subject: result.subject, body: result.body };
   } catch (err) {
     console.warn("generateEmail failed:", err.message);

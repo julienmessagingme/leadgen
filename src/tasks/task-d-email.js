@@ -245,27 +245,27 @@ module.exports = async function taskDEmail(runId) {
         continue;
       }
 
-      // Send via Gmail SMTP
-      var messageId = await sendEmail(email, emailContent.subject, emailContent.body);
-
-      // Update lead status
+      // VALIDATION MODE: save email draft, do NOT send yet
+      // Julien reviews and approves manually from the frontend
       var metadata = lead.metadata || {};
-      metadata.email_subject = emailContent.subject;
-      metadata.email_message_id = messageId;
+      metadata.draft_email_subject = emailContent.subject;
+      metadata.draft_email_body = emailContent.body;
+      metadata.draft_email_to = email;
+      metadata.draft_email_run_id = runId;
+      metadata.draft_email_generated_at = new Date().toISOString();
 
       await supabase
         .from("leads")
         .update({
-          email_sent_at: new Date().toISOString(),
-          status: "email_sent",
+          status: "email_pending",
           metadata: metadata,
         })
         .eq("id", lead.id);
 
       sent++;
       var isCold = isColdLead(lead);
-      await log(runId, TASK_NAME, "info", "Email sent successfully" + (isCold ? " (cold)" : ""),
-        { lead_id: lead.id, email: email, message_id: messageId });
+      await log(runId, TASK_NAME, "info", "Email draft saved for " + (lead.full_name || lead.id) + " — awaiting manual approval" + (isCold ? " (cold)" : ""),
+        { lead_id: lead.id, email: email });
 
       // Rate limiting: 5-10s delay between emails
       if (i < leads.length - 1) {
@@ -283,7 +283,7 @@ module.exports = async function taskDEmail(runId) {
   var totalSkipped = skipped.no_email + skipped.hubspot + skipped.replied + skipped.suppressed + skipped.gen_failed + skipped.send_failed;
 
   await log(runId, TASK_NAME, "info",
-    "Task D complete: " + sent + " emails sent, " + totalSkipped + " skipped " +
+    "Task D complete: " + sent + " email drafts saved (awaiting approval), " + totalSkipped + " skipped " +
     "(no_email=" + skipped.no_email + ", hubspot=" + skipped.hubspot +
     ", replied=" + skipped.replied + ", suppressed=" + skipped.suppressed +
     ", gen_failed=" + skipped.gen_failed + ", send_failed=" + skipped.send_failed + ")",

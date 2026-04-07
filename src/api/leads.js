@@ -516,6 +516,93 @@ router.post("/:id/reject-message", async (req, res) => {
 });
 
 /**
+ * POST /:id/approve-email -- Send approved email draft via Gmail SMTP
+ * Body: { subject: "...", body: "..." } (optional — uses draft if not provided)
+ */
+router.post("/:id/approve-email", async (req, res) => {
+  try {
+    const { sendEmail } = require("../lib/gmail");
+
+    const { data: lead, error: fetchErr } = await supabase
+      .from("leads")
+      .select("*")
+      .eq("id", req.params.id)
+      .single();
+
+    if (fetchErr || !lead) return res.status(404).json({ error: "Lead not found" });
+    if (lead.status !== "email_pending") return res.status(400).json({ error: "Lead is not in email_pending status" });
+
+    const email = lead.metadata?.draft_email_to || lead.email;
+    if (!email) return res.status(400).json({ error: "No email address" });
+
+    const subject = (req.body.subject || "").trim() || lead.metadata?.draft_email_subject;
+    const body = (req.body.body || "").trim() || lead.metadata?.draft_email_body;
+    if (!subject || !body) return res.status(400).json({ error: "No email content to send" });
+
+    const messageId = await sendEmail(email, subject, body);
+
+    const updatedMetadata = Object.assign({}, lead.metadata || {}, {
+      email_subject: subject,
+      email_message_id: messageId,
+      draft_email_subject: null,
+      draft_email_body: null,
+      draft_email_to: null,
+      draft_email_run_id: null,
+      draft_email_generated_at: null,
+    });
+
+    await supabase
+      .from("leads")
+      .update({
+        status: "email_sent",
+        email_sent_at: new Date().toISOString(),
+        metadata: updatedMetadata,
+      })
+      .eq("id", lead.id);
+
+    res.json({ ok: true, email, subject });
+  } catch (err) {
+    console.error("POST /leads/:id/approve-email error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /:id/reject-email -- Discard email draft, revert to previous status
+ */
+router.post("/:id/reject-email", async (req, res) => {
+  try {
+    const { data: lead, error: fetchErr } = await supabase
+      .from("leads")
+      .select("id, status, metadata")
+      .eq("id", req.params.id)
+      .single();
+
+    if (fetchErr || !lead) return res.status(404).json({ error: "Lead not found" });
+    if (lead.status !== "email_pending") return res.status(400).json({ error: "Lead is not in email_pending status" });
+
+    const updatedMetadata = Object.assign({}, lead.metadata || {});
+    updatedMetadata.skip_email = true;
+    delete updatedMetadata.draft_email_subject;
+    delete updatedMetadata.draft_email_body;
+    delete updatedMetadata.draft_email_to;
+    delete updatedMetadata.draft_email_run_id;
+    delete updatedMetadata.draft_email_generated_at;
+
+    // Revert to invitation_sent (Task D picked them up from there)
+    await supabase
+      .from("leads")
+      .update({ status: "invitation_sent", metadata: updatedMetadata })
+      .eq("id", lead.id);
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("POST /leads/:id/reject-email error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
  * POST /:id/mark-connected -- Manual: Julien confirms invitation was accepted.
  * Marks as connected, enriches, generates draft message → status message_pending.
  */
