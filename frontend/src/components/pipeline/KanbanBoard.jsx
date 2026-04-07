@@ -16,13 +16,13 @@ export const KANBAN_COLUMNS = [
   {
     id: "connecte",
     label: "Connecte",
-    statuses: ["connected", "messaged"],
+    statuses: ["connected", "message_pending", "messaged"],
     color: "bg-indigo-50",
   },
   {
     id: "email",
     label: "Email envoye",
-    statuses: ["email_sent"],
+    statuses: ["email_pending", "email_sent"],
     color: "bg-purple-50",
   },
   {

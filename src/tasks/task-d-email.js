@@ -32,10 +32,11 @@ async function selectLeads(runId) {
 
   var { data, error } = await supabase
     .from("leads")
-    .select("id, full_name, first_name, last_name, linkedin_url, headline, company_name, signal_type, signal_category, signal_source, signal_detail, metadata, email, icp_score, tier, location, company_location, company_size, company_sector, seniority_years, connections_count")
+    .select("id, full_name, first_name, last_name, linkedin_url, headline, company_name, signal_type, signal_category, signal_source, signal_detail, metadata, email, icp_score, tier, status, location, company_location, company_size, company_sector, seniority_years, connections_count")
     .in("status", ["invitation_sent", "messaged"])
     .or("invitation_sent_at.lte." + cutoff + ",follow_up_sent_at.lte." + cutoff)
     .is("email_sent_at", null)
+    .or("metadata->>skip_email.is.null,metadata->>skip_email.neq.true")
     .in("tier", ["hot", "warm", "cold"])
     .order("icp_score", { ascending: false })
     .limit(50);
@@ -233,11 +234,13 @@ module.exports = async function taskDEmail(runId) {
         continue;
       }
 
-      // Step 2: HubSpot email dedup
-      var inHubSpot = await checkHubSpot(email, lead, runId);
-      if (inHubSpot) {
-        skipped.hubspot++;
-        continue;
+      // Step 2: HubSpot email dedup (skip if email already came from HubSpot)
+      if (!hubspotEmail) {
+        var inHubSpot = await checkHubSpot(email, lead, runId);
+        if (inHubSpot) {
+          skipped.hubspot++;
+          continue;
+        }
       }
 
       // Step 3: LinkedIn inbox reply check
@@ -271,6 +274,7 @@ module.exports = async function taskDEmail(runId) {
       metadata.draft_email_to = email;
       metadata.draft_email_run_id = runId;
       metadata.draft_email_generated_at = new Date().toISOString();
+      metadata.pre_email_status = lead.status; // store for reject revert
 
       await supabase
         .from("leads")
@@ -285,9 +289,9 @@ module.exports = async function taskDEmail(runId) {
       await log(runId, TASK_NAME, "info", "Email draft saved for " + (lead.full_name || lead.id) + " — awaiting manual approval" + (isCold ? " (cold)" : ""),
         { lead_id: lead.id, email: email });
 
-      // Rate limiting: 5-10s delay between emails
+      // Brief delay between LLM calls to respect rate limits
       if (i < leads.length - 1) {
-        await sleep(5000 + Math.random() * 5000);
+        await sleep(2000);
       }
 
     } catch (err) {

@@ -24,10 +24,13 @@ function sanitizeForPrompt(value, maxLen = 200) {
  * GCC region (Dubai, KSA, Qatar, UAE) → always English.
  * Non-French location + English headline → English.
  */
+function stripAccents(str) {
+  return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
 function detectLanguage(lead) {
-  var location = ((lead.location || "") + " " + (lead.company_location || "")).toLowerCase();
-  var headline = (lead.headline || "").toLowerCase();
-  var name = (lead.full_name || "").toLowerCase();
+  var location = stripAccents(((lead.location || "") + " " + (lead.company_location || "")).toLowerCase());
+  var headline = stripAccents((lead.headline || "").toLowerCase());
 
   // GCC / Middle East → English
   var gccPatterns = ["dubai", "abu dhabi", "uae", "united arab", "saudi", "ksa", "qatar", "doha", "bahrain", "oman", "kuwait", "riyadh", "jeddah"];

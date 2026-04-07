@@ -583,16 +583,18 @@ router.post("/:id/reject-email", async (req, res) => {
 
     const updatedMetadata = Object.assign({}, lead.metadata || {});
     updatedMetadata.skip_email = true;
+    const revertStatus = updatedMetadata.pre_email_status || "invitation_sent";
     delete updatedMetadata.draft_email_subject;
     delete updatedMetadata.draft_email_body;
     delete updatedMetadata.draft_email_to;
     delete updatedMetadata.draft_email_run_id;
     delete updatedMetadata.draft_email_generated_at;
+    delete updatedMetadata.pre_email_status;
 
-    // Revert to invitation_sent (Task D picked them up from there)
+    // Revert to previous status (invitation_sent or messaged)
     await supabase
       .from("leads")
-      .update({ status: "invitation_sent", metadata: updatedMetadata })
+      .update({ status: revertStatus, metadata: updatedMetadata })
       .eq("id", lead.id);
 
     res.json({ ok: true });
