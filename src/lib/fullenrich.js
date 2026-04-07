@@ -17,13 +17,14 @@ const POLL_INTERVAL_MS = 30000;
 const MAX_POLL_ATTEMPTS = 6;
 
 /**
- * Enrich a lead's contact info (email/phone) via FullEnrich.
+ * Enrich a lead's contact info (email) via FullEnrich.
+ * Only needs the LinkedIn URL — FullEnrich extracts name/company from the profile.
+ * Cost: 1 credit per email lookup.
  * @param {string} linkedinUrl - LinkedIn profile URL to enrich
  * @param {string} runId - UUID for this pipeline run
- * @param {object} [extra] - Optional { firstName, lastName, companyName } to improve match rate
  * @returns {Promise<object|null>} { email, phone, confidence } or null
  */
-async function enrichContactInfo(linkedinUrl, runId, extra) {
+async function enrichContactInfo(linkedinUrl, runId) {
   var apiKey = process.env.FULLENRICH_API_KEY;
   if (!apiKey) {
     await log(runId, "fullenrich", "warn",
@@ -33,17 +34,6 @@ async function enrichContactInfo(linkedinUrl, runId, extra) {
 
   if (!linkedinUrl) {
     return null;
-  }
-
-  // Build contact object — linkedin_url is the primary input
-  var contact = {
-    linkedin_url: linkedinUrl,
-    enrich_fields: ["contact.emails"],
-  };
-  if (extra) {
-    if (extra.firstName) contact.firstname = extra.firstName;
-    if (extra.lastName) contact.lastname = extra.lastName;
-    if (extra.companyName) contact.company_name = extra.companyName;
   }
 
   try {
@@ -56,7 +46,10 @@ async function enrichContactInfo(linkedinUrl, runId, extra) {
       },
       body: JSON.stringify({
         name: "leadgen-" + Date.now(),
-        datas: [contact],
+        datas: [{
+          linkedin_url: linkedinUrl,
+          enrich_fields: ["contact.emails"],
+        }],
       }),
     });
 
