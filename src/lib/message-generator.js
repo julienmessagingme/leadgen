@@ -381,8 +381,9 @@ async function generateEmail(lead, templates) {
       .replace(/(<br\s*\/?>){3,}/g, "<br><br>");
 
     // Add the correct signature before closing tags or at end
+    var ctaLabel = lang === "en" ? "Schedule a call" : "Programmer un echange";
     var signature = '<br><br>Julien Dumas<br>CEO MessagingMe<br><a href="https://www.messagingme.fr">www.messagingme.fr</a>' +
-      '<br><br><a href="' + calendlyUrl + '" style="display:inline-block;padding:10px 20px;background-color:#4F46E5;color:#ffffff;text-decoration:none;border-radius:6px;font-size:14px;font-weight:600;">Programmer un echange</a>';
+      '<br><br><a href="' + calendlyUrl + '" style="display:inline-block;padding:10px 20px;background-color:#4F46E5;color:#ffffff;text-decoration:none;border-radius:6px;font-size:14px;font-weight:600;">' + ctaLabel + '</a>';
     // Remove existing correct signature if present (avoid double)
     result.body = result.body.replace(/(<br\s*\/?>){1,3}\s*Julien Dumas\s*<br\s*\/?>.*?messagingme\.fr<\/a>/gi, "");
     // Insert before closing </body> or </html>
