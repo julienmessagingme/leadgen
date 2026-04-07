@@ -151,7 +151,7 @@ async function callClaude(systemPrompt, userPrompt, maxTokens, prefill) {
   return JSON.parse(raw);
 }
 
-var SYSTEM = "Tu es Julien, expert en strategie conversationnelle et messaging (WhatsApp, RCS, SMS). Tu diriges MessagingMe (messagingme.app), cabinet de conseil et plateforme techno." +
+var SYSTEM = "Tu es Julien Dumas, expert en strategie conversationnelle et messaging (WhatsApp, RCS, SMS). Tu diriges MessagingMe (messagingme.fr), cabinet de conseil et plateforme techno." +
 
 " TON : Naturel, direct, pair a pair. Pas corporate, pas commercial. Vouvoiement TOUJOURS en France. 2-3 phrases max. Se termine par une question ouverte. JAMAIS de signature. JAMAIS de 'je me permets', 'n hesitez pas', 'serait-il possible'. JAMAIS de 'En tant que', 'Chez MessagingMe nous', 'en tant que specialistes'. Pas de bullet points. Tu parles a une PERSONNE, pas a une marque ou une entreprise. Jamais 'pour des marques comme X', 'pour une entreprise comme X', 'pour X'. Tu t adresses a elle directement : son poste, ses enjeux, son quotidien." +
 
@@ -359,14 +359,24 @@ async function generateEmail(lead, templates) {
 
     if (!result.subject || !result.body) return null;
 
-    // Ensure signature is present at the end of the body
+    // Strip any signature Sonnet may have generated (wrong name, wrong format, etc.)
+    // Common patterns: "Julien\nMessagingMe", "Julien Poupard", "Cordialement,\nJulien", etc.
+    result.body = result.body
+      .replace(/<br\s*\/?>\s*(Cordialement|Best regards|Kind regards|Regards|Bien cordialement|A bientot|A tres vite)[,.]?\s*(<br\s*\/?>.*?)?\s*Julien[^<]*/gi, "")
+      .replace(/<p>\s*(Cordialement|Best regards|Kind regards|Regards|Bien cordialement)[,.]?\s*<\/p>\s*<p>\s*Julien[^<]*<\/p>/gi, "")
+      .replace(/Julien\s+Poupard/gi, "")
+      .replace(/Julien\s+MessagingMe/gi, "")
+      .replace(/--\s*<br\s*\/?>\s*Julien[^<]*/gi, "");
+
+    // Add the correct signature before closing tags or at end
     var signature = '<br><br>Julien Dumas<br>CEO MessagingMe<br><a href="https://www.messagingme.fr">www.messagingme.fr</a>';
-    if (!result.body.includes("Julien Dumas")) {
-      // Insert before closing </html> or </body> or at end
+    // Remove existing correct signature if present (avoid double)
+    result.body = result.body.replace(/(<br\s*\/?>){1,3}\s*Julien Dumas\s*<br\s*\/?>.*?messagingme\.fr<\/a>/gi, "");
+    // Insert before closing </body> or </html>
+    if (result.body.match(/<\/(body|html)>/i)) {
       result.body = result.body.replace(/<\/(body|html)>/i, signature + "</$1>");
-      if (!result.body.includes("Julien Dumas")) {
-        result.body = result.body + signature;
-      }
+    } else {
+      result.body = result.body + signature;
     }
 
     return { subject: result.subject, body: result.body };
