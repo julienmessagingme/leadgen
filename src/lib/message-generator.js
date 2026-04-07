@@ -98,9 +98,9 @@ var DEFAULT_EMAIL_TEMPLATE =
   "1. REAGIR AU SIGNAL : Meme principe que le message LinkedIn. On part du signal detecte.\n" +
   "2. APPORTER DE LA VALEUR : Partager un insight, une tendance, un retour d'experience concret sur le sujet du signal. Pas un pitch produit.\n" +
   "3. SI SIGNAL CONCURRENT : Se positionner comme consultant en strategie conversationnelle. On aide a choisir les bons canaux, la bonne approche. Notre techno vient en complement.\n" +
-  "4. CTA LEGER : Proposer un echange rapide (15 min), pas un 'demo produit'. Lien Calendly : {calendlyUrl}\n" +
-  "5. FORMAT : Objet court et accrocheur (pas 'Relance' ou 'Suite a'). Corps : 4-6 phrases. HTML simple.\n" +
-  "6. SIGNATURE : NE PAS mettre de signature. Elle sera ajoutee automatiquement apres ton texte.\n" +
+  "4. PAS DE CTA : ne propose PAS de RDV, PAS de lien Calendly, PAS de 'reserver un creneau', PAS de 'programmer un echange'. Le lien sera ajoute automatiquement en signature.\n" +
+  "5. FORMAT : Objet court et accrocheur (pas 'Relance' ou 'Suite a'). Corps : 4-6 phrases. HTML simple. Terminer par une question ouverte.\n" +
+  "6. SIGNATURE : NE PAS mettre de signature, NE PAS mettre 'Bonne journee', NE PAS mettre 'Cordialement'. Tout sera ajoute automatiquement.\n" +
   "7. EN FRANCAIS si le prospect est en France, EN ANGLAIS si zone GCC/international.";
 
 var DEFAULT_WHATSAPP_TEMPLATE =
@@ -362,14 +362,27 @@ async function generateEmail(lead, templates) {
     // Strip any signature Sonnet may have generated (wrong name, wrong format, etc.)
     // Common patterns: "Julien\nMessagingMe", "Julien Poupard", "Cordialement,\nJulien", etc.
     result.body = result.body
-      .replace(/<br\s*\/?>\s*(Cordialement|Best regards|Kind regards|Regards|Bien cordialement|A bientot|A tres vite)[,.]?\s*(<br\s*\/?>.*?)?\s*Julien[^<]*/gi, "")
-      .replace(/<p>\s*(Cordialement|Best regards|Kind regards|Regards|Bien cordialement)[,.]?\s*<\/p>\s*<p>\s*Julien[^<]*<\/p>/gi, "")
-      .replace(/Julien\s+Poupard/gi, "")
-      .replace(/Julien\s+MessagingMe/gi, "")
-      .replace(/--\s*<br\s*\/?>\s*Julien[^<]*/gi, "");
+      // Strip closing formulas (Cordialement, Bonne journee, Best regards...)
+      .replace(/<br\s*\/?>\s*(Cordialement|Best regards|Kind regards|Regards|Bien cordialement|A bientot|A tres vite|Bonne journee|Bonne soiree)[,.]?\s*(<br\s*\/?>.*?)?\s*Julien[^<]*/gi, "")
+      .replace(/<p>\s*(Cordialement|Best regards|Kind regards|Regards|Bien cordialement|Bonne journee)[,.]?\s*<\/p>(\s*<p>[^<]*<\/p>)*/gi, "")
+      // Strip any "Julien" signature lines
+      .replace(/Julien\s+(Poupard|Dumas|MessagingMe)[^<]*/gi, "")
+      .replace(/--\s*<br\s*\/?>\s*Julien[^<]*/gi, "")
+      // Strip Calendly CTA that Sonnet might add despite instructions
+      .replace(/<a[^>]*calendly[^>]*>[^<]*<\/a>/gi, "")
+      .replace(/<p[^>]*>\s*<a[^>]*calendly[^>]*>[^<]*<\/a>\s*<\/p>/gi, "")
+      .replace(/[Rr]eserv(er|ez)\s+un\s+creneau[^<]*/gi, "")
+      .replace(/[Pp]rogramm(er|ez)\s+un\s+echange[^<]*/gi, "")
+      // Strip standalone "Bonne journee" / "MessagingMe" lines
+      .replace(/<p>\s*(Bonne journee|Bonne soiree|MessagingMe)\s*,?\s*<\/p>/gi, "")
+      .replace(/<br\s*\/?>\s*(Bonne journee|Bonne soiree|MessagingMe)\s*,?\s*(<br\s*\/?>)?/gi, "")
+      // Clean up empty paragraphs and excessive breaks
+      .replace(/<p>\s*<\/p>/g, "")
+      .replace(/(<br\s*\/?>){3,}/g, "<br><br>");
 
     // Add the correct signature before closing tags or at end
-    var signature = '<br><br>Julien Dumas<br>CEO MessagingMe<br><a href="https://www.messagingme.fr">www.messagingme.fr</a><br><br><a href="' + calendlyUrl + '">Programmer un echange</a>';
+    var signature = '<br><br>Julien Dumas<br>CEO MessagingMe<br><a href="https://www.messagingme.fr">www.messagingme.fr</a>' +
+      '<br><br><a href="' + calendlyUrl + '" style="display:inline-block;padding:10px 20px;background-color:#4F46E5;color:#ffffff;text-decoration:none;border-radius:6px;font-size:14px;font-weight:600;">Programmer un echange</a>';
     // Remove existing correct signature if present (avoid double)
     result.body = result.body.replace(/(<br\s*\/?>){1,3}\s*Julien Dumas\s*<br\s*\/?>.*?messagingme\.fr<\/a>/gi, "");
     // Insert before closing </body> or </html>
