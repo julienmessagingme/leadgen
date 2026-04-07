@@ -283,10 +283,17 @@ export default function MessagesDraft() {
                       <p className="text-xs text-gray-400">{lead.company_name} · {lead.signal_source}</p>
                     </div>
                     <div className="text-right flex flex-col items-end gap-1.5">
-                      <span className="inline-flex items-center gap-1 px-2 py-1 bg-orange-50 text-orange-700 text-xs font-medium rounded-md border border-orange-200">
-                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-                        {emailTo}
-                      </span>
+                      {emailTo ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-orange-50 text-orange-700 text-xs font-medium rounded-md border border-orange-200">
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                          {emailTo}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-50 text-red-600 text-xs font-medium rounded-md border border-red-200">
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M12 3a9 9 0 100 18 9 9 0 000-18z" /></svg>
+                          Email a trouver
+                        </span>
+                      )}
                       {isFromHubspot ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-50 text-green-700 text-xs font-medium rounded-md border border-green-200">
                           <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
@@ -350,10 +357,11 @@ export default function MessagesDraft() {
                   <div className="flex gap-2 mt-3">
                     <button
                       onClick={() => handleApproveEmail(lead)}
-                      disabled={isApproving || !subject.trim() || !body.trim()}
+                      disabled={isApproving || !subject.trim() || !body.trim() || !emailTo}
                       className="px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title={!emailTo ? "Email a trouver avant envoi" : ""}
                     >
-                      {isApproving ? "Envoi…" : "Envoyer l'email"}
+                      {isApproving ? "Envoi…" : !emailTo ? "Email manquant" : "Envoyer l'email"}
                     </button>
                     <button
                       onClick={() => handleRejectEmail(lead)}

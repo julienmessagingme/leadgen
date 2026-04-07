@@ -209,55 +209,62 @@ module.exports = async function taskDEmail(runId) {
         continue;
       }
 
-      // Step 0: Check HubSpot first for existing email (avoids wasting Fullenrich credits)
-      var hubspotEmail = await findEmailInHubspot(
-        lead.first_name, lead.last_name, lead.company_name
-      );
-      if (hubspotEmail) {
-        lead.email = hubspotEmail;
-        lead.metadata = Object.assign({}, lead.metadata || {}, {
-          email_verified: true,
-          email_source: "hubspot",
-        });
-        await supabase.from("leads").update({
-          email: hubspotEmail,
-          metadata: lead.metadata,
-        }).eq("id", lead.id);
-        await log(runId, TASK_NAME, "info", "Email found in HubSpot for " + (lead.full_name || lead.id) + " — skipping Fullenrich",
-          { lead_id: lead.id, email: hubspotEmail });
-      }
+      // Step 1: Try to find email (best-effort, does NOT block draft generation)
+      var email = lead.email || null;
 
-      // Step 1: FullEnrich email enrichment (only if no HubSpot email)
-      var email = hubspotEmail || await checkEmail(lead, runId);
+      // Check HubSpot first (free)
       if (!email) {
-        skipped.no_email++;
-        continue;
+        var hubspotEmail = await findEmailInHubspot(
+          lead.first_name, lead.last_name, lead.company_name
+        );
+        if (hubspotEmail) {
+          email = hubspotEmail;
+          lead.email = hubspotEmail;
+          lead.metadata = Object.assign({}, lead.metadata || {}, {
+            email_verified: true,
+            email_source: "hubspot",
+          });
+          await supabase.from("leads").update({
+            email: hubspotEmail,
+            metadata: lead.metadata,
+          }).eq("id", lead.id);
+          await log(runId, TASK_NAME, "info", "Email found in HubSpot for " + (lead.full_name || lead.id),
+            { lead_id: lead.id, email: hubspotEmail });
+        }
       }
 
-      // Step 2: HubSpot email dedup (skip if email already came from HubSpot)
-      if (!hubspotEmail) {
-        var inHubSpot = await checkHubSpot(email, lead, runId);
-        if (inHubSpot) {
-          skipped.hubspot++;
+      // Then FullEnrich (costs credits)
+      if (!email) {
+        email = await checkEmail(lead, runId);
+      }
+
+      // Step 2: Verification checks (only if we have an email)
+      if (email) {
+        // HubSpot dedup (skip if email came from HubSpot)
+        if (!hubspotEmail) {
+          var inHubSpot = await checkHubSpot(email, lead, runId);
+          if (inHubSpot) {
+            skipped.hubspot++;
+            continue;
+          }
+        }
+
+        // Suppression list check
+        var isSuppressedResult = await checkSuppression(email, lead, runId);
+        if (isSuppressedResult) {
+          skipped.suppressed++;
           continue;
         }
       }
 
-      // Step 3: LinkedIn inbox reply check
+      // LinkedIn inbox reply check (works with or without email)
       var hasReplied = await checkInboxReply(lead, runId);
       if (hasReplied) {
         skipped.replied++;
         continue;
       }
 
-      // Step 4: Suppression list check
-      var isSuppressedResult = await checkSuppression(email, lead, runId);
-      if (isSuppressedResult) {
-        skipped.suppressed++;
-        continue;
-      }
-
-      // All 4 checks passed -- generate email
+      // Step 3: Generate email draft (even without email address)
       var emailContent = await generateEmail(lead, templates);
       if (!emailContent) {
         skipped.gen_failed++;
@@ -266,15 +273,15 @@ module.exports = async function taskDEmail(runId) {
         continue;
       }
 
-      // VALIDATION MODE: save email draft, do NOT send yet
-      // Julien reviews and approves manually from the frontend
+      // VALIDATION MODE: save email draft for manual review
+      // Email address will be resolved later (Fullenrich) if not available now
       var metadata = lead.metadata || {};
       metadata.draft_email_subject = emailContent.subject;
       metadata.draft_email_body = emailContent.body;
-      metadata.draft_email_to = email;
+      metadata.draft_email_to = email || null;
       metadata.draft_email_run_id = runId;
       metadata.draft_email_generated_at = new Date().toISOString();
-      metadata.pre_email_status = lead.status; // store for reject revert
+      metadata.pre_email_status = lead.status;
 
       await supabase
         .from("leads")
@@ -286,8 +293,9 @@ module.exports = async function taskDEmail(runId) {
 
       sent++;
       var isCold = isColdLead(lead);
-      await log(runId, TASK_NAME, "info", "Email draft saved for " + (lead.full_name || lead.id) + " — awaiting manual approval" + (isCold ? " (cold)" : ""),
-        { lead_id: lead.id, email: email });
+      var emailNote = email ? "" : " (email a trouver)";
+      await log(runId, TASK_NAME, "info", "Email draft saved for " + (lead.full_name || lead.id) + emailNote + " — awaiting manual approval" + (isCold ? " (cold)" : ""),
+        { lead_id: lead.id, email: email || "unknown" });
 
       // Brief delay between LLM calls to respect rate limits
       if (i < leads.length - 1) {
