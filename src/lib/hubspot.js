@@ -179,6 +179,7 @@ async function findEmailInHubspot(firstName, lastName, companyName) {
 
 /**
  * Get the last email (sent or received) for a HubSpot contact.
+ * Uses the email search API with association filter.
  * Returns { subject, body, direction, date, from, to } or null.
  * @param {string} contactId - HubSpot contact ID
  * @returns {Promise<object|null>}
@@ -190,45 +191,33 @@ async function getLastEmail(contactId) {
     const client = getClient();
     if (!client) return null;
 
-    // Get email IDs associated with this contact
-    var assocResponse = await client.crm.contacts.associationsApi.getAll(
-      contactId, "emails"
-    );
-
-    var emailIds = (assocResponse.results || []).map(function(a) { return a.id; });
-    if (emailIds.length === 0) return null;
-
-    // Fetch details for the most recent emails (up to 5, then pick latest by date)
-    var emails = [];
-    var toFetch = emailIds.slice(0, 5);
-    for (var i = 0; i < toFetch.length; i++) {
-      try {
-        var email = await client.crm.objects.emails.basicApi.getById(toFetch[i], [
-          "hs_email_subject", "hs_email_text", "hs_email_html",
-          "hs_email_direction", "hs_timestamp",
-          "hs_email_from_email", "hs_email_to_email",
-        ]);
-        if (email && email.properties) {
-          emails.push(email.properties);
-        }
-      } catch (e) { /* skip individual email errors */ }
-    }
-
-    if (emails.length === 0) return null;
-
-    // Sort by date desc, pick the most recent
-    emails.sort(function(a, b) {
-      return new Date(b.hs_timestamp || 0) - new Date(a.hs_timestamp || 0);
+    var response = await client.crm.objects.emails.searchApi.doSearch({
+      filterGroups: [{
+        filters: [{
+          propertyName: "associations.contact",
+          operator: "EQ",
+          value: contactId,
+        }],
+      }],
+      properties: [
+        "hs_email_subject", "hs_email_text",
+        "hs_email_direction", "hs_timestamp",
+        "hs_email_from_email", "hs_email_to_email",
+      ],
+      sorts: [{ propertyName: "hs_timestamp", direction: "DESCENDING" }],
+      limit: 1,
     });
 
-    var latest = emails[0];
+    if (!response.results || response.results.length === 0) return null;
+
+    var p = response.results[0].properties;
     return {
-      subject: latest.hs_email_subject || null,
-      body: (latest.hs_email_text || "").substring(0, 500),
-      direction: latest.hs_email_direction || null, // "EMAIL" (sent) or "INCOMING_EMAIL" (received)
-      date: latest.hs_timestamp || null,
-      from: latest.hs_email_from_email || null,
-      to: latest.hs_email_to_email || null,
+      subject: p.hs_email_subject || null,
+      body: (p.hs_email_text || "").substring(0, 500),
+      direction: p.hs_email_direction || null,
+      date: p.hs_timestamp || null,
+      from: p.hs_email_from_email || null,
+      to: p.hs_email_to_email || null,
     };
   } catch (err) {
     console.error("HubSpot getLastEmail failed for contact", contactId, ":", err.message);
