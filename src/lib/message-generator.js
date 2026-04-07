@@ -69,7 +69,7 @@ function detectLanguage(lead) {
   }
 
   // English-speaking countries in location → English
-  var enLocations = ["united states", "usa", "uk", "united kingdom", "london", "new york", "canada", "australia", "singapore", "hong kong", "india", "mumbai", "delhi", "bangalore", "hyderabad", "chennai", "pune", "germany", "berlin", "munich", "netherlands", "amsterdam", "spain", "madrid", "barcelona", "italy", "milan", "rome", "portugal", "lisbon", "ireland", "dublin", "sweden", "stockholm", "norway", "oslo", "denmark", "copenhagen", "finland", "helsinki", "poland", "warsaw", "japan", "tokyo", "korea", "seoul", "nigeria", "lagos", "south africa", "johannesburg", "kenya", "nairobi"];
+  var enLocations = ["united states", "usa", ", us", "uk", "united kingdom", "london", "new york", "dallas", "chicago", "san francisco", "los angeles", "boston", "seattle", "miami", "atlanta", "houston", "denver", "toronto", "vancouver", "canada", "australia", "sydney", "melbourne", "singapore", "hong kong", "india", "mumbai", "delhi", "bangalore", "hyderabad", "chennai", "pune", "germany", "berlin", "munich", "netherlands", "amsterdam", "spain", "madrid", "barcelona", "italy", "milan", "rome", "portugal", "lisbon", "ireland", "dublin", "sweden", "stockholm", "norway", "oslo", "denmark", "copenhagen", "finland", "helsinki", "poland", "warsaw", "japan", "tokyo", "korea", "seoul", "nigeria", "lagos", "south africa", "johannesburg", "kenya", "nairobi"];
   for (var n = 0; n < enLocations.length; n++) {
     if (location.includes(enLocations[n])) return "en";
   }

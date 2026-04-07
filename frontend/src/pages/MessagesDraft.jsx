@@ -37,6 +37,14 @@ function useRejectEmail() {
   });
 }
 
+function useRegenerateEmail() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, lang }) => api.post(`/leads/${id}/regenerate-email`, { lang }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["leads"] }),
+  });
+}
+
 export default function MessagesDraft() {
   const [tab, setTab] = useState("linkedin"); // "linkedin" | "email"
   const [editedMessages, setEditedMessages] = useState({});
@@ -62,6 +70,7 @@ export default function MessagesDraft() {
   const reject = useRejectMessage();
   const approveEmail = useApproveEmail();
   const rejectEmail = useRejectEmail();
+  const regenerateEmail = useRegenerateEmail();
 
   const linkedinLeads = linkedinData?.leads ?? [];
   const emailLeads = emailData?.leads ?? [];
@@ -371,7 +380,7 @@ export default function MessagesDraft() {
                     </div>
                   )}
 
-                  <div className="flex gap-2 mt-3">
+                  <div className="flex items-center gap-2 mt-3">
                     <button
                       onClick={() => handleApproveEmail(lead)}
                       disabled={isApproving || !subject.trim() || !body.trim() || !emailTo}
@@ -387,6 +396,42 @@ export default function MessagesDraft() {
                     >
                       Rejeter
                     </button>
+                    <div className="ml-auto flex items-center gap-1">
+                      {["fr", "en"].map((lang) => {
+                        const isCurrent = body.includes("Programmer un echange") ? "fr" : body.includes("Schedule a call") ? "en" : "fr";
+                        const isRegenerating = pendingIds[lead.id] === "regen-" + lang;
+                        return (
+                          <button
+                            key={lang}
+                            onClick={() => {
+                              setPendingIds((p) => ({ ...p, [lead.id]: "regen-" + lang }));
+                              regenerateEmail.mutate(
+                                { id: lead.id, lang },
+                                {
+                                  onSuccess: () => {
+                                    setPendingIds((p) => { const n = { ...p }; delete n[lead.id]; return n; });
+                                    setEditedEmails((prev) => { const n = { ...prev }; delete n[lead.id]; return n; });
+                                    refetchEmail();
+                                  },
+                                  onError: (err) => {
+                                    setPendingIds((p) => { const n = { ...p }; delete n[lead.id]; return n; });
+                                    setErrors((e) => ({ ...e, [lead.id]: err?.response?.data?.error || err?.message || "Erreur" }));
+                                  },
+                                }
+                              );
+                            }}
+                            disabled={isRegenerating || (lang === isCurrent && !isRegenerating)}
+                            className={`px-2.5 py-1 text-xs font-medium rounded-md border transition-colors ${
+                              lang === isCurrent
+                                ? "bg-indigo-100 text-indigo-700 border-indigo-300 cursor-default"
+                                : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700"
+                            } disabled:opacity-50`}
+                          >
+                            {isRegenerating ? "..." : lang === "fr" ? "FR" : "EN"}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               );

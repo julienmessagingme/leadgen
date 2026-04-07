@@ -568,6 +568,55 @@ router.post("/:id/approve-email", async (req, res) => {
 });
 
 /**
+ * POST /:id/regenerate-email -- Regenerate email draft with forced language
+ * Body: { lang: "fr" | "en" }
+ */
+router.post("/:id/regenerate-email", async (req, res) => {
+  try {
+    const { generateEmail, loadTemplates } = require("../lib/message-generator");
+
+    const { data: lead, error: fetchErr } = await supabase
+      .from("leads")
+      .select("*")
+      .eq("id", req.params.id)
+      .single();
+
+    if (fetchErr || !lead) return res.status(404).json({ error: "Lead not found" });
+    if (lead.status !== "email_pending") return res.status(400).json({ error: "Lead is not in email_pending status" });
+
+    const lang = req.body.lang === "en" ? "en" : "fr";
+
+    // Override language detection by temporarily injecting a location hint
+    const originalLocation = lead.location;
+    lead.location = lang === "en" ? "New York, US" : "Paris, France";
+
+    const templates = await loadTemplates();
+    const emailContent = await generateEmail(lead, templates);
+
+    lead.location = originalLocation; // restore
+
+    if (!emailContent) return res.status(500).json({ error: "Failed to generate email" });
+
+    const updatedMetadata = Object.assign({}, lead.metadata || {}, {
+      draft_email_subject: emailContent.subject,
+      draft_email_body: emailContent.body,
+      draft_email_generated_at: new Date().toISOString(),
+      forced_lang: lang,
+    });
+
+    await supabase
+      .from("leads")
+      .update({ metadata: updatedMetadata })
+      .eq("id", lead.id);
+
+    res.json({ ok: true, lang, subject: emailContent.subject });
+  } catch (err) {
+    console.error("POST /leads/:id/regenerate-email error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
  * POST /:id/reject-email -- Discard email draft, revert to previous status
  */
 router.post("/:id/reject-email", async (req, res) => {
