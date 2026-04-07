@@ -11,10 +11,10 @@
  */
 
 const { supabase } = require("../lib/supabase");
-const { getConnections, sleep } = require("../lib/bereach");
+const { getConnections, withdrawInvitation, sleep } = require("../lib/bereach");
 const { enrichLead } = require("../lib/enrichment");
 const { isSuppressed } = require("../lib/suppression");
-const { generateFollowUpMessage, isColdLead, loadTemplates } = require("../lib/message-generator");
+const { generateFollowUpMessage, generateInvitationNote, isColdLead, loadTemplates } = require("../lib/message-generator");
 const { log } = require("../lib/logger");
 
 /**
@@ -28,6 +28,154 @@ module.exports = async function taskCFollowup(runId) {
   var draftsSaved = 0;
   var skipped = 0;
   var errors = 0;
+  var expired = 0;
+  var reinviteDrafts = 0;
+
+  // -------------------------------------------------------
+  // Phase 0: Expire stale invitations (configurable, default 15 days)
+  // Withdraws via BeReach (best-effort) and marks as invitation_expired.
+  // -------------------------------------------------------
+
+  try {
+    // Read setting
+    var pendingMaxDays = 15;
+    try {
+      var { data: setting } = await supabase
+        .from("global_settings")
+        .select("value")
+        .eq("key", "invitation_pending_max_days")
+        .single();
+      if (setting && setting.value) pendingMaxDays = parseInt(setting.value) || 15;
+    } catch (e) { /* use default */ }
+
+    var expiryCutoff = new Date(Date.now() - pendingMaxDays * 24 * 60 * 60 * 1000).toISOString();
+
+    var { data: staleLeads, error: staleErr } = await supabase
+      .from("leads")
+      .select("id, full_name, linkedin_url, metadata")
+      .eq("status", "invitation_sent")
+      .lt("invitation_sent_at", expiryCutoff)
+      .limit(50);
+
+    if (staleErr) {
+      await log(runId, "task-c-followup", "error", "Failed to query stale invitations: " + staleErr.message);
+    } else if (staleLeads && staleLeads.length > 0) {
+      await log(runId, "task-c-followup", "info", "Found " + staleLeads.length + " invitations pending > " + pendingMaxDays + " days — expiring");
+
+      for (var s = 0; s < staleLeads.length; s++) {
+        var staleLead = staleLeads[s];
+        try {
+          // Best-effort withdraw — we don't have invitationUrn, try with profileUrn
+          var acoaId = (staleLead.linkedin_url || "").match(/ACoA[A-Za-z0-9_-]+/);
+          var profileUrn = acoaId ? "urn:li:fsd_profile:" + acoaId[0] : null;
+
+          if (profileUrn) {
+            try {
+              await withdrawInvitation(profileUrn);
+              await log(runId, "task-c-followup", "info", "Withdraw succeeded for " + (staleLead.full_name || staleLead.id));
+            } catch (wErr) {
+              await log(runId, "task-c-followup", "warn", "Withdraw failed for " + (staleLead.full_name || staleLead.id) + ": " + wErr.message + " — marking expired anyway");
+            }
+          } else {
+            await log(runId, "task-c-followup", "warn", "No ACoA URN for " + (staleLead.full_name || staleLead.id) + " — cannot withdraw, marking expired");
+          }
+
+          // Mark as expired regardless of withdraw result
+          var meta = staleLead.metadata || {};
+          meta.invitation_withdrawn_at = new Date().toISOString();
+          meta.reinvite_count = meta.reinvite_count || 0;
+
+          var { error: expireErr } = await supabase
+            .from("leads")
+            .update({ status: "invitation_expired", metadata: meta })
+            .eq("id", staleLead.id);
+
+          if (expireErr) throw new Error("Supabase update failed: " + expireErr.message);
+          expired++;
+        } catch (err) {
+          errors++;
+          await log(runId, "task-c-followup", "error", "Failed to expire " + (staleLead.full_name || staleLead.id) + ": " + err.message);
+        }
+
+        // Small delay between withdraw calls
+        if (s < staleLeads.length - 1) await sleep(3000);
+      }
+
+      await log(runId, "task-c-followup", "info", "Expired " + expired + " stale invitations");
+    }
+  } catch (err) {
+    await log(runId, "task-c-followup", "error", "Phase 0 (expire invitations) failed: " + err.message);
+  }
+
+  // -------------------------------------------------------
+  // Phase 0b: Re-invite leads expired 22+ days ago with a personalized note
+  // Generates a draft invitation note for Julien to approve.
+  // -------------------------------------------------------
+
+  try {
+    var reinviteCutoff = new Date(Date.now() - 22 * 24 * 60 * 60 * 1000).toISOString();
+
+    var { data: reinviteLeads, error: reinviteErr } = await supabase
+      .from("leads")
+      .select("id, full_name, first_name, last_name, linkedin_url, headline, company_name, signal_type, signal_category, signal_source, signal_detail, metadata, email, icp_score, tier, location, company_location, company_size, company_sector")
+      .eq("status", "invitation_expired")
+      .limit(20);
+
+    if (reinviteErr) {
+      await log(runId, "task-c-followup", "error", "Failed to query reinvite leads: " + reinviteErr.message);
+    } else if (reinviteLeads && reinviteLeads.length > 0) {
+      // Filter to those expired 22+ days ago
+      var eligible = reinviteLeads.filter(function(rl) {
+        var withdrawnAt = rl.metadata && rl.metadata.invitation_withdrawn_at;
+        return withdrawnAt && new Date(withdrawnAt) < new Date(reinviteCutoff);
+      });
+
+      if (eligible.length > 0) {
+        await log(runId, "task-c-followup", "info", "Found " + eligible.length + " leads eligible for re-invite (expired 22+ days ago)");
+        var templates = await loadTemplates();
+
+        for (var r = 0; r < eligible.length; r++) {
+          var rl = eligible[r];
+          try {
+            // Skip if already re-invited once (max 1 re-invite)
+            if (rl.metadata && rl.metadata.reinvite_count >= 1) {
+              await log(runId, "task-c-followup", "info", "Skipping " + (rl.full_name || rl.id) + " — already re-invited once");
+              skipped++;
+              continue;
+            }
+
+            var note = await generateInvitationNote(rl, templates);
+            if (!note) {
+              await log(runId, "task-c-followup", "warn", "Failed to generate reinvite note for " + (rl.full_name || rl.id));
+              skipped++;
+              continue;
+            }
+
+            var meta = Object.assign({}, rl.metadata || {}, {
+              draft_invitation_note: note,
+              draft_reinvite_run_id: runId,
+              draft_reinvite_generated_at: new Date().toISOString(),
+            });
+
+            var { error: reinvUpErr } = await supabase
+              .from("leads")
+              .update({ status: "reinvite_pending", metadata: meta })
+              .eq("id", rl.id);
+
+            if (reinvUpErr) throw new Error("Supabase update failed: " + reinvUpErr.message);
+
+            reinviteDrafts++;
+            await log(runId, "task-c-followup", "info", "Reinvite note draft saved for " + (rl.full_name || rl.id) + " — awaiting approval");
+          } catch (err) {
+            errors++;
+            await log(runId, "task-c-followup", "error", "Failed to generate reinvite for " + (rl.full_name || rl.id) + ": " + err.message);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    await log(runId, "task-c-followup", "error", "Phase 0b (reinvite drafts) failed: " + err.message);
+  }
 
   // -------------------------------------------------------
   // Phase 1: Detect accepted connections via /me/linkedin/connections (LIN-06)
@@ -243,5 +391,8 @@ module.exports = async function taskCFollowup(runId) {
   }
 
   // Summary log
-  await log(runId, "task-c-followup", "info", "Task C completed: " + connectionsDetected + " connections detected, " + draftsSaved + " drafts saved (awaiting approval — 0 BeReach credits used), " + skipped + " skipped, " + errors + " errors");
+  await log(runId, "task-c-followup", "info",
+    "Task C completed: " + expired + " expired, " + reinviteDrafts + " reinvite drafts, " +
+    connectionsDetected + " connections detected, " + draftsSaved + " message drafts saved, " +
+    skipped + " skipped, " + errors + " errors");
 };

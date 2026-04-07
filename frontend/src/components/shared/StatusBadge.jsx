@@ -13,6 +13,8 @@ const STATUS_MAP = {
   replied: { label: "Gagne", colors: "bg-emerald-100 text-emerald-700" },
   meeting_booked: { label: "Gagne", colors: "bg-emerald-100 text-emerald-700" },
   hubspot_existing: { label: "HubSpot", colors: "bg-orange-100 text-orange-700" },
+  invitation_expired: { label: "Invit. expiree", colors: "bg-gray-100 text-gray-500" },
+  reinvite_pending: { label: "Re-invit. en attente", colors: "bg-purple-100 text-purple-700" },
   disqualified: { label: "Exclu", colors: "bg-red-100 text-red-700" },
 };
 

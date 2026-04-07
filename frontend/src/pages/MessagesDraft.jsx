@@ -45,10 +45,27 @@ function useRegenerateEmail() {
   });
 }
 
+function useApproveReinvite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, note }) => api.post(`/leads/${id}/approve-reinvite`, { note }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["leads"] }),
+  });
+}
+
+function useRejectReinvite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id }) => api.post(`/leads/${id}/reject-reinvite`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["leads"] }),
+  });
+}
+
 export default function MessagesDraft() {
-  const [tab, setTab] = useState("linkedin"); // "linkedin" | "email"
+  const [tab, setTab] = useState("linkedin"); // "linkedin" | "email" | "reinvite"
   const [editedMessages, setEditedMessages] = useState({});
   const [editedEmails, setEditedEmails] = useState({}); // { id: { subject, body } }
+  const [editedNotes, setEditedNotes] = useState({}); // { id: note }
   const [pendingIds, setPendingIds] = useState({});
   const [errors, setErrors] = useState({});
   const [editingHtml, setEditingHtml] = useState({}); // { id: true } = show raw HTML editor
@@ -65,15 +82,24 @@ export default function MessagesDraft() {
     order: "desc",
     limit: 100,
   });
+  const { data: reinviteData, isLoading: reinviteLoading, refetch: refetchReinvite } = useLeads({
+    status: "reinvite_pending",
+    sort: "icp_score",
+    order: "desc",
+    limit: 100,
+  });
 
   const approve = useApproveMessage();
   const reject = useRejectMessage();
   const approveEmail = useApproveEmail();
   const rejectEmail = useRejectEmail();
   const regenerateEmail = useRegenerateEmail();
+  const approveReinvite = useApproveReinvite();
+  const rejectReinvite = useRejectReinvite();
 
   const linkedinLeads = linkedinData?.leads ?? [];
   const emailLeads = emailData?.leads ?? [];
+  const reinviteLeads = reinviteData?.leads ?? [];
 
   const handleApprove = (lead) => {
     const message = editedMessages[lead.id] ?? lead.metadata?.draft_message ?? "";
@@ -137,8 +163,38 @@ export default function MessagesDraft() {
     );
   };
 
-  const isLoading = tab === "linkedin" ? linkedinLoading : emailLoading;
-  const leads = tab === "linkedin" ? linkedinLeads : emailLeads;
+  const handleApproveReinvite = (lead) => {
+    const note = editedNotes[lead.id] ?? lead.metadata?.draft_invitation_note ?? "";
+    setPendingIds((p) => ({ ...p, [lead.id]: "approving" }));
+    setErrors((e) => ({ ...e, [lead.id]: null }));
+    approveReinvite.mutate(
+      { id: lead.id, note },
+      {
+        onSuccess: () => { setPendingIds((p) => { const n = { ...p }; delete n[lead.id]; return n; }); refetchReinvite(); },
+        onError: (err) => {
+          setPendingIds((p) => { const n = { ...p }; delete n[lead.id]; return n; });
+          setErrors((e) => ({ ...e, [lead.id]: err?.response?.data?.error || err?.message || "Erreur inconnue" }));
+        },
+      }
+    );
+  };
+
+  const handleRejectReinvite = (lead) => {
+    setPendingIds((p) => ({ ...p, [lead.id]: "rejecting" }));
+    rejectReinvite.mutate(
+      { id: lead.id },
+      {
+        onSuccess: () => { setPendingIds((p) => { const n = { ...p }; delete n[lead.id]; return n; }); refetchReinvite(); },
+        onError: (err) => {
+          setPendingIds((p) => { const n = { ...p }; delete n[lead.id]; return n; });
+          setErrors((e) => ({ ...e, [lead.id]: err?.response?.data?.error || err?.message || "Erreur inconnue" }));
+        },
+      }
+    );
+  };
+
+  const isLoading = tab === "linkedin" ? linkedinLoading : tab === "email" ? emailLoading : reinviteLoading;
+  const leads = tab === "linkedin" ? linkedinLeads : tab === "email" ? emailLeads : reinviteLeads;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -183,6 +239,21 @@ export default function MessagesDraft() {
               </span>
             )}
           </button>
+          <button
+            onClick={() => setTab("reinvite")}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              tab === "reinvite"
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Re-invitations
+            {reinviteLeads.length > 0 && (
+              <span className="ml-1.5 inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 rounded-full">
+                {reinviteLeads.length}
+              </span>
+            )}
+          </button>
         </div>
 
         {isLoading && (
@@ -193,7 +264,9 @@ export default function MessagesDraft() {
           <div className="text-center py-12 text-gray-400">
             {tab === "linkedin"
               ? "Aucun message LinkedIn en attente."
-              : "Aucun email en attente. Task D n'a pas encore tourné ou tous les emails ont été traités."}
+              : tab === "email"
+              ? "Aucun email en attente. Task D n'a pas encore tourné ou tous les emails ont été traités."
+              : "Aucune re-invitation en attente."}
           </div>
         )}
 
@@ -252,6 +325,77 @@ export default function MessagesDraft() {
                     </button>
                     <button
                       onClick={() => handleReject(lead)}
+                      disabled={isRejecting}
+                      className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 disabled:opacity-50"
+                    >
+                      Rejeter
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Re-invite drafts */}
+        {tab === "reinvite" && (
+          <div className="space-y-4">
+            {reinviteLeads.map((lead) => {
+              const note = editedNotes[lead.id] ?? lead.metadata?.draft_invitation_note ?? "";
+              const reinviteCount = lead.metadata?.reinvite_count || 0;
+              const isApproving = pendingIds[lead.id] === "approving";
+              const isRejecting = pendingIds[lead.id] === "rejecting";
+              const errorMsg = errors[lead.id];
+
+              return (
+                <div key={lead.id} className="bg-white rounded-xl shadow-sm border border-purple-200 p-5">
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <a href={lead.linkedin_url} target="_blank" rel="noopener noreferrer" className="font-semibold text-gray-900 hover:text-blue-600">
+                          {lead.full_name}
+                        </a>
+                        <TierBadge tier={lead.tier} />
+                        <span className="text-xs text-gray-400">#{lead.icp_score}</span>
+                        <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 rounded-full">
+                          Re-invite #{reinviteCount + 1}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-500">{lead.headline}</p>
+                      <p className="text-xs text-gray-400">{lead.company_name} · {lead.signal_source}</p>
+                    </div>
+                  </div>
+
+                  <div className="mb-2">
+                    <label className="text-xs font-medium text-gray-500 mb-1 block">
+                      Note d'invitation (max 280 car.)
+                    </label>
+                    <textarea
+                      className="w-full border border-purple-200 rounded-lg px-3 py-2 text-sm text-gray-800 resize-none focus:outline-none focus:ring-2 focus:ring-purple-300"
+                      rows={3}
+                      maxLength={280}
+                      value={note}
+                      onChange={(e) => setEditedNotes((prev) => ({ ...prev, [lead.id]: e.target.value }))}
+                    />
+                    <p className="text-xs text-gray-400 mt-1 text-right">{note.length}/280</p>
+                  </div>
+
+                  {errorMsg && (
+                    <div className="mt-2 text-xs text-red-600 bg-red-50 rounded px-3 py-2 border border-red-200">
+                      {errorMsg}
+                    </div>
+                  )}
+
+                  <div className="flex gap-2 mt-3">
+                    <button
+                      onClick={() => handleApproveReinvite(lead)}
+                      disabled={isApproving || !note.trim()}
+                      className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isApproving ? "Envoi…" : "Re-inviter"}
+                    </button>
+                    <button
+                      onClick={() => handleRejectReinvite(lead)}
                       disabled={isRejecting}
                       className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 disabled:opacity-50"
                     >

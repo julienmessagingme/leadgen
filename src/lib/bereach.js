@@ -220,6 +220,16 @@ async function getConnections() {
   return bereachGet("/me/linkedin/connections");
 }
 
+/**
+ * Withdraw a sent LinkedIn invitation.
+ * Requires invitationUrn (e.g. "urn:li:fs_relInvitation:123456").
+ * If unavailable, pass profileUrn (e.g. "urn:li:fsd_profile:ACoA...") as best-effort.
+ * Cost: 1 credit.
+ */
+async function withdrawInvitation(invitationUrn) {
+  return bereach("/withdraw/linkedin/invitation", { invitationUrn: invitationUrn });
+}
+
 module.exports = {
   collectPostLikers,
   collectPostCommenters,
@@ -235,4 +245,5 @@ module.exports = {
   sendMessage,
   searchInbox,
   getConnections,
+  withdrawInvitation,
 };

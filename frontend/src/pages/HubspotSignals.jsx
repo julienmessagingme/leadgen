@@ -62,6 +62,7 @@ export default function HubspotSignals() {
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nom</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Entreprise</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">HubSpot</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tier</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Score ICP</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Signal</th>
@@ -104,6 +105,18 @@ export default function HubspotSignals() {
                         {lead.company_name || "-"}
                         {lead.company_location && (
                           <span className="text-xs text-gray-400 ml-1">({lead.company_location})</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {meta.hubspot_is_marketing === true ? (
+                          <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full">Marketing</span>
+                        ) : meta.hubspot_is_marketing === false ? (
+                          <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-500 rounded-full">Non-marketing</span>
+                        ) : (
+                          <span className="text-xs text-gray-400">-</span>
+                        )}
+                        {meta.hubspot_owner_name && (
+                          <div className="text-xs text-gray-500 mt-1">{meta.hubspot_owner_name}</div>
                         )}
                       </td>
                       <td className="px-4 py-3">

@@ -490,6 +490,9 @@ module.exports = async function taskASignals(runId) {
         // 8e. HubSpot check — insert with special status if found
         var leadStatus = "new";
         var hubspotContactId = null;
+        var hubspotIsMarketing = null;
+        var hubspotOwnerName = null;
+        var hubspotOwnerId = null;
         try {
           if (scoredLead.first_name && scoredLead.last_name) {
             var hubspotResult = await existsInHubspot(
@@ -500,10 +503,14 @@ module.exports = async function taskASignals(runId) {
             if (hubspotResult.found) {
               leadStatus = "hubspot_existing";
               hubspotContactId = hubspotResult.contactId;
+              hubspotIsMarketing = hubspotResult.isMarketingContact;
+              hubspotOwnerName = hubspotResult.ownerName;
+              hubspotOwnerId = hubspotResult.ownerId;
               skippedHubspot++;
               await log(runId, "task-a-signals", "info",
                 "HubSpot contact: " + scoredLead.first_name + " " + scoredLead.last_name +
-                " — inserting with status hubspot_existing (id: " + hubspotContactId + ")");
+                " — marketing=" + hubspotIsMarketing + ", owner=" + (hubspotOwnerName || "none") +
+                " (id: " + hubspotContactId + ")");
             }
           }
         } catch (hubErr) {
@@ -549,6 +556,9 @@ module.exports = async function taskASignals(runId) {
             post_author_name: scoredLead.post_author_name || null,
             post_author_headline: scoredLead.post_author_headline || null,
             hubspot_contact_id: hubspotContactId || null,
+            hubspot_is_marketing: hubspotIsMarketing,
+            hubspot_owner_name: hubspotOwnerName || null,
+            hubspot_owner_id: hubspotOwnerId || null,
           }),
           status: leadStatus,
           scored_at: new Date().toISOString(),

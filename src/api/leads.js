@@ -717,4 +717,88 @@ router.post("/:id/mark-connected", async (req, res) => {
   }
 });
 
+/**
+ * POST /:id/approve-reinvite -- Julien approves a re-invitation with note.
+ * Sends the invitation via BeReach with the draft note, resets to invitation_sent.
+ */
+router.post("/:id/approve-reinvite", async (req, res) => {
+  try {
+    const { connectProfile } = require("../lib/bereach");
+
+    const { data: lead, error: fetchErr } = await supabase
+      .from("leads")
+      .select("*")
+      .eq("id", req.params.id)
+      .single();
+
+    if (fetchErr || !lead) return res.status(404).json({ error: "Lead not found" });
+    if (lead.status !== "reinvite_pending") return res.status(400).json({ error: "Lead is not in reinvite_pending status" });
+
+    var note = (lead.metadata && lead.metadata.draft_invitation_note) || null;
+    if (!note) return res.status(400).json({ error: "No draft invitation note found" });
+
+    // Allow Julien to override the note from the request body
+    if (req.body && req.body.note) {
+      note = req.body.note;
+    }
+
+    // Send invitation via BeReach with note
+    await connectProfile(lead.linkedin_url, note);
+
+    var metadata = lead.metadata || {};
+    metadata.reinvite_count = (metadata.reinvite_count || 0) + 1;
+    metadata.reinvite_note = note;
+    metadata.reinvite_sent_at = new Date().toISOString();
+    delete metadata.draft_invitation_note;
+    delete metadata.draft_reinvite_run_id;
+    delete metadata.draft_reinvite_generated_at;
+
+    await supabase
+      .from("leads")
+      .update({
+        status: "invitation_sent",
+        invitation_sent_at: new Date().toISOString(),
+        metadata: metadata,
+      })
+      .eq("id", lead.id);
+
+    res.json({ ok: true, note: note });
+  } catch (err) {
+    console.error("POST /leads/:id/approve-reinvite error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /:id/reject-reinvite -- Julien rejects a re-invitation.
+ * Disqualifies the lead.
+ */
+router.post("/:id/reject-reinvite", async (req, res) => {
+  try {
+    const { data: lead, error: fetchErr } = await supabase
+      .from("leads")
+      .select("id, status, metadata")
+      .eq("id", req.params.id)
+      .single();
+
+    if (fetchErr || !lead) return res.status(404).json({ error: "Lead not found" });
+    if (lead.status !== "reinvite_pending") return res.status(400).json({ error: "Lead is not in reinvite_pending status" });
+
+    var metadata = lead.metadata || {};
+    delete metadata.draft_invitation_note;
+    delete metadata.draft_reinvite_run_id;
+    delete metadata.draft_reinvite_generated_at;
+
+    await supabase
+      .from("leads")
+      .update({ status: "disqualified", metadata: metadata })
+      .eq("id", lead.id);
+
+    res.json({ ok: true, action: "disqualified" });
+  } catch (err) {
+    console.error("POST /leads/:id/reject-reinvite error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

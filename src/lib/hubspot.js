@@ -21,21 +21,48 @@ function getClient() {
   return _client;
 }
 
+/** In-memory cache for HubSpot owner names (they rarely change). */
+var _ownerCache = {};
+
+/**
+ * Get a HubSpot owner's name by ID. Cached in memory.
+ * @param {string} ownerId - HubSpot owner ID
+ * @returns {Promise<string|null>} "FirstName LastName" or null
+ */
+async function getOwnerName(ownerId) {
+  if (!ownerId) return null;
+  if (_ownerCache[ownerId]) return _ownerCache[ownerId];
+
+  try {
+    const client = getClient();
+    if (!client) return null;
+
+    const owner = await client.crm.owners.ownersApi.getById(ownerId);
+    var name = ((owner.firstName || "") + " " + (owner.lastName || "")).trim() || owner.email || null;
+    if (name) _ownerCache[ownerId] = name;
+    return name;
+  } catch (err) {
+    console.error("HubSpot getOwnerName failed for", ownerId, ":", err.message);
+    return null;
+  }
+}
+
 /**
  * Check if a contact exists in HubSpot by first name, last name, and optional company.
+ * Returns marketing status and owner info if found.
  * Fails open: returns { found: false, contactId: null } on any error.
  *
  * @param {string} firstName
  * @param {string} lastName
  * @param {string|null} companyName
- * @returns {Promise<{found: boolean, contactId: string|null}>}
+ * @returns {Promise<{found: boolean, contactId: string|null, isMarketingContact: boolean|null, ownerName: string|null, ownerId: string|null}>}
  */
 async function existsInHubspot(firstName, lastName, companyName) {
-  if (!firstName || !lastName) return { found: false, contactId: null };
+  if (!firstName || !lastName) return { found: false, contactId: null, isMarketingContact: null, ownerName: null, ownerId: null };
 
   try {
     const client = getClient();
-    if (!client) return { found: false, contactId: null };
+    if (!client) return { found: false, contactId: null, isMarketingContact: null, ownerName: null, ownerId: null };
 
     const filters = [
       { propertyName: "firstname", operator: "EQ", value: firstName },
@@ -48,17 +75,28 @@ async function existsInHubspot(firstName, lastName, companyName) {
 
     const response = await client.crm.contacts.searchApi.doSearch({
       filterGroups: [{ filters }],
-      properties: ["firstname", "lastname", "company"],
+      properties: ["firstname", "lastname", "company", "hs_marketable_status", "hubspot_owner_id"],
       limit: 1,
     });
 
     if (response.total > 0) {
-      return { found: true, contactId: response.results[0].id };
+      var props = response.results[0].properties || {};
+      var ownerId = props.hubspot_owner_id || null;
+      var ownerName = await getOwnerName(ownerId);
+      var isMarketing = props.hs_marketable_status === "true" || props.hs_marketable_status === true;
+
+      return {
+        found: true,
+        contactId: response.results[0].id,
+        isMarketingContact: isMarketing,
+        ownerName: ownerName,
+        ownerId: ownerId,
+      };
     }
-    return { found: false, contactId: null };
+    return { found: false, contactId: null, isMarketingContact: null, ownerName: null, ownerId: null };
   } catch (err) {
     console.error("HubSpot check failed:", err.message);
-    return { found: false, contactId: null };
+    return { found: false, contactId: null, isMarketingContact: null, ownerName: null, ownerId: null };
   }
 }
 
