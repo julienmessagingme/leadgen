@@ -100,7 +100,7 @@ var DEFAULT_EMAIL_TEMPLATE =
   "3. SI SIGNAL CONCURRENT : Se positionner comme consultant en strategie conversationnelle. On aide a choisir les bons canaux, la bonne approche. Notre techno vient en complement.\n" +
   "4. CTA LEGER : Proposer un echange rapide (15 min), pas un 'demo produit'. Lien Calendly : {calendlyUrl}\n" +
   "5. FORMAT : Objet court et accrocheur (pas 'Relance' ou 'Suite a'). Corps : 4-6 phrases. HTML simple.\n" +
-  "6. SIGNATURE : Terminer TOUJOURS par cette signature exacte (en HTML) :\\n<br><br>Julien Dumas<br>CEO MessagingMe<br><a href=\\\"https://www.messagingme.fr\\\">www.messagingme.fr</a>\n" +
+  "6. SIGNATURE : NE PAS mettre de signature. Elle sera ajoutee automatiquement apres ton texte.\n" +
   "7. EN FRANCAIS si le prospect est en France, EN ANGLAIS si zone GCC/international.";
 
 var DEFAULT_WHATSAPP_TEMPLATE =
@@ -342,7 +342,7 @@ async function generateFollowUpMessage(lead, templates) {
  */
 async function generateEmail(lead, templates) {
   try {
-    var calendlyUrl = process.env.CALENDLY_URL || "https://calendly.com/julien-messagingme";
+    var calendlyUrl = process.env.CALENDLY_URL || "https://calendly.com/julien-messagingme/30min";
     var tpl = templates || (await loadTemplates());
     var instructions = (tpl.template_email || DEFAULT_EMAIL_TEMPLATE).replace("{calendlyUrl}", calendlyUrl);
     var lang = detectLanguage(lead);
@@ -369,7 +369,7 @@ async function generateEmail(lead, templates) {
       .replace(/--\s*<br\s*\/?>\s*Julien[^<]*/gi, "");
 
     // Add the correct signature before closing tags or at end
-    var signature = '<br><br>Julien Dumas<br>CEO MessagingMe<br><a href="https://www.messagingme.fr">www.messagingme.fr</a>';
+    var signature = '<br><br>Julien Dumas<br>CEO MessagingMe<br><a href="https://www.messagingme.fr">www.messagingme.fr</a><br><br><a href="' + calendlyUrl + '">Programmer un echange</a>';
     // Remove existing correct signature if present (avoid double)
     result.body = result.body.replace(/(<br\s*\/?>){1,3}\s*Julien Dumas\s*<br\s*\/?>.*?messagingme\.fr<\/a>/gi, "");
     // Insert before closing </body> or </html>
