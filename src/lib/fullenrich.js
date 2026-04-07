@@ -131,30 +131,22 @@ async function enrichContactInfo(linkedinUrl, runId) {
         var phone = c.most_probable_phone || null;
         var credits = pollData.cost ? pollData.cost.credits : 0;
 
-        // Return if email is DELIVERABLE or HIGH_PROBABILITY
-        var acceptedStatuses = ["DELIVERABLE", "HIGH_PROBABILITY"];
-        if (email && acceptedStatuses.indexOf(emailStatus) !== -1) {
+        // Accept ANY email returned by FullEnrich, regardless of status
+        if (email) {
           await log(runId, "fullenrich", "info",
-            "FullEnrich returned verified email (" + credits + " credits)",
-            { linkedin_url: linkedinUrl, email: email, has_phone: !!phone, credits: credits });
+            "FullEnrich returned email (" + emailStatus + ", " + credits + " credits)",
+            { linkedin_url: linkedinUrl, email: email, status: emailStatus, credits: credits });
 
           return {
             email: email,
             phone: phone,
-            confidence: "high",
+            confidence: emailStatus.toLowerCase(),
           };
         }
 
-        // Email found but not deliverable
-        if (email) {
-          await log(runId, "fullenrich", "info",
-            "FullEnrich email not deliverable: " + emailStatus + " (" + credits + " credits)",
-            { linkedin_url: linkedinUrl, email: email, status: emailStatus });
-        } else {
-          await log(runId, "fullenrich", "info",
-            "FullEnrich found no email (" + credits + " credits)",
-            { linkedin_url: linkedinUrl });
-        }
+        await log(runId, "fullenrich", "info",
+          "FullEnrich found no email (" + credits + " credits)",
+          { linkedin_url: linkedinUrl });
         return null;
       }
 
