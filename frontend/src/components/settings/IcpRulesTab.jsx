@@ -142,7 +142,7 @@ export default function IcpRulesTab() {
                   <select
                     value={newRule.category}
                     onChange={(e) => setNewRule({ ...newRule, category: e.target.value })}
-                    className="w-full rounded border-gray-300 text-sm"
+                    className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
                   >
                     {CATEGORIES.map((c) => (
                       <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>
@@ -155,13 +155,13 @@ export default function IcpRulesTab() {
                       placeholder="Cle"
                       value={newRule.key}
                       onChange={(e) => setNewRule({ ...newRule, key: e.target.value })}
-                      className="w-1/2 rounded border-gray-300 text-sm"
+                      className="w-1/2 rounded-md border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
                     />
                     <input
                       placeholder="Valeur"
                       value={newRule.value}
                       onChange={(e) => setNewRule({ ...newRule, value: e.target.value })}
-                      className="w-1/2 rounded border-gray-300 text-sm"
+                      className="w-1/2 rounded-md border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
                     />
                   </div>
                 </td>
@@ -172,20 +172,20 @@ export default function IcpRulesTab() {
                       placeholder="Poids"
                       value={newRule.numeric_value}
                       onChange={(e) => setNewRule({ ...newRule, numeric_value: Number(e.target.value) })}
-                      className="w-1/2 rounded border-gray-300 text-sm"
+                      className="w-1/2 rounded-md border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
                     />
                     <input
                       type="number"
                       placeholder="Seuil"
                       value={newRule.threshold}
                       onChange={(e) => setNewRule({ ...newRule, threshold: Number(e.target.value) })}
-                      className="w-1/2 rounded border-gray-300 text-sm"
+                      className="w-1/2 rounded-md border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
                     />
                   </div>
                 </td>
                 <td className="px-4 py-2 text-right">
-                  <button onClick={handleCreate} disabled={createRule.isPending} className="text-sm text-blue-600 hover:text-blue-800 mr-2 disabled:opacity-50">{createRule.isPending ? "..." : "Sauver"}</button>
-                  <button onClick={() => { setAdding(false); setNewRule({ ...emptyRule }); }} className="text-sm text-gray-500 hover:text-gray-700">Annuler</button>
+                  <button type="button" onClick={handleCreate} disabled={createRule.isPending} className="px-3 py-1 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 mr-2">{createRule.isPending ? "..." : "Sauver"}</button>
+                  <button type="button" onClick={() => { setAdding(false); setNewRule({ ...emptyRule }); }} className="px-3 py-1 text-sm text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200">Annuler</button>
                 </td>
               </tr>
             )}
@@ -205,7 +205,7 @@ export default function IcpRulesTab() {
                       <select
                         value={editData.category}
                         onChange={(e) => setEditData({ ...editData, category: e.target.value })}
-                        className="w-full rounded border-gray-300 text-sm"
+                        className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
                       >
                         {CATEGORIES.map((c) => (
                           <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>
@@ -217,12 +217,12 @@ export default function IcpRulesTab() {
                         <input
                           value={editData.key}
                           onChange={(e) => setEditData({ ...editData, key: e.target.value })}
-                          className="w-1/2 rounded border-gray-300 text-sm"
+                          className="w-1/2 rounded-md border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
                         />
                         <input
                           value={editData.value}
                           onChange={(e) => setEditData({ ...editData, value: e.target.value })}
-                          className="w-1/2 rounded border-gray-300 text-sm"
+                          className="w-1/2 rounded-md border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
                         />
                       </div>
                     </td>
@@ -232,19 +232,19 @@ export default function IcpRulesTab() {
                           type="number"
                           value={editData.numeric_value}
                           onChange={(e) => setEditData({ ...editData, numeric_value: Number(e.target.value) })}
-                          className="w-1/2 rounded border-gray-300 text-sm"
+                          className="w-1/2 rounded-md border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
                         />
                         <input
                           type="number"
                           value={editData.threshold}
                           onChange={(e) => setEditData({ ...editData, threshold: Number(e.target.value) })}
-                          className="w-1/2 rounded border-gray-300 text-sm"
+                          className="w-1/2 rounded-md border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
                         />
                       </div>
                     </td>
                     <td className="px-4 py-2 text-right">
-                      <button onClick={handleUpdate} disabled={updateRule.isPending} className="text-sm text-blue-600 hover:text-blue-800 mr-2 disabled:opacity-50">{updateRule.isPending ? "..." : "Sauver"}</button>
-                      <button onClick={() => setEditId(null)} className="text-sm text-gray-500 hover:text-gray-700">Annuler</button>
+                      <button type="button" onClick={handleUpdate} disabled={updateRule.isPending} className="px-3 py-1 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 mr-2">{updateRule.isPending ? "..." : "Sauver"}</button>
+                      <button type="button" onClick={() => setEditId(null)} className="px-3 py-1 text-sm text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200">Annuler</button>
                     </td>
                   </tr>
                 ) : (
