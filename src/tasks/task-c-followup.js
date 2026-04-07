@@ -214,7 +214,7 @@ module.exports = async function taskCFollowup(runId) {
       .select("id, full_name, first_name, last_name, linkedin_url, headline, company_name, signal_type, signal_category, signal_source, signal_detail, metadata, email, icp_score, tier, location, company_location, company_size, company_sector")
       .eq("status", "invitation_expired")
       .order("created_at", { ascending: true })
-      .limit(20);
+      .limit(100);
 
     if (reinviteErr) {
       await log(runId, "task-c-followup", "error", "Failed to query reinvite leads: " + reinviteErr.message);

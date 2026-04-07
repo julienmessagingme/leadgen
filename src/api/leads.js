@@ -784,7 +784,7 @@ router.post("/:id/reject-reinvite", async (req, res) => {
     if (fetchErr || !lead) return res.status(404).json({ error: "Lead not found" });
     if (lead.status !== "reinvite_pending") return res.status(400).json({ error: "Lead is not in reinvite_pending status" });
 
-    var metadata = lead.metadata || {};
+    var metadata = Object.assign({}, lead.metadata || {});
     delete metadata.draft_invitation_note;
     delete metadata.draft_reinvite_run_id;
     delete metadata.draft_reinvite_generated_at;
