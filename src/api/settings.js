@@ -24,6 +24,7 @@ const VALID_ICP_CATEGORIES = [
   "title_positive",
   "title_negative",
   "sector",
+  "geo_positive",
   "company_size",
   "seniority",
   "freshness",
