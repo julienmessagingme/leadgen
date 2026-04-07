@@ -300,6 +300,19 @@ export default function MessagesDraft() {
                     </div>
                   </div>
 
+                  {/* Signal context */}
+                  {lead.metadata?.post_text && (
+                    <div className="mb-3 bg-blue-50 rounded-lg px-3 py-2 text-xs text-blue-700 border border-blue-100">
+                      <span className="font-medium">Signal :</span> {lead.metadata.post_text.slice(0, 200)}{lead.metadata.post_text.length > 200 ? "…" : ""}
+                    </div>
+                  )}
+                  {!lead.metadata?.post_text && lead.signal_source && (
+                    <div className="mb-3 bg-gray-50 rounded-lg px-3 py-2 text-xs text-gray-600 border border-gray-200">
+                      <span className="font-medium">Signal :</span> {lead.signal_source}
+                      {lead.metadata?.signal_category ? ` (${lead.metadata.signal_category})` : ""}
+                    </div>
+                  )}
+
                   {/* Subject */}
                   <div className="mb-2">
                     <label className="text-xs font-medium text-gray-500 mb-1 block">Objet</label>
