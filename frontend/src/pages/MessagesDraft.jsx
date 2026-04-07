@@ -43,6 +43,7 @@ export default function MessagesDraft() {
   const [editedEmails, setEditedEmails] = useState({}); // { id: { subject, body } }
   const [pendingIds, setPendingIds] = useState({});
   const [errors, setErrors] = useState({});
+  const [editingHtml, setEditingHtml] = useState({}); // { id: true } = show raw HTML editor
 
   const { data: linkedinData, isLoading: linkedinLoading, refetch: refetchLinkedin } = useLeads({
     status: "message_pending",
@@ -334,18 +335,34 @@ export default function MessagesDraft() {
                     />
                   </div>
 
-                  {/* Body (HTML preview + edit) */}
+                  {/* Body (HTML preview / raw editor toggle) */}
                   <div className="mb-2">
-                    <label className="text-xs font-medium text-gray-500 mb-1 block">Corps de l'email</label>
-                    <textarea
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 resize-none focus:outline-none focus:ring-2 focus:ring-orange-300 font-mono"
-                      rows={6}
-                      value={body}
-                      onChange={(e) => setEditedEmails((prev) => ({
-                        ...prev,
-                        [lead.id]: { ...(prev[lead.id] || {}), body: e.target.value, subject: prev[lead.id]?.subject ?? subject },
-                      }))}
-                    />
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-medium text-gray-500">Corps de l'email</label>
+                      <button
+                        type="button"
+                        onClick={() => setEditingHtml((prev) => ({ ...prev, [lead.id]: !prev[lead.id] }))}
+                        className="text-xs text-gray-400 hover:text-gray-600"
+                      >
+                        {editingHtml[lead.id] ? "Apercu" : "Modifier le code"}
+                      </button>
+                    </div>
+                    {editingHtml[lead.id] ? (
+                      <textarea
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 resize-none focus:outline-none focus:ring-2 focus:ring-orange-300 font-mono"
+                        rows={8}
+                        value={body}
+                        onChange={(e) => setEditedEmails((prev) => ({
+                          ...prev,
+                          [lead.id]: { ...(prev[lead.id] || {}), body: e.target.value, subject: prev[lead.id]?.subject ?? subject },
+                        }))}
+                      />
+                    ) : (
+                      <div
+                        className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-800 bg-white prose prose-sm max-w-none"
+                        dangerouslySetInnerHTML={{ __html: body }}
+                      />
+                    )}
                   </div>
 
                   {errorMsg && (

@@ -31,46 +31,50 @@ function stripAccents(str) {
 function detectLanguage(lead) {
   var location = stripAccents(((lead.location || "") + " " + (lead.company_location || "")).toLowerCase());
   var headline = stripAccents((lead.headline || "").toLowerCase());
+  var companyName = stripAccents((lead.company_name || "").toLowerCase());
+  // Combine all text fields for French location detection (handles "chez McDonald's France" in headline)
+  var allText = location + " " + headline + " " + companyName;
 
   // GCC / Middle East → English
   var gccPatterns = ["dubai", "abu dhabi", "uae", "united arab", "saudi", "ksa", "qatar", "doha", "bahrain", "oman", "kuwait", "riyadh", "jeddah"];
   for (var i = 0; i < gccPatterns.length; i++) {
-    if (location.includes(gccPatterns[i])) return "en";
+    if (allText.includes(gccPatterns[i])) return "en";
   }
 
-  // Explicitly French-speaking countries → French
-  var frPatterns = ["france", "paris", "lyon", "marseille", "toulouse", "bordeaux", "lille", "nantes", "strasbourg", "belgique", "belgium", "bruxelles", "brussels", "suisse", "switzerland", "geneve", "geneva", "lausanne", "luxembourg", "montreal", "quebec"];
-  var isFrenchLocation = false;
+  // Explicitly French-speaking patterns → French (check location + headline + company)
+  var frPatterns = ["france", "paris", "lyon", "marseille", "toulouse", "bordeaux", "lille", "nantes", "strasbourg", "belgique", "belgium", "bruxelles", "brussels", "suisse", "switzerland", "geneve", "geneva", "lausanne", "luxembourg", "montreal", "quebec", "guyancourt", "ile-de-france", "ile de france"];
+  var isFrench = false;
   for (var j = 0; j < frPatterns.length; j++) {
-    if (location.includes(frPatterns[j])) { isFrenchLocation = true; break; }
+    if (allText.includes(frPatterns[j])) { isFrench = true; break; }
   }
 
-  // If location is French-speaking, default to French
-  if (isFrenchLocation) return "fr";
+  // If any French location signal found anywhere → French
+  if (isFrench) return "fr";
 
-  // English-speaking headline keywords (job titles typically in English)
-  var enHeadlinePatterns = ["head of", "chief", "ceo", "cto", "cmo", "coo", "vp ", "vice president", "director", "manager", "lead", "officer", "founder", "co-founder", "partner", "consultant", "advisor", "engineer", "developer", "product", "growth", "marketing", "sales", "business development", "customer success", "digital", "strategy"];
-  var frHeadlinePatterns = ["directeur", "directrice", "responsable", "chef de", "gerant", "fondateur", "fondatrice", "charge", "chargee", "conseiller", "conseillere", "adjoint", "adjointe", "ingenieur"];
-
-  var enScore = 0;
+  // French headline keywords (job titles in French = prospect is French-speaking)
+  var frHeadlinePatterns = ["directeur", "directrice", "responsable", "chef de", "cheffe", "gerant", "gerante", "fondateur", "fondatrice", "charge", "chargee", "conseiller", "conseillere", "adjoint", "adjointe", "ingenieur", "ingenieure", " chez ", "projet", "stagiaire", "alternance", "comptable", "redacteur", "redactrice", "coordinateur", "coordinatrice"];
   var frScore = 0;
-  for (var k = 0; k < enHeadlinePatterns.length; k++) {
-    if (headline.includes(enHeadlinePatterns[k])) enScore++;
-  }
   for (var m = 0; m < frHeadlinePatterns.length; m++) {
     if (headline.includes(frHeadlinePatterns[m])) frScore++;
   }
 
-  // Non-French location + English headline → English
-  if (!isFrenchLocation && enScore > 0 && frScore === 0) return "en";
+  // If headline has French job titles → French (even without location)
+  if (frScore > 0) return "fr";
 
-  // English-speaking countries → English
+  // English-speaking headline keywords
+  var enHeadlinePatterns = ["head of", "chief", "ceo", "cto", "cmo", "coo", "vp ", "vice president", "director", "manager", "officer", "founder", "co-founder", "partner", "consultant", "advisor", "engineer", "developer", "product", "growth", "sales", "business development", "customer success"];
+  var enScore = 0;
+  for (var k = 0; k < enHeadlinePatterns.length; k++) {
+    if (headline.includes(enHeadlinePatterns[k])) enScore++;
+  }
+
+  // English-speaking countries in location → English
   var enLocations = ["united states", "usa", "uk", "united kingdom", "london", "new york", "canada", "australia", "singapore", "hong kong", "india", "mumbai", "delhi", "bangalore", "hyderabad", "chennai", "pune", "germany", "berlin", "munich", "netherlands", "amsterdam", "spain", "madrid", "barcelona", "italy", "milan", "rome", "portugal", "lisbon", "ireland", "dublin", "sweden", "stockholm", "norway", "oslo", "denmark", "copenhagen", "finland", "helsinki", "poland", "warsaw", "japan", "tokyo", "korea", "seoul", "nigeria", "lagos", "south africa", "johannesburg", "kenya", "nairobi"];
   for (var n = 0; n < enLocations.length; n++) {
     if (location.includes(enLocations[n])) return "en";
   }
 
-  // If no location but headline is clearly English → English
+  // If no location and only English headline signals → English
   if (!location.trim() && enScore > 0 && frScore === 0) return "en";
 
   // Default: French
