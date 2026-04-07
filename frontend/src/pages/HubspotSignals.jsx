@@ -82,7 +82,7 @@ export default function HubspotSignals() {
                     (lead.signal_type || "") + " — " + (lead.signal_source || "");
                   const portalId = import.meta.env.VITE_HUBSPOT_PORTAL_ID;
                   const hubspotUrl = portalId && meta.hubspot_contact_id
-                    ? `https://app.hubspot.com/contacts/${portalId}/contact/${meta.hubspot_contact_id}`
+                    ? `https://app-eu1.hubspot.com/contacts/${portalId}/contact/${meta.hubspot_contact_id}`
                     : null;
 
                   return (

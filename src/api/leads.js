@@ -745,7 +745,7 @@ router.post("/:id/approve-reinvite", async (req, res) => {
     // Send invitation via BeReach with note
     await connectProfile(lead.linkedin_url, note);
 
-    var metadata = lead.metadata || {};
+    var metadata = Object.assign({}, lead.metadata || {});
     metadata.reinvite_count = (metadata.reinvite_count || 0) + 1;
     metadata.reinvite_note = note;
     metadata.reinvite_sent_at = new Date().toISOString();

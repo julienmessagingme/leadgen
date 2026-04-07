@@ -2,12 +2,14 @@
  * Task C: LinkedIn Connection Follow-up Processor.
  * Detects accepted connections and sends follow-up messages via BeReach.
  *
- * Runs at 07h20 Mon-Fri via scheduler (before Task A at 07h30).
+ * Runs at 07h20 Mon-Sat via scheduler (before Task A at 07h30).
  * Receives runId from registerTask wrapper.
  *
- * LIN-06: Detect accepted connections by comparing pending invitations against invitation_sent leads
- * LIN-07: Send follow-up messages to newly connected leads via BeReach /message/linkedin
- * LIN-08: Idempotence via run_id (skip leads already processed in current run)
+ * Phase ordering (critical — connection detection MUST run before expiry):
+ *   Phase 1: Detect accepted connections (0 credits)
+ *   Phase 2: Expire stale invitations > N days (configurable)
+ *   Phase 3: Generate reinvite drafts for leads expired 22+ days ago
+ *   Phase 4: Enrich + generate follow-up message drafts for connected leads
  */
 
 const { supabase } = require("../lib/supabase");
@@ -32,12 +34,106 @@ module.exports = async function taskCFollowup(runId) {
   var reinviteDrafts = 0;
 
   // -------------------------------------------------------
-  // Phase 0: Expire stale invitations (configurable, default 15 days)
-  // Withdraws via BeReach (best-effort) and marks as invitation_expired.
+  // Phase 1: Detect accepted connections via /me/linkedin/connections
+  // MUST run BEFORE Phase 2 (expire) to catch late acceptors (day 14-15).
+  // Cost: 0 BeReach credits.
   // -------------------------------------------------------
 
   try {
-    // Read setting
+    var { data: invitedLeads, error: invitedErr } = await supabase
+      .from("leads")
+      .select("id, full_name, first_name, last_name, linkedin_url, headline, company_name, signal_type, signal_category, signal_source, signal_detail, metadata, email, icp_score, tier, status, last_processed_run_id, location, company_location, company_size, company_sector, seniority_years, connections_count")
+      .eq("status", "invitation_sent")
+      .limit(200);
+
+    if (invitedErr) {
+      await log(runId, "task-c-followup", "error", "Failed to query invited leads: " + invitedErr.message);
+    } else if (!invitedLeads || invitedLeads.length === 0) {
+      await log(runId, "task-c-followup", "info", "No leads with status invitation_sent");
+    } else {
+      // Build two lookups for dual matching (ACoA vs slug URL mismatch)
+      var invitedBySlug = {};
+      var invitedByAcoa = {};
+      for (var i = 0; i < invitedLeads.length; i++) {
+        var rawUrl = (invitedLeads[i].linkedin_url || "").replace(/\/$/, "");
+        var lowerUrl = rawUrl.toLowerCase();
+        if (lowerUrl) invitedBySlug[lowerUrl] = invitedLeads[i];
+        var acoaId = rawUrl.match(/ACoA[A-Za-z0-9_-]+/);
+        if (acoaId) invitedByAcoa[acoaId[0]] = invitedLeads[i];
+      }
+
+      await log(runId, "task-c-followup", "info", "Checking " + invitedLeads.length + " invited leads against recent LinkedIn connections");
+
+      var connResult = await getConnections();
+      var connections = connResult.connections || connResult.items || [];
+
+      await log(runId, "task-c-followup", "info", "BeReach returned " + connections.length + " recent connections (0 credits)");
+
+      if (connResult.hasMore) {
+        await log(runId, "task-c-followup", "warn",
+          "BeReach returned hasMore=true — connections beyond first " + connections.length + " are not checked.");
+      }
+
+      var alreadyMatched = new Set();
+      var unmatchedSamples = 0;
+      for (var c = 0; c < connections.length; c++) {
+        var conn = connections[c];
+        var lead = null;
+
+        // Strategy 1: slug URL match (lowercase)
+        var connSlug = (conn.profileUrl || "").toLowerCase().replace(/\/$/, "");
+        if (connSlug && invitedBySlug[connSlug]) {
+          lead = invitedBySlug[connSlug];
+        }
+
+        // Strategy 2: ACoA ID match (case-sensitive, from profileUrn)
+        if (!lead) {
+          var urn = conn.profileUrn || "";
+          var acoaMatch = urn.match(/ACoA[A-Za-z0-9_-]+/);
+          if (acoaMatch && invitedByAcoa[acoaMatch[0]]) {
+            lead = invitedByAcoa[acoaMatch[0]];
+          }
+        }
+
+        if (lead && !alreadyMatched.has(lead.id)) {
+          alreadyMatched.add(lead.id);
+          try {
+            var { error: updateErr } = await supabase
+              .from("leads")
+              .update({ status: "connected", connected_at: new Date().toISOString() })
+              .eq("id", lead.id);
+
+            if (updateErr) throw new Error("Supabase update failed: " + updateErr.message);
+            connectionsDetected++;
+            await log(runId, "task-c-followup", "info", "Connection detected: " + (lead.full_name || lead.id));
+          } catch (err) {
+            errors++;
+            await log(runId, "task-c-followup", "error", "Failed to update connection status for " + (lead.full_name || lead.id) + ": " + err.message);
+          }
+        }
+
+        if (!lead && unmatchedSamples < 3) {
+          unmatchedSamples++;
+          await log(runId, "task-c-followup", "debug",
+            "Unmatched connection: " + (conn.name || "?") +
+            " profileUrl=" + (conn.profileUrl || "null") +
+            " profileUrn=" + (conn.profileUrn || "null"));
+        }
+      }
+
+      await log(runId, "task-c-followup", "info", "Connection detection complete: " + connectionsDetected + " new connections found");
+    }
+  } catch (err) {
+    await log(runId, "task-c-followup", "error", "Phase 1 (connection detection) failed: " + err.message);
+  }
+
+  // -------------------------------------------------------
+  // Phase 2: Expire stale invitations (configurable, default 15 days)
+  // Runs AFTER Phase 1 so late acceptors are detected first.
+  // Best-effort withdraw via BeReach.
+  // -------------------------------------------------------
+
+  try {
     var pendingMaxDays = 15;
     try {
       var { data: setting } = await supabase
@@ -65,9 +161,9 @@ module.exports = async function taskCFollowup(runId) {
       for (var s = 0; s < staleLeads.length; s++) {
         var staleLead = staleLeads[s];
         try {
-          // Best-effort withdraw — we don't have invitationUrn, try with profileUrn
-          var acoaId = (staleLead.linkedin_url || "").match(/ACoA[A-Za-z0-9_-]+/);
-          var profileUrn = acoaId ? "urn:li:fsd_profile:" + acoaId[0] : null;
+          // Best-effort withdraw — try with profileUrn (invitationUrn unavailable)
+          var staleAcoa = (staleLead.linkedin_url || "").match(/ACoA[A-Za-z0-9_-]+/);
+          var profileUrn = staleAcoa ? "urn:li:fsd_profile:" + staleAcoa[0] : null;
 
           if (profileUrn) {
             try {
@@ -80,8 +176,7 @@ module.exports = async function taskCFollowup(runId) {
             await log(runId, "task-c-followup", "warn", "No ACoA URN for " + (staleLead.full_name || staleLead.id) + " — cannot withdraw, marking expired");
           }
 
-          // Mark as expired regardless of withdraw result
-          var meta = staleLead.metadata || {};
+          var meta = Object.assign({}, staleLead.metadata || {});
           meta.invitation_withdrawn_at = new Date().toISOString();
           meta.reinvite_count = meta.reinvite_count || 0;
 
@@ -97,19 +192,18 @@ module.exports = async function taskCFollowup(runId) {
           await log(runId, "task-c-followup", "error", "Failed to expire " + (staleLead.full_name || staleLead.id) + ": " + err.message);
         }
 
-        // Small delay between withdraw calls
         if (s < staleLeads.length - 1) await sleep(3000);
       }
 
       await log(runId, "task-c-followup", "info", "Expired " + expired + " stale invitations");
     }
   } catch (err) {
-    await log(runId, "task-c-followup", "error", "Phase 0 (expire invitations) failed: " + err.message);
+    await log(runId, "task-c-followup", "error", "Phase 2 (expire invitations) failed: " + err.message);
   }
 
   // -------------------------------------------------------
-  // Phase 0b: Re-invite leads expired 22+ days ago with a personalized note
-  // Generates a draft invitation note for Julien to approve.
+  // Phase 3: Re-invite leads expired 22+ days ago with a personalized note
+  // Generates a draft invitation note for Julien to approve on /messages-draft.
   // -------------------------------------------------------
 
   try {
@@ -119,12 +213,12 @@ module.exports = async function taskCFollowup(runId) {
       .from("leads")
       .select("id, full_name, first_name, last_name, linkedin_url, headline, company_name, signal_type, signal_category, signal_source, signal_detail, metadata, email, icp_score, tier, location, company_location, company_size, company_sector")
       .eq("status", "invitation_expired")
+      .order("created_at", { ascending: true })
       .limit(20);
 
     if (reinviteErr) {
       await log(runId, "task-c-followup", "error", "Failed to query reinvite leads: " + reinviteErr.message);
     } else if (reinviteLeads && reinviteLeads.length > 0) {
-      // Filter to those expired 22+ days ago
       var eligible = reinviteLeads.filter(function(rl) {
         var withdrawnAt = rl.metadata && rl.metadata.invitation_withdrawn_at;
         return withdrawnAt && new Date(withdrawnAt) < new Date(reinviteCutoff);
@@ -137,9 +231,8 @@ module.exports = async function taskCFollowup(runId) {
         for (var r = 0; r < eligible.length; r++) {
           var rl = eligible[r];
           try {
-            // Skip if already re-invited once (max 1 re-invite)
+            // Max 1 re-invite per lead
             if (rl.metadata && rl.metadata.reinvite_count >= 1) {
-              await log(runId, "task-c-followup", "info", "Skipping " + (rl.full_name || rl.id) + " — already re-invited once");
               skipped++;
               continue;
             }
@@ -151,7 +244,7 @@ module.exports = async function taskCFollowup(runId) {
               continue;
             }
 
-            var meta = Object.assign({}, rl.metadata || {}, {
+            var reinvMeta = Object.assign({}, rl.metadata || {}, {
               draft_invitation_note: note,
               draft_reinvite_run_id: runId,
               draft_reinvite_generated_at: new Date().toISOString(),
@@ -159,7 +252,7 @@ module.exports = async function taskCFollowup(runId) {
 
             var { error: reinvUpErr } = await supabase
               .from("leads")
-              .update({ status: "reinvite_pending", metadata: meta })
+              .update({ status: "reinvite_pending", metadata: reinvMeta })
               .eq("id", rl.id);
 
             if (reinvUpErr) throw new Error("Supabase update failed: " + reinvUpErr.message);
@@ -174,127 +267,14 @@ module.exports = async function taskCFollowup(runId) {
       }
     }
   } catch (err) {
-    await log(runId, "task-c-followup", "error", "Phase 0b (reinvite drafts) failed: " + err.message);
+    await log(runId, "task-c-followup", "error", "Phase 3 (reinvite drafts) failed: " + err.message);
   }
 
   // -------------------------------------------------------
-  // Phase 1: Detect accepted connections via /me/linkedin/connections (LIN-06)
-  // Compares recent LinkedIn connections against leads with status 'invitation_sent'.
-  // Cost: 0 BeReach credits.
+  // Phase 4: Send follow-up messages to connected leads
+  // Enriches + generates draft message for Julien to approve.
   // -------------------------------------------------------
 
-  try {
-    // Get leads with status 'invitation_sent'
-    var { data: invitedLeads, error: invitedErr } = await supabase
-      .from("leads")
-      .select("id, full_name, first_name, last_name, linkedin_url, headline, company_name, signal_type, signal_category, signal_source, signal_detail, metadata, email, icp_score, tier, status, last_processed_run_id, location, company_location, company_size, company_sector, seniority_years, connections_count")
-      .eq("status", "invitation_sent")
-      .limit(200);
-
-    if (invitedErr) {
-      await log(runId, "task-c-followup", "error", "Failed to query invited leads: " + invitedErr.message);
-      return;
-    }
-
-    if (!invitedLeads || invitedLeads.length === 0) {
-      await log(runId, "task-c-followup", "info", "No leads with status invitation_sent");
-    } else {
-      // Build two lookups:
-      // 1. invitedBySlug: lowercase URL -> lead (for slug matching)
-      // 2. invitedByAcoa: ACoA ID (case-sensitive) -> lead (for ACoA matching)
-      var invitedBySlug = {};
-      var invitedByAcoa = {};
-      for (var i = 0; i < invitedLeads.length; i++) {
-        var rawUrl = (invitedLeads[i].linkedin_url || "").replace(/\/$/, "");
-        var lowerUrl = rawUrl.toLowerCase();
-        if (lowerUrl) invitedBySlug[lowerUrl] = invitedLeads[i];
-        // Extract ACoA ID (case-sensitive — Base64)
-        var acoaId = rawUrl.match(/ACoA[A-Za-z0-9_-]+/);
-        if (acoaId) invitedByAcoa[acoaId[0]] = invitedLeads[i];
-      }
-
-      await log(runId, "task-c-followup", "info", "Checking " + invitedLeads.length + " invited leads against recent LinkedIn connections");
-
-      // Fetch recent connections from BeReach (sorted by connectedAt desc, 0 credits)
-      var connResult = await getConnections();
-      var connections = connResult.connections || connResult.items || [];
-
-      await log(runId, "task-c-followup", "info", "BeReach returned " + connections.length + " recent connections (0 credits)");
-
-      // Warn if more connections exist beyond first page
-      if (connResult.hasMore) {
-        await log(runId, "task-c-followup", "warn",
-          "BeReach returned hasMore=true — connections beyond first " + connections.length + " are not checked. Older acceptances may be missed.");
-      }
-
-      // For each connection, try to match against invited leads.
-      // Two match strategies to handle ACoA vs slug URL mismatch:
-      //   1. Slug match: connection.profileUrl (lowercase) matches lead URL (lowercase)
-      //   2. ACoA match: ACoA ID from connection.profileUrn matches ACoA ID from lead URL
-      var alreadyMatched = new Set(); // avoid double-matching
-      var unmatchedSamples = 0; // log first few unmatched for debugging
-      for (var c = 0; c < connections.length; c++) {
-        var conn = connections[c];
-        var lead = null;
-
-        // Strategy 1: slug URL match
-        var connSlug = (conn.profileUrl || "").toLowerCase().replace(/\/$/, "");
-        if (connSlug && invitedBySlug[connSlug]) {
-          lead = invitedBySlug[connSlug];
-        }
-
-        // Strategy 2: ACoA ID match (from profileUrn)
-        if (!lead) {
-          var urn = conn.profileUrn || "";
-          var acoaMatch = urn.match(/ACoA[A-Za-z0-9_-]+/);
-          if (acoaMatch && invitedByAcoa[acoaMatch[0]]) {
-            lead = invitedByAcoa[acoaMatch[0]];
-          }
-        }
-
-        if (lead && !alreadyMatched.has(lead.id)) {
-          alreadyMatched.add(lead.id);
-          try {
-            var { error: updateErr } = await supabase
-              .from("leads")
-              .update({
-                status: "connected",
-                connected_at: new Date().toISOString(),
-              })
-              .eq("id", lead.id);
-
-            if (updateErr) throw new Error("Supabase update failed: " + updateErr.message);
-
-            connectionsDetected++;
-            await log(runId, "task-c-followup", "info", "Connection detected: " + (lead.full_name || lead.id));
-          } catch (err) {
-            errors++;
-            await log(runId, "task-c-followup", "error", "Failed to update connection status for " + (lead.full_name || lead.id) + ": " + err.message);
-          }
-        }
-
-        // Debug: log first 3 unmatched connections to diagnose URL/URN format
-        if (!lead && unmatchedSamples < 3) {
-          unmatchedSamples++;
-          await log(runId, "task-c-followup", "debug",
-            "Unmatched connection (not in invited leads): " + (conn.name || "?") +
-            " profileUrl=" + (conn.profileUrl || "null") +
-            " profileUrn=" + (conn.profileUrn || "null"));
-        }
-      }
-
-      await log(runId, "task-c-followup", "info", "Connection detection complete: " + connectionsDetected + " new connections found");
-    }
-  } catch (err) {
-    await log(runId, "task-c-followup", "error", "Connection detection failed: " + err.message);
-    // Continue to follow-up phase -- some connections may already have status 'connected'
-  }
-
-  // -------------------------------------------------------
-  // Phase 2: Send follow-up messages to connected leads (LIN-07)
-  // -------------------------------------------------------
-
-  // Query connected leads that haven't received a follow-up yet
   var { data: connectedLeads, error: connectedErr } = await supabase
     .from("leads")
     .select("id, full_name, first_name, last_name, linkedin_url, headline, company_name, signal_type, signal_category, signal_source, signal_detail, metadata, email, icp_score, tier, follow_up_sent_at, last_processed_run_id, location, company_location, company_size, company_sector, seniority_years, connections_count")
@@ -312,31 +292,25 @@ module.exports = async function taskCFollowup(runId) {
   } else {
     await log(runId, "task-c-followup", "info", "Found " + connectedLeads.length + " connected leads for follow-up");
 
-    // Cache templates once before lead loop (PERF-08)
     var templates = await loadTemplates();
 
     for (var j = 0; j < connectedLeads.length; j++) {
       var connLead = connectedLeads[j];
 
       try {
-        // LIN-08: Idempotence check -- skip if already processed in this run
         if (connLead.last_processed_run_id === runId) {
           skipped++;
           continue;
         }
 
-        // Suppression check (RGPD)
         if (await isSuppressed(connLead.email, connLead.linkedin_url)) {
           await log(runId, "task-c-followup", "info", "Lead suppressed (RGPD): " + (connLead.full_name || connLead.id));
           skipped++;
           continue;
         }
 
-        // Enrich lead with full profile + company data before generating message
-        // This gives Sonnet the complete context (posts, comments, company description, etc.)
         try {
           var enrichedConnLead = await enrichLead(connLead, runId);
-          // Persist enriched data back to leads table
           await supabase.from("leads").update({
             location: enrichedConnLead.location || connLead.location,
             company_name: enrichedConnLead.company_name || connLead.company_name,
@@ -356,7 +330,6 @@ module.exports = async function taskCFollowup(runId) {
             "Enrichment failed for " + (connLead.full_name || connLead.id) + ": " + enrichErr.message + " — generating message with existing data");
         }
 
-        // Generate follow-up message via Claude Sonnet
         var message = await generateFollowUpMessage(connLead, templates);
         if (!message) {
           await log(runId, "task-c-followup", "warn", "Failed to generate follow-up message for " + (connLead.full_name || connLead.id));
@@ -364,8 +337,6 @@ module.exports = async function taskCFollowup(runId) {
           continue;
         }
 
-        // VALIDATION MODE : save draft, do NOT send via BeReach
-        // Julien reviews and approves manually from the frontend
         var updatedMetadata = Object.assign({}, connLead.metadata || {}, {
           draft_message: message,
           draft_run_id: runId,
@@ -390,9 +361,9 @@ module.exports = async function taskCFollowup(runId) {
     }
   }
 
-  // Summary log
+  // Summary
   await log(runId, "task-c-followup", "info",
-    "Task C completed: " + expired + " expired, " + reinviteDrafts + " reinvite drafts, " +
-    connectionsDetected + " connections detected, " + draftsSaved + " message drafts saved, " +
+    "Task C completed: " + connectionsDetected + " connections, " + expired + " expired, " +
+    reinviteDrafts + " reinvite drafts, " + draftsSaved + " message drafts, " +
     skipped + " skipped, " + errors + " errors");
 };
