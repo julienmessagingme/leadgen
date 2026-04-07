@@ -73,11 +73,18 @@ module.exports = async function taskCFollowup(runId) {
 
       await log(runId, "task-c-followup", "info", "BeReach returned " + connections.length + " recent connections (0 credits)");
 
+      // Warn if more connections exist beyond first page
+      if (connResult.hasMore) {
+        await log(runId, "task-c-followup", "warn",
+          "BeReach returned hasMore=true — connections beyond first " + connections.length + " are not checked. Older acceptances may be missed.");
+      }
+
       // For each connection, try to match against invited leads.
       // Two match strategies to handle ACoA vs slug URL mismatch:
       //   1. Slug match: connection.profileUrl (lowercase) matches lead URL (lowercase)
       //   2. ACoA match: ACoA ID from connection.profileUrn matches ACoA ID from lead URL
       var alreadyMatched = new Set(); // avoid double-matching
+      var unmatchedSamples = 0; // log first few unmatched for debugging
       for (var c = 0; c < connections.length; c++) {
         var conn = connections[c];
         var lead = null;
@@ -100,7 +107,7 @@ module.exports = async function taskCFollowup(runId) {
         if (lead && !alreadyMatched.has(lead.id)) {
           alreadyMatched.add(lead.id);
           try {
-            await supabase
+            var { error: updateErr } = await supabase
               .from("leads")
               .update({
                 status: "connected",
@@ -108,12 +115,23 @@ module.exports = async function taskCFollowup(runId) {
               })
               .eq("id", lead.id);
 
+            if (updateErr) throw new Error("Supabase update failed: " + updateErr.message);
+
             connectionsDetected++;
             await log(runId, "task-c-followup", "info", "Connection detected: " + (lead.full_name || lead.id));
           } catch (err) {
             errors++;
             await log(runId, "task-c-followup", "error", "Failed to update connection status for " + (lead.full_name || lead.id) + ": " + err.message);
           }
+        }
+
+        // Debug: log first 3 unmatched connections to diagnose URL/URN format
+        if (!lead && unmatchedSamples < 3) {
+          unmatchedSamples++;
+          await log(runId, "task-c-followup", "debug",
+            "Unmatched connection (not in invited leads): " + (conn.name || "?") +
+            " profileUrl=" + (conn.profileUrl || "null") +
+            " profileUrn=" + (conn.profileUrn || "null"));
         }
       }
 
