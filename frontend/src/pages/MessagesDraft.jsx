@@ -262,6 +262,8 @@ export default function MessagesDraft() {
               const subject = edited?.subject ?? lead.metadata?.draft_email_subject ?? "";
               const body = edited?.body ?? lead.metadata?.draft_email_body ?? "";
               const emailTo = lead.metadata?.draft_email_to || lead.email;
+              const emailSource = lead.metadata?.email_source;
+              const isFromHubspot = emailSource === "hubspot";
               const isApproving = pendingIds[lead.id] === "approving";
               const isRejecting = pendingIds[lead.id] === "rejecting";
               const errorMsg = errors[lead.id];
@@ -280,11 +282,21 @@ export default function MessagesDraft() {
                       <p className="text-sm text-gray-500">{lead.headline}</p>
                       <p className="text-xs text-gray-400">{lead.company_name} · {lead.signal_source}</p>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right flex flex-col items-end gap-1.5">
                       <span className="inline-flex items-center gap-1 px-2 py-1 bg-orange-50 text-orange-700 text-xs font-medium rounded-md border border-orange-200">
                         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                         {emailTo}
                       </span>
+                      {isFromHubspot ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-50 text-green-700 text-xs font-medium rounded-md border border-green-200">
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                          HubSpot
+                        </span>
+                      ) : emailSource === "fullenrich" ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-600 text-xs font-medium rounded-md border border-blue-200">
+                          FullEnrich
+                        </span>
+                      ) : null}
                     </div>
                   </div>
 
