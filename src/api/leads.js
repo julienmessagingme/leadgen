@@ -801,4 +801,31 @@ router.post("/:id/reject-reinvite", async (req, res) => {
   }
 });
 
+/**
+ * GET /:id/hubspot-email -- Fetch the last email for a HubSpot contact.
+ * Returns on-demand (not cached) to always show the latest.
+ */
+router.get("/:id/hubspot-email", async (req, res) => {
+  try {
+    const { getLastEmail } = require("../lib/hubspot");
+
+    const { data: lead, error: fetchErr } = await supabase
+      .from("leads")
+      .select("id, metadata")
+      .eq("id", req.params.id)
+      .single();
+
+    if (fetchErr || !lead) return res.status(404).json({ error: "Lead not found" });
+
+    var contactId = lead.metadata && lead.metadata.hubspot_contact_id;
+    if (!contactId) return res.json({ email: null, reason: "no_hubspot_contact_id" });
+
+    var email = await getLastEmail(contactId);
+    res.json({ email: email });
+  } catch (err) {
+    console.error("GET /leads/:id/hubspot-email error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
