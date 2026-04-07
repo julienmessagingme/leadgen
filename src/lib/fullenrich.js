@@ -36,6 +36,26 @@ async function enrichContactInfo(linkedinUrl, runId) {
     return null;
   }
 
+  // FullEnrich only accepts slug URLs (/in/john-doe), not ACoA URLs (/in/ACoAAXXX...).
+  // Convert ACoA to slug via BeReach visitProfile if needed.
+  var urlToEnrich = linkedinUrl;
+  if (/ACoA/.test(linkedinUrl)) {
+    try {
+      var { visitProfile } = require("./bereach");
+      var profile = await visitProfile(linkedinUrl);
+      var slug = profile.publicIdentifier || profile.public_identifier;
+      if (slug) {
+        urlToEnrich = "https://www.linkedin.com/in/" + slug;
+        await log(runId, "fullenrich", "info",
+          "Resolved ACoA to slug: " + urlToEnrich, { original: linkedinUrl });
+      }
+    } catch (resolveErr) {
+      await log(runId, "fullenrich", "warn",
+        "Failed to resolve ACoA URL: " + resolveErr.message, { linkedin_url: linkedinUrl });
+      // Continue with ACoA URL — FullEnrich might still handle it
+    }
+  }
+
   try {
     // Step 1: Submit bulk enrichment (single contact)
     var submitRes = await fetch(FULLENRICH_BASE + "/contact/enrich/bulk", {
@@ -47,7 +67,7 @@ async function enrichContactInfo(linkedinUrl, runId) {
       body: JSON.stringify({
         name: "leadgen-" + Date.now(),
         datas: [{
-          linkedin_url: linkedinUrl,
+          linkedin_url: urlToEnrich,
           enrich_fields: ["contact.emails"],
         }],
       }),
@@ -111,8 +131,9 @@ async function enrichContactInfo(linkedinUrl, runId) {
         var phone = c.most_probable_phone || null;
         var credits = pollData.cost ? pollData.cost.credits : 0;
 
-        // Only return if email is DELIVERABLE
-        if (email && emailStatus === "DELIVERABLE") {
+        // Return if email is DELIVERABLE or HIGH_PROBABILITY
+        var acceptedStatuses = ["DELIVERABLE", "HIGH_PROBABILITY"];
+        if (email && acceptedStatuses.indexOf(emailStatus) !== -1) {
           await log(runId, "fullenrich", "info",
             "FullEnrich returned verified email (" + credits + " credits)",
             { linkedin_url: linkedinUrl, email: email, has_phone: !!phone, credits: credits });
