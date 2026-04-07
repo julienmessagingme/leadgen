@@ -51,11 +51,18 @@ module.exports = async function taskCFollowup(runId) {
     if (!invitedLeads || invitedLeads.length === 0) {
       await log(runId, "task-c-followup", "info", "No leads with status invitation_sent");
     } else {
-      // Build lookup: normalized linkedin URL -> lead
-      var invitedByUrl = {};
+      // Build two lookups:
+      // 1. invitedBySlug: lowercase URL -> lead (for slug matching)
+      // 2. invitedByAcoa: ACoA ID (case-sensitive) -> lead (for ACoA matching)
+      var invitedBySlug = {};
+      var invitedByAcoa = {};
       for (var i = 0; i < invitedLeads.length; i++) {
-        var leadUrl = (invitedLeads[i].linkedin_url || "").toLowerCase().replace(/\/$/, "");
-        if (leadUrl) invitedByUrl[leadUrl] = invitedLeads[i];
+        var rawUrl = (invitedLeads[i].linkedin_url || "").replace(/\/$/, "");
+        var lowerUrl = rawUrl.toLowerCase();
+        if (lowerUrl) invitedBySlug[lowerUrl] = invitedLeads[i];
+        // Extract ACoA ID (case-sensitive — Base64)
+        var acoaId = rawUrl.match(/ACoA[A-Za-z0-9_-]+/);
+        if (acoaId) invitedByAcoa[acoaId[0]] = invitedLeads[i];
       }
 
       await log(runId, "task-c-followup", "info", "Checking " + invitedLeads.length + " invited leads against recent LinkedIn connections");
@@ -66,17 +73,32 @@ module.exports = async function taskCFollowup(runId) {
 
       await log(runId, "task-c-followup", "info", "BeReach returned " + connections.length + " recent connections (0 credits)");
 
-      // Build set of connected profile URLs
-      var connectedUrls = new Set();
+      // For each connection, try to match against invited leads.
+      // Two match strategies to handle ACoA vs slug URL mismatch:
+      //   1. Slug match: connection.profileUrl (lowercase) matches lead URL (lowercase)
+      //   2. ACoA match: ACoA ID from connection.profileUrn matches ACoA ID from lead URL
+      var alreadyMatched = new Set(); // avoid double-matching
       for (var c = 0; c < connections.length; c++) {
-        var connUrl = (connections[c].profileUrl || "").toLowerCase().replace(/\/$/, "");
-        if (connUrl) connectedUrls.add(connUrl);
-      }
+        var conn = connections[c];
+        var lead = null;
 
-      // Match: if an invited lead's URL appears in connections → accepted
-      for (var url in invitedByUrl) {
-        if (connectedUrls.has(url)) {
-          var lead = invitedByUrl[url];
+        // Strategy 1: slug URL match
+        var connSlug = (conn.profileUrl || "").toLowerCase().replace(/\/$/, "");
+        if (connSlug && invitedBySlug[connSlug]) {
+          lead = invitedBySlug[connSlug];
+        }
+
+        // Strategy 2: ACoA ID match (from profileUrn)
+        if (!lead) {
+          var urn = conn.profileUrn || "";
+          var acoaMatch = urn.match(/ACoA[A-Za-z0-9_-]+/);
+          if (acoaMatch && invitedByAcoa[acoaMatch[0]]) {
+            lead = invitedByAcoa[acoaMatch[0]];
+          }
+        }
+
+        if (lead && !alreadyMatched.has(lead.id)) {
+          alreadyMatched.add(lead.id);
           try {
             await supabase
               .from("leads")
