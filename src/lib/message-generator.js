@@ -101,7 +101,8 @@ var DEFAULT_EMAIL_TEMPLATE =
   "4. PAS DE CTA : ne propose PAS de RDV, PAS de lien Calendly, PAS de 'reserver un creneau', PAS de 'programmer un echange'. Le lien sera ajoute automatiquement en signature.\n" +
   "5. FORMAT : Objet court et accrocheur (pas 'Relance' ou 'Suite a'). Corps : 4-6 phrases. HTML simple. Terminer par une question ouverte.\n" +
   "6. SIGNATURE : NE PAS mettre de signature, NE PAS mettre 'Bonne journee', NE PAS mettre 'Cordialement'. Tout sera ajoute automatiquement.\n" +
-  "7. EN FRANCAIS si le prospect est en France, EN ANGLAIS si zone GCC/international.";
+  "7. EN FRANCAIS si le prospect est en France, EN ANGLAIS si zone GCC/international.\n" +
+  "8. INTERDICTIONS ABSOLUES : 'j ai vu que vous avez like/commente/reagi', 'vous avez reagi a mes posts', 'vous suivez de pres', 'vos interactions recentes', 'votre activite recente', 'your repeated engagement', 'I noticed you ve been exploring', 'caught my attention', 'le sujet revient souvent dans vos echanges'. JAMAIS de reference au fait qu on surveille ou observe l activite LinkedIn du prospect — ca fait flicage/stalking. On ecrit parce que le SUJET nous interesse, pas parce qu on a vu que la personne a like un post. Pas de 'MessagingMe', pas de nom de societe.";
 
 var DEFAULT_WHATSAPP_TEMPLATE =
   "Redige un message WhatsApp pour ce prospect.\n\n" +
