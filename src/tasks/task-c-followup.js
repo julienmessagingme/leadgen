@@ -11,7 +11,7 @@
  */
 
 const { supabase } = require("../lib/supabase");
-const { getSentInvitations, sleep } = require("../lib/bereach");
+const { getConnections, sleep } = require("../lib/bereach");
 const { enrichLead } = require("../lib/enrichment");
 const { isSuppressed } = require("../lib/suppression");
 const { generateFollowUpMessage, isColdLead, loadTemplates } = require("../lib/message-generator");
@@ -30,36 +30,12 @@ module.exports = async function taskCFollowup(runId) {
   var errors = 0;
 
   // -------------------------------------------------------
-  // Phase 1: Detect accepted connections (LIN-06)
+  // Phase 1: Detect accepted connections via /me/linkedin/connections (LIN-06)
+  // Compares recent LinkedIn connections against leads with status 'invitation_sent'.
+  // Cost: 0 BeReach credits.
   // -------------------------------------------------------
 
   try {
-    // Get pending sent invitations from BeReach
-    // API returns { success: true, invitations: [...], total: N }
-    var pendingResult = await getSentInvitations();
-    var pendingInvitations = (pendingResult && Array.isArray(pendingResult.invitations))
-      ? pendingResult.invitations
-      : Array.isArray(pendingResult) ? pendingResult : [];
-
-    // Normalize: extract LinkedIn URLs from pending invitations
-    var pendingUrls = new Set();
-    for (var p = 0; p < pendingInvitations.length; p++) {
-      var inv = pendingInvitations[p];
-      var url = inv.profileUrl || inv.profile_url || inv.url || inv.profile || "";
-      if (url) {
-        pendingUrls.add(url.toLowerCase().replace(/\/$/, ""));
-      }
-    }
-
-    var totalPending = pendingResult && pendingResult.total != null ? pendingResult.total : pendingInvitations.length;
-    await log(runId, "task-c-followup", "info", "Found " + pendingUrls.size + " pending invitations from BeReach (total reported: " + totalPending + ")");
-
-    // SAFETY GUARD: if BeReach returns 0 pending invitations, skip detection.
-    // Could mean all were accepted OR the API is broken — either way don't mark everyone as connected.
-    // Connection detection is now primarily manual via the Invitations page.
-    if (pendingUrls.size === 0) {
-      await log(runId, "task-c-followup", "warn", "BeReach returned 0 pending invitations — skipping connection detection (use Invitations page for manual confirmation)");
-    } else {
     // Get leads with status 'invitation_sent'
     var { data: invitedLeads, error: invitedErr } = await supabase
       .from("leads")
@@ -75,17 +51,39 @@ module.exports = async function taskCFollowup(runId) {
     if (!invitedLeads || invitedLeads.length === 0) {
       await log(runId, "task-c-followup", "info", "No leads with status invitation_sent");
     } else {
-      // Compare: if a lead's invitation is no longer pending, it was accepted (or withdrawn)
+      // Build lookup: normalized linkedin URL -> lead
+      var invitedByUrl = {};
       for (var i = 0; i < invitedLeads.length; i++) {
-        var lead = invitedLeads[i];
-        var leadUrl = (lead.linkedin_url || "").toLowerCase().replace(/\/$/, "");
+        var leadUrl = (invitedLeads[i].linkedin_url || "").toLowerCase().replace(/\/$/, "");
+        if (leadUrl) invitedByUrl[leadUrl] = invitedLeads[i];
+      }
 
-        if (leadUrl && !pendingUrls.has(leadUrl)) {
-          // Invitation no longer pending -> mark as connected
+      await log(runId, "task-c-followup", "info", "Checking " + invitedLeads.length + " invited leads against recent LinkedIn connections");
+
+      // Fetch recent connections from BeReach (sorted by connectedAt desc, 0 credits)
+      var connResult = await getConnections();
+      var connections = connResult.connections || connResult.items || [];
+
+      await log(runId, "task-c-followup", "info", "BeReach returned " + connections.length + " recent connections (0 credits)");
+
+      // Build set of connected profile URLs
+      var connectedUrls = new Set();
+      for (var c = 0; c < connections.length; c++) {
+        var connUrl = (connections[c].profileUrl || "").toLowerCase().replace(/\/$/, "");
+        if (connUrl) connectedUrls.add(connUrl);
+      }
+
+      // Match: if an invited lead's URL appears in connections → accepted
+      for (var url in invitedByUrl) {
+        if (connectedUrls.has(url)) {
+          var lead = invitedByUrl[url];
           try {
             await supabase
               .from("leads")
-              .update({ status: "connected" })
+              .update({
+                status: "connected",
+                connected_at: new Date().toISOString(),
+              })
               .eq("id", lead.id);
 
             connectionsDetected++;
@@ -96,10 +94,9 @@ module.exports = async function taskCFollowup(runId) {
           }
         }
       }
-    }
 
-    await log(runId, "task-c-followup", "info", "Connection detection complete: " + connectionsDetected + " new connections found");
-    } // end pendingUrls.size > 0 guard
+      await log(runId, "task-c-followup", "info", "Connection detection complete: " + connectionsDetected + " new connections found");
+    }
   } catch (err) {
     await log(runId, "task-c-followup", "error", "Connection detection failed: " + err.message);
     // Continue to follow-up phase -- some connections may already have status 'connected'

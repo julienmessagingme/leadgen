@@ -66,6 +66,47 @@ async function bereach(endpoint, body = {}) {
 }
 
 /**
+ * Internal function: GET from BeReach API with Bearer auth.
+ * @param {string} endpoint - API endpoint path (e.g. /me/linkedin/connections)
+ * @returns {Promise<object>} Parsed JSON response
+ */
+async function bereachGet(endpoint) {
+  const apiKey = process.env.BEREACH_API_KEY;
+  if (!apiKey) {
+    throw new Error("BEREACH_API_KEY is not set in environment");
+  }
+
+  const res = await fetch(BEREACH_BASE + endpoint, {
+    method: "GET",
+    headers: {
+      Authorization: "Bearer " + apiKey,
+    },
+  });
+
+  if (res.status === 429) {
+    var errBody = await res.json().catch(() => ({}));
+    var wait = (errBody.error && errBody.error.retryAfter) || 5;
+    await new Promise(function(r) { setTimeout(r, wait * 1000); });
+    var retry = await fetch(BEREACH_BASE + endpoint, {
+      method: "GET",
+      headers: { Authorization: "Bearer " + apiKey },
+    });
+    if (!retry.ok) {
+      var retryText = await retry.text();
+      throw new Error("BeReach GET " + endpoint + " failed after retry (" + retry.status + "): " + retryText);
+    }
+    return retry.json();
+  }
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error("BeReach GET " + endpoint + " failed (" + res.status + "): " + text);
+  }
+
+  return res.json();
+}
+
+/**
  * Collect likers of a LinkedIn post.
  * @param {string} postUrl - LinkedIn post URL
  */
@@ -169,6 +210,16 @@ async function searchInbox(keyword) {
   return bereach("/chats/linkedin/search", { keyword });
 }
 
+/**
+ * Get LinkedIn connections (most recent first).
+ * Returns { connections: [...], hasMore, count, total }.
+ * Each connection has: name, profileUrl, profileUrn, connectedAt (timestamp ms).
+ * Cost: 0 credits.
+ */
+async function getConnections() {
+  return bereachGet("/me/linkedin/connections");
+}
+
 module.exports = {
   collectPostLikers,
   collectPostCommenters,
@@ -183,4 +234,5 @@ module.exports = {
   getSentInvitations,
   sendMessage,
   searchInbox,
+  getConnections,
 };
