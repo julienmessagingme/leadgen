@@ -35,21 +35,33 @@ export default function IcpRulesTab() {
   const [newRule, setNewRule] = useState({ ...emptyRule });
   const [editId, setEditId] = useState(null);
   const [editData, setEditData] = useState({});
+  const [saveError, setSaveError] = useState(null);
+  const [saveSuccess, setSaveSuccess] = useState(null);
 
   const rules = data?.rules ?? [];
 
   const handleCreate = () => {
+    setSaveError(null);
     createRule.mutate(newRule, {
       onSuccess: () => {
         setAdding(false);
         setNewRule({ ...emptyRule });
+        setSaveSuccess("Regle creee");
+        setTimeout(() => setSaveSuccess(null), 2000);
       },
+      onError: (err) => setSaveError(err?.response?.data?.error || err?.message || "Erreur lors de la creation"),
     });
   };
 
   const handleUpdate = () => {
+    setSaveError(null);
     updateRule.mutate({ id: editId, ...editData }, {
-      onSuccess: () => setEditId(null),
+      onSuccess: () => {
+        setEditId(null);
+        setSaveSuccess("Enregistre !");
+        setTimeout(() => setSaveSuccess(null), 2000);
+      },
+      onError: (err) => setSaveError(err?.response?.data?.error || err?.message || "Erreur lors de la sauvegarde"),
     });
   };
 
@@ -89,6 +101,17 @@ export default function IcpRulesTab() {
 
   return (
     <div>
+      {saveError && (
+        <div className="mb-4 px-4 py-2 bg-red-50 text-red-700 text-sm rounded-lg border border-red-200">
+          {saveError}
+        </div>
+      )}
+      {saveSuccess && (
+        <div className="mb-4 px-4 py-2 bg-green-50 text-green-700 text-sm rounded-lg border border-green-200">
+          {saveSuccess}
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-gray-800">Regles de scoring ICP</h2>
         {!adding && (
@@ -161,7 +184,7 @@ export default function IcpRulesTab() {
                   </div>
                 </td>
                 <td className="px-4 py-2 text-right">
-                  <button onClick={handleCreate} className="text-sm text-blue-600 hover:text-blue-800 mr-2">Sauver</button>
+                  <button onClick={handleCreate} disabled={createRule.isPending} className="text-sm text-blue-600 hover:text-blue-800 mr-2 disabled:opacity-50">{createRule.isPending ? "..." : "Sauver"}</button>
                   <button onClick={() => { setAdding(false); setNewRule({ ...emptyRule }); }} className="text-sm text-gray-500 hover:text-gray-700">Annuler</button>
                 </td>
               </tr>
@@ -220,7 +243,7 @@ export default function IcpRulesTab() {
                       </div>
                     </td>
                     <td className="px-4 py-2 text-right">
-                      <button onClick={handleUpdate} className="text-sm text-blue-600 hover:text-blue-800 mr-2">Sauver</button>
+                      <button onClick={handleUpdate} disabled={updateRule.isPending} className="text-sm text-blue-600 hover:text-blue-800 mr-2 disabled:opacity-50">{updateRule.isPending ? "..." : "Sauver"}</button>
                       <button onClick={() => setEditId(null)} className="text-sm text-gray-500 hover:text-gray-700">Annuler</button>
                     </td>
                   </tr>
