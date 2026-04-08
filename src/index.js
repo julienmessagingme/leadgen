@@ -63,6 +63,9 @@ app.use(express.json({ limit: "50kb" }));
 // Auth routes (public -- no middleware)
 app.use("/api/auth", require("./api/auth"));
 
+// Tracking endpoints (PUBLIC -- called by email recipients' browsers)
+app.use("/track", require("./api/tracking"));
+
 // Auth check (protected)
 app.get("/api/auth/check", require("./api/middleware"), (req, res) => {
   res.json({ ok: true });
