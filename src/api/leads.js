@@ -572,6 +572,54 @@ router.post("/:id/approve-email", async (req, res) => {
 });
 
 /**
+ * POST /:id/regenerate-message -- Regenerate LinkedIn follow-up draft with forced language
+ * Body: { lang: "fr" | "en" }
+ */
+router.post("/:id/regenerate-message", async (req, res) => {
+  try {
+    const { generateFollowUpMessage, loadTemplates } = require("../lib/message-generator");
+
+    const { data: lead, error: fetchErr } = await supabase
+      .from("leads")
+      .select("*")
+      .eq("id", req.params.id)
+      .single();
+
+    if (fetchErr || !lead) return res.status(404).json({ error: "Lead not found" });
+    if (lead.status !== "message_pending") return res.status(400).json({ error: "Lead is not in message_pending status" });
+
+    const lang = req.body.lang === "en" ? "en" : "fr";
+
+    // Override language detection by temporarily injecting a location hint
+    const originalLocation = lead.location;
+    lead.location = lang === "en" ? "New York, US" : "Paris, France";
+
+    const templates = await loadTemplates();
+    const message = await generateFollowUpMessage(lead, templates);
+
+    lead.location = originalLocation; // restore
+
+    if (!message) return res.status(500).json({ error: "Failed to generate message" });
+
+    const updatedMetadata = Object.assign({}, lead.metadata || {}, {
+      draft_message: message,
+      draft_generated_at: new Date().toISOString(),
+      forced_lang: lang,
+    });
+
+    await supabase
+      .from("leads")
+      .update({ metadata: updatedMetadata })
+      .eq("id", lead.id);
+
+    res.json({ ok: true, lang, message });
+  } catch (err) {
+    console.error("POST /leads/:id/regenerate-message error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
  * POST /:id/regenerate-email -- Regenerate email draft with forced language
  * Body: { lang: "fr" | "en" }
  */
