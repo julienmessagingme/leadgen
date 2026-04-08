@@ -14,7 +14,7 @@
 
 const { supabase } = require("../lib/supabase");
 const { enrichContactInfo } = require("../lib/fullenrich");
-const { existsInHubspotByEmail, findEmailInHubspot } = require("../lib/hubspot");
+const { existsInHubspot, existsInHubspotByEmail, findEmailInHubspot } = require("../lib/hubspot");
 const { searchInbox, sleep } = require("../lib/bereach");
 const { isSuppressed } = require("../lib/suppression");
 const { generateEmail, isColdLead, loadTemplates } = require("../lib/message-generator");
@@ -273,6 +273,18 @@ module.exports = async function taskDEmail(runId) {
         continue;
       }
 
+      // HubSpot enrichment — always check, store marketing/owner info in metadata
+      // so the validation page shows whether this is an existing HubSpot contact.
+      var hubspotInfo = null;
+      try {
+        if (lead.first_name && lead.last_name) {
+          hubspotInfo = await existsInHubspot(lead.first_name, lead.last_name, lead.company_name || null);
+        }
+      } catch (e) {
+        // fail open
+        await log(runId, TASK_NAME, "warn", "HubSpot enrichment failed: " + e.message, { lead_id: lead.id });
+      }
+
       // VALIDATION MODE: save email draft for manual review
       // Email address will be resolved later (Fullenrich) if not available now
       var metadata = lead.metadata || {};
@@ -282,6 +294,13 @@ module.exports = async function taskDEmail(runId) {
       metadata.draft_email_run_id = runId;
       metadata.draft_email_generated_at = new Date().toISOString();
       metadata.pre_email_status = lead.status;
+
+      if (hubspotInfo && hubspotInfo.found) {
+        metadata.hubspot_contact_id = hubspotInfo.contactId;
+        metadata.hubspot_is_marketing = hubspotInfo.isMarketingContact;
+        metadata.hubspot_owner_name = hubspotInfo.ownerName;
+        metadata.hubspot_owner_id = hubspotInfo.ownerId;
+      }
 
       await supabase
         .from("leads")

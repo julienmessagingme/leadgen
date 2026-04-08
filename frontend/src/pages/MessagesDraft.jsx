@@ -467,6 +467,41 @@ export default function MessagesDraft() {
                     </div>
                   </div>
 
+                  {/* HubSpot contact info — shown if lead is in HubSpot */}
+                  {lead.metadata?.hubspot_contact_id && (
+                    <div className="mb-3 bg-orange-50 rounded-lg px-3 py-2 text-xs border border-orange-200">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex items-center px-2 py-0.5 bg-orange-200 text-orange-900 font-semibold rounded">
+                            Contact HubSpot existant
+                          </span>
+                          {lead.metadata.hubspot_is_marketing === true ? (
+                            <span className="inline-flex items-center px-2 py-0.5 bg-green-100 text-green-700 font-medium rounded">
+                              Marketing : Oui
+                            </span>
+                          ) : lead.metadata.hubspot_is_marketing === false ? (
+                            <span className="inline-flex items-center px-2 py-0.5 bg-red-50 text-red-600 font-medium rounded">
+                              Marketing : Non
+                            </span>
+                          ) : null}
+                          {lead.metadata.hubspot_owner_name && (
+                            <span className="text-orange-800">
+                              Responsable : <strong>{lead.metadata.hubspot_owner_name}</strong>
+                            </span>
+                          )}
+                        </div>
+                        <a
+                          href={`https://app-eu1.hubspot.com/contacts/139615673/contact/${lead.metadata.hubspot_contact_id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-orange-700 hover:text-orange-900 font-medium underline"
+                        >
+                          Voir dans HubSpot
+                        </a>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Signal context */}
                   {lead.metadata?.post_text && (
                     <div className="mb-3 bg-blue-50 rounded-lg px-3 py-2 text-xs text-blue-700 border border-blue-100">
