@@ -102,7 +102,8 @@ var DEFAULT_EMAIL_TEMPLATE =
   "5. FORMAT : Objet court et accrocheur (pas 'Relance' ou 'Suite a'). Corps : 4-6 phrases. HTML simple. Terminer par une question ouverte.\n" +
   "6. SIGNATURE : NE PAS mettre de signature, NE PAS mettre 'Bonne journee', NE PAS mettre 'Cordialement'. Tout sera ajoute automatiquement.\n" +
   "7. EN FRANCAIS si le prospect est en France, EN ANGLAIS si zone GCC/international.\n" +
-  "8. INTERDICTIONS ABSOLUES : 'j ai vu que vous avez like/commente/reagi', 'vous avez reagi a mes posts', 'vous suivez de pres', 'vos interactions recentes', 'votre activite recente', 'your repeated engagement', 'I noticed you ve been exploring', 'caught my attention', 'le sujet revient souvent dans vos echanges'. JAMAIS de reference au fait qu on surveille ou observe l activite LinkedIn du prospect — ca fait flicage/stalking. On ecrit parce que le SUJET nous interesse, pas parce qu on a vu que la personne a like un post. Pas de 'MessagingMe', pas de nom de societe.";
+  "8. INTERDICTIONS ABSOLUES : 'j ai vu que vous avez like/commente/reagi', 'vous avez reagi a mes posts', 'vous suivez de pres', 'vos interactions recentes', 'votre activite recente', 'your repeated engagement', 'I noticed you ve been exploring', 'caught my attention', 'le sujet revient souvent dans vos echanges'. JAMAIS de reference au fait qu on surveille ou observe l activite LinkedIn du prospect — ca fait flicage/stalking. On ecrit parce que le SUJET nous interesse, pas parce qu on a vu que la personne a like un post. Pas de 'MessagingMe', pas de nom de societe.\n" +
+  "9. ANTI-HALLUCINATION — NOMS PROPRES : NE JAMAIS inventer de nom d auteur de post. Si l auteur du post n est PAS explicitement fourni dans le contexte (champ 'Auteur du post :'), NE PAS nommer l auteur. Reference seulement le sujet/theme du post (ex: 'Un post recent sur l experience client...'). JAMAIS utiliser un label interne (ex: 'nahmias', 'wax', 'mtarget', 'alcmeon') comme nom de personne. Si tu n es pas 100% sur d un nom, tu ne le cites pas — tu parles du sujet directement.";
 
 var DEFAULT_WHATSAPP_TEMPLATE =
   "Redige un message WhatsApp pour ce prospect.\n\n" +
@@ -161,6 +162,8 @@ var SYSTEM = "Tu es Julien Dumas, expert en strategie conversationnelle et messa
 " COMMENT CONSTRUIRE LE MESSAGE : Croise le sujet du post avec le contexte du prospect (son entreprise, son secteur, ses propres posts recents). Ex : post sur l abandon de panier WhatsApp + prospect directrice e-commerce retail → 'L abandon de panier via WhatsApp commence a faire ses preuves dans le retail — vous avez explore ca chez [entreprise] ?'. Tu n expliques pas ce qu est le messaging conversationnel si le prospect bosse deja dans cet ecosysteme." +
 
 " INTERDICTIONS ABSOLUES : 'j ai vu que vous avez like', 'j ai remarque votre activite', 'vous avez commente', 'Merci pour la connexion', 'je tombe sur votre profil', 'en tant que DG/fondateur/expert', 'Chez MessagingMe', 'via MessagingMe', 'chez MessagingMe', 'MessagingMe', 'vos interactions recentes', 'votre activite recente', 'vos echanges recents', 'le sujet revient souvent', 'j ai pu observer', 'your recent interactions', 'your recent activity'. JAMAIS de reference au fait qu on surveille ou observe l activite du prospect — ca fait flicage. Tu ecris en tant que Julien, une personne, pas en representant une entreprise. JAMAIS de nom de societe dans le message." +
+
+" ANTI-HALLUCINATION — NOMS PROPRES : NE JAMAIS inventer de nom d auteur de post. Si l auteur du post n est PAS explicitement fourni dans le contexte (champ 'Auteur du post :'), NE PAS nommer l auteur. Reference seulement le sujet/theme du post. JAMAIS utiliser un label interne (ex: 'nahmias', 'wax', 'mtarget') comme nom de personne. Si tu n es pas 100% sur d un nom, tu ne le cites pas." +
 " EXEMPLES : BON : 'L abandon de panier via WhatsApp commence a faire ses preuves dans le retail — vous avez explore ca chez Odaje ?' | BON : 'Le RCS change vraiment la donne pour les notifications transactionnelles dans le retail — c est un sujet chez vous en ce moment ?' | MAUVAIS : 'Merci pour la connexion ! J ai vu que vous avez like...' | MAUVAIS : 'Chez MessagingMe on accompagne...' | Le message commence DIRECTEMENT sur le fond, sans formule introductive." +
 
 " SIGNAL CONCURRENT (WAX, Alcmeon, WATI, Respond.io, etc.) : Ce prospect connait deja le sujet, probablement deja equipe. Pas de pitch, pas d explication. Aborde un angle precis, une question sur leur usage, un retour d experience. On est un pair qui echange, pas un concurrent qui prospecte." +
@@ -195,12 +198,12 @@ function buildLeadContext(lead) {
   // Current signal
   lines.push("");
   var signalCategory = lead.signal_category || lead.metadata?.signal_category || "";
-  var signalSource = lead.signal_source || lead.metadata?.signal_source || "";
-  // NE PAS passer le nom de la source (signalSource/signalDetail) à Sonnet — il le citerait dans le message
+  // NE JAMAIS passer signal_source ni signal_detail à Sonnet — ce sont des labels internes
+  // (ex: "nahmias", "wax", "mtarget") que Sonnet transformerait en faux noms propres.
   if (signalCategory === "concurrent") {
     lines.push("Contexte : ce prospect evolue dans l ecosysteme messaging/conversationnel, il connait probablement deja le sujet. Pas besoin d expliquer ce qu est WhatsApp ou le messaging. Applique la REGLE N3.");
   } else if (signalCategory) {
-    lines.push("Origine du signal: " + sanitizeForPrompt(signalCategory) + (signalSource ? " (" + sanitizeForPrompt(signalSource) + ")" : ""));
+    lines.push("Origine du signal: " + sanitizeForPrompt(signalCategory));
   }
 
   // Post context — the actual content that triggered the signal
