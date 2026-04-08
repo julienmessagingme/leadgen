@@ -58,6 +58,10 @@ function buildOpenPixelUrl(leadId, emailType) {
 function injectTracking(htmlBody, leadId, emailType) {
   if (!TRACKING_ENABLED || !htmlBody) return htmlBody;
 
+  // Idempotency guard: if tracking is already injected, return as-is.
+  // Prevents double-injection if a wrapper accidentally calls this twice.
+  if (htmlBody.indexOf("/track/click/") !== -1) return htmlBody;
+
   // Rewrite href="..." links — match http(s) URLs only, leave mailto:/tel: alone
   let modified = htmlBody.replace(
     /href=(["'])(https?:\/\/[^"']+)\1/gi,
