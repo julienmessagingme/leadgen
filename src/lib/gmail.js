@@ -35,13 +35,21 @@ function getTransporter() {
 
 /**
  * Send an email via Gmail SMTP.
+ *
+ * Supports reply-in-thread via opts.inReplyTo: when provided, Nodemailer adds
+ * In-Reply-To and References headers and Gmail will auto-thread the message
+ * with the original conversation.
+ *
  * @param {string} to - Recipient email address
  * @param {string} subject - Email subject
  * @param {string} htmlBody - HTML body content
  * @param {string|null} textBody - Optional plain text body
+ * @param {object} [opts] - Optional reply-in-thread parameters
+ * @param {string} [opts.inReplyTo] - Original Message-Id (for In-Reply-To header)
+ * @param {string|string[]} [opts.references] - Original References chain (defaults to inReplyTo if not given)
  * @returns {Promise<string>} Message ID from SMTP server
  */
-async function sendEmail(to, subject, htmlBody, textBody) {
+async function sendEmail(to, subject, htmlBody, textBody, opts) {
   const transporter = getTransporter();
 
   const mailOptions = {
@@ -53,6 +61,11 @@ async function sendEmail(to, subject, htmlBody, textBody) {
 
   if (textBody) {
     mailOptions.text = textBody;
+  }
+
+  if (opts && opts.inReplyTo) {
+    mailOptions.inReplyTo = opts.inReplyTo;
+    mailOptions.references = opts.references || opts.inReplyTo;
   }
 
   const info = await transporter.sendMail(mailOptions);
