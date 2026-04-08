@@ -125,7 +125,9 @@ export default function MessagesDraft() {
         onSuccess: () => { setPendingIds((p) => { const n = { ...p }; delete n[lead.id]; return n; }); refetchLinkedin(); },
         onError: (err) => {
           setPendingIds((p) => { const n = { ...p }; delete n[lead.id]; return n; });
-          setErrors((e) => ({ ...e, [lead.id]: err?.response?.data?.error || err?.message || "Erreur inconnue" }));
+          // 404 = lead already deleted (double-click race) — treat as success
+          if (err?.status === 404) { refetchLinkedin(); return; }
+          setErrors((e) => ({ ...e, [lead.id]: err?.message || "Erreur inconnue" }));
         },
       }
     );
@@ -157,7 +159,9 @@ export default function MessagesDraft() {
         onSuccess: () => { setPendingIds((p) => { const n = { ...p }; delete n[lead.id]; return n; }); refetchEmail(); },
         onError: (err) => {
           setPendingIds((p) => { const n = { ...p }; delete n[lead.id]; return n; });
-          setErrors((e) => ({ ...e, [lead.id]: err?.response?.data?.error || err?.message || "Erreur inconnue" }));
+          // 404 = lead already deleted (double-click race) — treat as success
+          if (err?.status === 404) { refetchEmail(); return; }
+          setErrors((e) => ({ ...e, [lead.id]: err?.message || "Erreur inconnue" }));
         },
       }
     );
@@ -187,7 +191,9 @@ export default function MessagesDraft() {
         onSuccess: () => { setPendingIds((p) => { const n = { ...p }; delete n[lead.id]; return n; }); refetchReinvite(); },
         onError: (err) => {
           setPendingIds((p) => { const n = { ...p }; delete n[lead.id]; return n; });
-          setErrors((e) => ({ ...e, [lead.id]: err?.response?.data?.error || err?.message || "Erreur inconnue" }));
+          // 404 = lead already deleted (double-click race) — treat as success
+          if (err?.status === 404) { refetchReinvite(); return; }
+          setErrors((e) => ({ ...e, [lead.id]: err?.message || "Erreur inconnue" }));
         },
       }
     );
