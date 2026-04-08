@@ -485,30 +485,25 @@ router.post("/:id/approve-message", async (req, res) => {
 });
 
 /**
- * POST /:id/reject-message -- Discard draft, put lead back to connected
+ * POST /:id/reject-message -- Delete the lead entirely.
+ * If the person signals again in the future, Task A will recreate a fresh lead.
  */
 router.post("/:id/reject-message", async (req, res) => {
   try {
     const { data: lead, error: fetchErr } = await supabase
       .from("leads")
-      .select("id, status, metadata")
+      .select("id, status, full_name")
       .eq("id", req.params.id)
       .single();
 
     if (fetchErr || !lead) return res.status(404).json({ error: "Lead not found" });
     if (lead.status !== "message_pending") return res.status(400).json({ error: "Lead is not in message_pending status" });
 
-    const updatedMetadata = Object.assign({}, lead.metadata || {});
-    delete updatedMetadata.draft_message;
-    delete updatedMetadata.draft_run_id;
-    delete updatedMetadata.draft_generated_at;
+    const { error: delErr } = await supabase.from("leads").delete().eq("id", lead.id);
+    if (delErr) return res.status(500).json({ error: "Delete failed: " + delErr.message });
 
-    await supabase
-      .from("leads")
-      .update({ status: "disqualified", metadata: updatedMetadata })
-      .eq("id", lead.id);
-
-    res.json({ ok: true });
+    console.log("Lead deleted via reject-message:", lead.full_name || lead.id);
+    res.json({ ok: true, deleted: true });
   } catch (err) {
     console.error("POST /leads/:id/reject-message error:", err.message);
     res.status(500).json({ error: err.message });
@@ -617,36 +612,25 @@ router.post("/:id/regenerate-email", async (req, res) => {
 });
 
 /**
- * POST /:id/reject-email -- Discard email draft, revert to previous status
+ * POST /:id/reject-email -- Delete the lead entirely.
+ * If the person signals again in the future, Task A will recreate a fresh lead.
  */
 router.post("/:id/reject-email", async (req, res) => {
   try {
     const { data: lead, error: fetchErr } = await supabase
       .from("leads")
-      .select("id, status, metadata")
+      .select("id, status, full_name")
       .eq("id", req.params.id)
       .single();
 
     if (fetchErr || !lead) return res.status(404).json({ error: "Lead not found" });
     if (lead.status !== "email_pending") return res.status(400).json({ error: "Lead is not in email_pending status" });
 
-    const updatedMetadata = Object.assign({}, lead.metadata || {});
-    updatedMetadata.skip_email = true;
-    const revertStatus = updatedMetadata.pre_email_status || "invitation_sent";
-    delete updatedMetadata.draft_email_subject;
-    delete updatedMetadata.draft_email_body;
-    delete updatedMetadata.draft_email_to;
-    delete updatedMetadata.draft_email_run_id;
-    delete updatedMetadata.draft_email_generated_at;
-    delete updatedMetadata.pre_email_status;
+    const { error: delErr } = await supabase.from("leads").delete().eq("id", lead.id);
+    if (delErr) return res.status(500).json({ error: "Delete failed: " + delErr.message });
 
-    // Revert to previous status (invitation_sent or messaged)
-    await supabase
-      .from("leads")
-      .update({ status: revertStatus, metadata: updatedMetadata })
-      .eq("id", lead.id);
-
-    res.json({ ok: true });
+    console.log("Lead deleted via reject-email:", lead.full_name || lead.id);
+    res.json({ ok: true, deleted: true });
   } catch (err) {
     console.error("POST /leads/:id/reject-email error:", err.message);
     res.status(500).json({ error: err.message });
@@ -770,31 +754,25 @@ router.post("/:id/approve-reinvite", async (req, res) => {
 });
 
 /**
- * POST /:id/reject-reinvite -- Julien rejects a re-invitation.
- * Disqualifies the lead.
+ * POST /:id/reject-reinvite -- Delete the lead entirely.
+ * If the person signals again in the future, Task A will recreate a fresh lead.
  */
 router.post("/:id/reject-reinvite", async (req, res) => {
   try {
     const { data: lead, error: fetchErr } = await supabase
       .from("leads")
-      .select("id, status, metadata")
+      .select("id, status, full_name")
       .eq("id", req.params.id)
       .single();
 
     if (fetchErr || !lead) return res.status(404).json({ error: "Lead not found" });
     if (lead.status !== "reinvite_pending") return res.status(400).json({ error: "Lead is not in reinvite_pending status" });
 
-    var metadata = Object.assign({}, lead.metadata || {});
-    delete metadata.draft_invitation_note;
-    delete metadata.draft_reinvite_run_id;
-    delete metadata.draft_reinvite_generated_at;
+    const { error: delErr } = await supabase.from("leads").delete().eq("id", lead.id);
+    if (delErr) return res.status(500).json({ error: "Delete failed: " + delErr.message });
 
-    await supabase
-      .from("leads")
-      .update({ status: "disqualified", metadata: metadata })
-      .eq("id", lead.id);
-
-    res.json({ ok: true, action: "disqualified" });
+    console.log("Lead deleted via reject-reinvite:", lead.full_name || lead.id);
+    res.json({ ok: true, deleted: true });
   } catch (err) {
     console.error("POST /leads/:id/reject-reinvite error:", err.message);
     res.status(500).json({ error: err.message });
