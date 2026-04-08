@@ -543,7 +543,11 @@ router.post("/:id/approve-email", async (req, res) => {
     const body = (req.body.body || "").trim() || lead.metadata?.draft_email_body;
     if (!subject || !body) return res.status(400).json({ error: "No email content to send" });
 
-    const messageId = await sendEmail(email, subject, body);
+    // Inject click + open tracking before sending (1st email)
+    const { injectTracking } = require("../lib/tracking");
+    const trackedBody = injectTracking(body, lead.id, "email_1");
+
+    const messageId = await sendEmail(email, subject, trackedBody);
 
     const updatedMetadata = Object.assign({}, lead.metadata || {}, {
       email_subject: subject,
