@@ -54,4 +54,35 @@ async function isSuppressed(email = null, linkedinUrl = null, phone = null) {
   }
 }
 
-module.exports = { isSuppressed, hashValue };
+/**
+ * Add a contact to the RGPD suppression list (hashed).
+ * Upserts on (hashed_value, hash_type). Idempotent.
+ *
+ * @param {object} opts - { email, linkedinUrl, phone, reason }
+ * @returns {Promise<number>} Number of new entries added
+ */
+async function addToSuppressionList({ email = null, linkedinUrl = null, phone = null, reason = "rejected" } = {}) {
+  const rows = [];
+  if (email) rows.push({ hashed_value: hashValue(email), hash_type: "email", reason });
+  if (linkedinUrl) rows.push({ hashed_value: hashValue(linkedinUrl), hash_type: "linkedin_url", reason });
+  if (phone) rows.push({ hashed_value: hashValue(phone), hash_type: "phone", reason });
+
+  if (rows.length === 0) return 0;
+
+  try {
+    const { error } = await supabase
+      .from("suppression_list")
+      .upsert(rows, { onConflict: "hashed_value", ignoreDuplicates: true });
+
+    if (error) {
+      console.error("addToSuppressionList failed:", error.message);
+      return 0;
+    }
+    return rows.length;
+  } catch (err) {
+    console.error("addToSuppressionList failed:", err.message);
+    return 0;
+  }
+}
+
+module.exports = { isSuppressed, hashValue, addToSuppressionList };

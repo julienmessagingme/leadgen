@@ -485,25 +485,34 @@ router.post("/:id/approve-message", async (req, res) => {
 });
 
 /**
- * POST /:id/reject-message -- Delete the lead entirely.
- * If the person signals again in the future, Task A will recreate a fresh lead.
+ * POST /:id/reject-message -- Delete the lead and add to RGPD suppression list.
+ * The suppression entry prevents re-contacting if the person signals again.
  */
 router.post("/:id/reject-message", async (req, res) => {
   try {
+    const { addToSuppressionList } = require("../lib/suppression");
+
     const { data: lead, error: fetchErr } = await supabase
       .from("leads")
-      .select("id, status, full_name")
+      .select("id, status, full_name, linkedin_url, email")
       .eq("id", req.params.id)
       .single();
 
     if (fetchErr || !lead) return res.status(404).json({ error: "Lead not found" });
     if (lead.status !== "message_pending") return res.status(400).json({ error: "Lead is not in message_pending status" });
 
+    // Add to suppression list BEFORE delete (so we have the data)
+    await addToSuppressionList({
+      email: lead.email,
+      linkedinUrl: lead.linkedin_url,
+      reason: "rejected_message",
+    });
+
     const { error: delErr } = await supabase.from("leads").delete().eq("id", lead.id);
     if (delErr) return res.status(500).json({ error: "Delete failed: " + delErr.message });
 
-    console.log("Lead deleted via reject-message:", lead.full_name || lead.id);
-    res.json({ ok: true, deleted: true });
+    console.log("Lead deleted + suppressed via reject-message:", lead.full_name || lead.id);
+    res.json({ ok: true, deleted: true, suppressed: true });
   } catch (err) {
     console.error("POST /leads/:id/reject-message error:", err.message);
     res.status(500).json({ error: err.message });
@@ -612,25 +621,34 @@ router.post("/:id/regenerate-email", async (req, res) => {
 });
 
 /**
- * POST /:id/reject-email -- Delete the lead entirely.
- * If the person signals again in the future, Task A will recreate a fresh lead.
+ * POST /:id/reject-email -- Delete the lead and add to RGPD suppression list.
+ * The suppression entry prevents re-contacting if the person signals again.
  */
 router.post("/:id/reject-email", async (req, res) => {
   try {
+    const { addToSuppressionList } = require("../lib/suppression");
+
     const { data: lead, error: fetchErr } = await supabase
       .from("leads")
-      .select("id, status, full_name")
+      .select("id, status, full_name, linkedin_url, email")
       .eq("id", req.params.id)
       .single();
 
     if (fetchErr || !lead) return res.status(404).json({ error: "Lead not found" });
     if (lead.status !== "email_pending") return res.status(400).json({ error: "Lead is not in email_pending status" });
 
+    // Add to suppression list BEFORE delete
+    await addToSuppressionList({
+      email: lead.email,
+      linkedinUrl: lead.linkedin_url,
+      reason: "rejected_email",
+    });
+
     const { error: delErr } = await supabase.from("leads").delete().eq("id", lead.id);
     if (delErr) return res.status(500).json({ error: "Delete failed: " + delErr.message });
 
-    console.log("Lead deleted via reject-email:", lead.full_name || lead.id);
-    res.json({ ok: true, deleted: true });
+    console.log("Lead deleted + suppressed via reject-email:", lead.full_name || lead.id);
+    res.json({ ok: true, deleted: true, suppressed: true });
   } catch (err) {
     console.error("POST /leads/:id/reject-email error:", err.message);
     res.status(500).json({ error: err.message });
@@ -754,25 +772,34 @@ router.post("/:id/approve-reinvite", async (req, res) => {
 });
 
 /**
- * POST /:id/reject-reinvite -- Delete the lead entirely.
- * If the person signals again in the future, Task A will recreate a fresh lead.
+ * POST /:id/reject-reinvite -- Delete the lead and add to RGPD suppression list.
+ * The suppression entry prevents re-contacting if the person signals again.
  */
 router.post("/:id/reject-reinvite", async (req, res) => {
   try {
+    const { addToSuppressionList } = require("../lib/suppression");
+
     const { data: lead, error: fetchErr } = await supabase
       .from("leads")
-      .select("id, status, full_name")
+      .select("id, status, full_name, linkedin_url, email")
       .eq("id", req.params.id)
       .single();
 
     if (fetchErr || !lead) return res.status(404).json({ error: "Lead not found" });
     if (lead.status !== "reinvite_pending") return res.status(400).json({ error: "Lead is not in reinvite_pending status" });
 
+    // Add to suppression list BEFORE delete
+    await addToSuppressionList({
+      email: lead.email,
+      linkedinUrl: lead.linkedin_url,
+      reason: "rejected_reinvite",
+    });
+
     const { error: delErr } = await supabase.from("leads").delete().eq("id", lead.id);
     if (delErr) return res.status(500).json({ error: "Delete failed: " + delErr.message });
 
-    console.log("Lead deleted via reject-reinvite:", lead.full_name || lead.id);
-    res.json({ ok: true, deleted: true });
+    console.log("Lead deleted + suppressed via reject-reinvite:", lead.full_name || lead.id);
+    res.json({ ok: true, deleted: true, suppressed: true });
   } catch (err) {
     console.error("POST /leads/:id/reject-reinvite error:", err.message);
     res.status(500).json({ error: err.message });
