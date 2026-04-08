@@ -15,7 +15,8 @@ CREATE TABLE IF NOT EXISTS case_studies (
   description TEXT,
   language TEXT NOT NULL DEFAULT 'fr' CHECK (language IN ('fr', 'en')),
   is_active BOOLEAN NOT NULL DEFAULT true,
-  created_at TIMESTAMPTZ DEFAULT now()
+  created_at TIMESTAMPTZ DEFAULT now(),
+  CONSTRAINT uq_case_studies_client_language UNIQUE (client_name, language)
 );
 ALTER TABLE case_studies ENABLE ROW LEVEL SECURITY;
 
@@ -43,4 +44,4 @@ VALUES (
   'Cas placeholder — remplacer via Paramètres > Cas clients',
   'fr'
 )
-ON CONFLICT DO NOTHING;
+ON CONFLICT (client_name, language) DO NOTHING;
