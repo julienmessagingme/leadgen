@@ -89,7 +89,10 @@ export function useCreateWatchlistEntry() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data) => api.post("/settings/watchlist", data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["watchlist"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["watchlist"] });
+      qc.invalidateQueries({ queryKey: ["watchlist-stats"] });
+    },
   });
 }
 
@@ -97,7 +100,10 @@ export function useUpdateWatchlistEntry() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...data }) => api.put(`/settings/watchlist/${id}`, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["watchlist"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["watchlist"] });
+      qc.invalidateQueries({ queryKey: ["watchlist-stats"] });
+    },
   });
 }
 
@@ -105,7 +111,10 @@ export function useDeleteWatchlistEntry() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id) => api.delete(`/settings/watchlist/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["watchlist"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["watchlist"] });
+      qc.invalidateQueries({ queryKey: ["watchlist-stats"] });
+    },
   });
 }
 

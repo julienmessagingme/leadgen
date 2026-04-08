@@ -261,23 +261,17 @@ export default function SourcePerformanceTab() {
                 </td>
               </tr>
             ) : (
-              filtered.map((s, idx) => {
-                const rowKey = s.id || `orphan-${idx}`;
+              filtered.map((s) => {
+                const rowKey = s.id;
                 const isZero = s.leads_count === 0;
-                const isOrphan = s.orphan === true;
                 return (
                   <tr
                     key={rowKey}
-                    className={`${isZero ? "bg-red-50/30" : "hover:bg-gray-50"} ${isOrphan ? "italic" : ""}`}
+                    className={isZero ? "bg-red-50/30" : "hover:bg-gray-50"}
                   >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium text-gray-900">{s.source_label || "—"}</span>
-                        {isOrphan && (
-                          <span className="text-xs text-orange-500" title="Source detectee dans les leads mais absente de la watchlist">
-                            ⚠ orphelin
-                          </span>
-                        )}
                       </div>
                       {s.source_url && (
                         <a
@@ -328,7 +322,7 @@ export default function SourcePerformanceTab() {
       </div>
 
       <p className="text-xs text-gray-400 mt-3">
-        H = Hot, W = Warm, C = Cold. Les sources "orphelines" sont detectees dans les leads mais n'existent plus dans la watchlist.
+        H = Hot, W = Warm, C = Cold. Seules les sources pr\u00e9sentes dans la watchlist sont affich\u00e9es — une source supprim\u00e9e dispara\u00eet imm\u00e9diatement.
       </p>
     </div>
   );

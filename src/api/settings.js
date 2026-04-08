@@ -432,42 +432,11 @@ router.get("/watchlist-stats", async (req, res) => {
       };
     });
 
-    // Also include unmatched signal_sources (leads with a source that doesn't match any watchlist entry)
-    const matchedKeys = new Set((sources || []).map((s) => (s.source_label || "").toLowerCase().trim()));
-    const orphanStats = [];
-    for (const key of Object.keys(leadsBySource)) {
-      if (matchedKeys.has(key)) continue;
-      const matched = leadsBySource[key];
-      let hot = 0, warm = 0, cold = 0, scoreSum = 0, scoreCount = 0, lastLeadAt = null;
-      for (const l of matched) {
-        if (l.tier === "hot") hot++;
-        else if (l.tier === "warm") warm++;
-        else if (l.tier === "cold") cold++;
-        if (typeof l.icp_score === "number") { scoreSum += l.icp_score; scoreCount++; }
-        if (l.created_at && (!lastLeadAt || l.created_at > lastLeadAt)) lastLeadAt = l.created_at;
-      }
-      const total = matched.length;
-      orphanStats.push({
-        id: null,
-        source_type: "unknown",
-        source_label: matched[0].signal_source,
-        source_url: null,
-        keywords: null,
-        priority: null,
-        is_active: null,
-        last_scraped_at: null,
-        leads_count: total,
-        hot_count: hot,
-        warm_count: warm,
-        cold_count: cold,
-        hot_pct: total > 0 ? Math.round((hot / total) * 100) : 0,
-        avg_score: scoreCount > 0 ? Math.round((scoreSum / scoreCount) * 10) / 10 : null,
-        last_lead_at: lastLeadAt,
-        orphan: true,
-      });
-    }
+    // Note: orphaned signal_sources (leads with a source no longer in watchlist) are intentionally
+    // NOT returned here — when a source is deleted from the watchlist, it disappears from the stats
+    // tab entirely. The historical leads themselves remain in the leads table.
 
-    res.json({ stats: stats.concat(orphanStats), total_leads: (leads || []).length });
+    res.json({ stats: stats, total_leads: (leads || []).length });
   } catch (err) {
     console.error("Settings GET /watchlist-stats error:", err.message);
     res.status(500).json({ error: "Internal server error" });
