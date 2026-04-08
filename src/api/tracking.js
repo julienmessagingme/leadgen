@@ -1,6 +1,6 @@
 const { Router } = require("express");
 const { supabase } = require("../lib/supabase");
-const { verifyToken } = require("../lib/tracking");
+const { verifyToken, isSafeRedirectTarget } = require("../lib/tracking");
 
 const router = Router();
 
@@ -24,15 +24,29 @@ router.get("/click/:leadId/:emailType/:token", async (req, res) => {
     const token = req.params.token;
     const targetUrl = req.query.to;
 
+    // Reject missing/malformed input
     if (!targetUrl || isNaN(leadId)) {
       return res.status(400).send("Invalid tracking link");
     }
+
+    // SECURITY: prevent open-redirect phishing — only allow safe public HTTPS URLs
+    if (!isSafeRedirectTarget(targetUrl)) {
+      console.warn("Blocked unsafe redirect target:", targetUrl, "for lead", leadId);
+      return res.status(400).send("Invalid redirect target");
+    }
+
+    // SECURITY: only allow whitelisted emailType values
+    if (emailType !== "email_1" && emailType !== "email_followup") {
+      return res.status(400).send("Invalid email type");
+    }
+
     if (!verifyToken(token, leadId, emailType)) {
-      // Still redirect -- don't block the user, just don't log
+      // Token mismatch — still redirect (don't break legitimate users on token bugs)
+      // but do NOT log to email_events (prevents pollution from forged links)
       return res.redirect(302, targetUrl);
     }
 
-    // Best-effort logging -- never block the redirect on errors
+    // Best-effort logging — never block the redirect on errors
     supabase
       .from("email_events")
       .insert({
@@ -49,7 +63,10 @@ router.get("/click/:leadId/:emailType/:token", async (req, res) => {
     res.redirect(302, targetUrl);
   } catch (err) {
     console.error("GET /track/click error:", err.message);
-    if (req.query.to) return res.redirect(302, req.query.to);
+    // Even in catch, only redirect if the target was validated above
+    if (req.query.to && isSafeRedirectTarget(req.query.to)) {
+      return res.redirect(302, req.query.to);
+    }
     res.status(500).send("Tracking error");
   }
 });
@@ -71,9 +88,10 @@ router.get("/open/:leadId/:emailType/:tokenPng", async (req, res) => {
     // tokenPng is "<token>.png" -- strip the extension
     const token = req.params.tokenPng.replace(/\.png$/, "");
 
-    if (isNaN(leadId) || !verifyToken(token, leadId, emailType)) {
-      return res.send(PIXEL_PNG);
-    }
+    // Whitelist emailType + verify token (silent — always return pixel)
+    if (isNaN(leadId)) return res.send(PIXEL_PNG);
+    if (emailType !== "email_1" && emailType !== "email_followup") return res.send(PIXEL_PNG);
+    if (!verifyToken(token, leadId, emailType)) return res.send(PIXEL_PNG);
 
     // Filter Apple Mail Privacy pre-loads: skip if < 30s after send
     const { data: lead } = await supabase

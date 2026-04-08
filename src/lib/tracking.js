@@ -1,8 +1,52 @@
 const crypto = require("crypto");
 
-const SECRET = process.env.TRACKING_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || "fallback-secret";
+const SECRET = process.env.TRACKING_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!SECRET) {
+  console.warn("WARNING: TRACKING_SECRET is not set. Tracking tokens will be insecure.");
+}
 const PUBLIC_URL = process.env.PUBLIC_TRACKING_URL || "https://leadgen.messagingme.app";
 const TRACKING_ENABLED = process.env.EMAIL_TRACKING_ENABLED !== "false";
+
+/**
+ * Allowlist of host suffixes that we are willing to 302-redirect to.
+ * Prevents open-redirect phishing: an attacker who has any valid tracking token
+ * cannot use it to redirect victims to arbitrary sites.
+ *
+ * Add to TRACKING_ALLOWED_DOMAINS env var (comma-separated suffixes) to extend.
+ * Default allowlist covers the only outbound links we currently send in emails.
+ */
+const DEFAULT_ALLOWED_SUFFIXES = [
+  "calendly.com",
+  "messagingme.fr",
+  "messagingme.app",
+  "messagingme.com",
+];
+
+const ALLOWED_SUFFIXES = (process.env.TRACKING_ALLOWED_DOMAINS || "")
+  .split(",")
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean)
+  .concat(DEFAULT_ALLOWED_SUFFIXES);
+
+/**
+ * Returns true only if the target URL is HTTPS and its hostname matches
+ * (or is a subdomain of) one of the allowed suffixes.
+ */
+function isSafeRedirectTarget(targetUrl) {
+  try {
+    const parsed = new URL(targetUrl);
+    if (parsed.protocol !== "https:") return false;
+    const hostname = parsed.hostname.toLowerCase();
+    // Block our own /track/ path to prevent loops
+    if (parsed.pathname.startsWith("/track/")) return false;
+    // Match exact hostname or any subdomain of an allowed suffix
+    return ALLOWED_SUFFIXES.some((suffix) => {
+      return hostname === suffix || hostname.endsWith("." + suffix);
+    });
+  } catch (e) {
+    return false;
+  }
+}
 
 /**
  * Generate a tracking token for (leadId, emailType).
@@ -89,4 +133,5 @@ module.exports = {
   buildClickUrl,
   buildOpenPixelUrl,
   injectTracking,
+  isSafeRedirectTarget,
 };
