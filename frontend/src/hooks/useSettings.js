@@ -135,6 +135,39 @@ export function useWatchlistStats() {
   });
 }
 
+// ── Case Studies ──
+
+export function useCaseStudies() {
+  return useQuery({
+    queryKey: ["case-studies"],
+    queryFn: () => api.get("/settings/case-studies"),
+  });
+}
+
+export function useCreateCaseStudy() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data) => api.post("/settings/case-studies", data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["case-studies"] }),
+  });
+}
+
+export function useUpdateCaseStudy() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }) => api.put(`/settings/case-studies/${id}`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["case-studies"] }),
+  });
+}
+
+export function useDeleteCaseStudy() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id) => api.delete(`/settings/case-studies/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["case-studies"] }),
+  });
+}
+
 // ── Cron Schedule ──
 
 export function useCronSchedule() {

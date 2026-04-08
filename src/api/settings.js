@@ -444,6 +444,87 @@ router.get("/watchlist-stats", async (req, res) => {
 });
 
 // ────────────────────────────────────────────────────────────
+// Case Studies — used by Task F (email followup) for credibility
+// ────────────────────────────────────────────────────────────
+
+router.get("/case-studies", async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("case_studies")
+      .select("*")
+      .order("sector", { ascending: true })
+      .order("client_name", { ascending: true });
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ cases: data });
+  } catch (err) {
+    console.error("Settings GET /case-studies error:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/case-studies", async (req, res) => {
+  try {
+    const { client_name, sector, metric_label, metric_value, description, language, is_active } = req.body;
+    if (!client_name || !sector || !metric_label || !metric_value) {
+      return res.status(400).json({ error: "client_name, sector, metric_label, metric_value are required" });
+    }
+    const { data, error } = await supabase
+      .from("case_studies")
+      .insert({
+        client_name,
+        sector,
+        metric_label,
+        metric_value,
+        description: description || null,
+        language: language || "fr",
+        is_active: is_active !== false,
+      })
+      .select()
+      .single();
+    if (error) return res.status(500).json({ error: error.message });
+    res.status(201).json(data);
+  } catch (err) {
+    console.error("Settings POST /case-studies error:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.put("/case-studies/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = {};
+    ["client_name", "sector", "metric_label", "metric_value", "description", "language", "is_active"].forEach((k) => {
+      if (req.body[k] !== undefined) updates[k] = req.body[k];
+    });
+    const { data, error } = await supabase
+      .from("case_studies")
+      .update(updates)
+      .eq("id", id)
+      .select()
+      .single();
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
+  } catch (err) {
+    console.error("Settings PUT /case-studies/:id error:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.delete("/case-studies/:id", async (req, res) => {
+  try {
+    const { error } = await supabase
+      .from("case_studies")
+      .delete()
+      .eq("id", req.params.id);
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Settings DELETE /case-studies/:id error:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
 // BeReach credit usage (last 4 days)
 // ────────────────────────────────────────────────────────────
 

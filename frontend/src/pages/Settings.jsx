@@ -7,6 +7,7 @@ import WatchlistTab from "../components/settings/WatchlistTab";
 import SourcePerformanceTab from "../components/settings/SourcePerformanceTab";
 import TemplatesTab from "../components/settings/TemplatesTab";
 import ColdTemplatesTab from "../components/settings/ColdTemplatesTab";
+import CaseStudiesTab from "../components/settings/CaseStudiesTab";
 import CronTab from "../components/settings/CronTab";
 
 const TABS = [
@@ -17,6 +18,7 @@ const TABS = [
   { key: "performance", label: "Performance sources" },
   { key: "templates", label: "Templates" },
   { key: "cold_templates", label: "Templates Cold" },
+  { key: "case_studies", label: "Cas clients" },
   { key: "cron", label: "Planning Cron" },
 ];
 
@@ -28,6 +30,7 @@ const TAB_COMPONENTS = {
   performance: SourcePerformanceTab,
   templates: TemplatesTab,
   cold_templates: ColdTemplatesTab,
+  case_studies: CaseStudiesTab,
   cron: CronTab,
 };
 
