@@ -362,6 +362,119 @@ router.delete("/watchlist/:id", async (req, res) => {
 });
 
 // ────────────────────────────────────────────────────────────
+// Watchlist performance stats (aggregated leads by signal_source)
+// Returns for each source: leads count, hot/warm/cold breakdown, avg score, last seen
+// ────────────────────────────────────────────────────────────
+
+router.get("/watchlist-stats", async (req, res) => {
+  try {
+    // Fetch watchlist entries
+    const { data: sources, error: srcErr } = await supabase
+      .from("watchlist")
+      .select("id, source_type, source_label, source_url, keywords, priority, is_active, last_scraped_at");
+
+    if (srcErr) return res.status(500).json({ error: srcErr.message });
+
+    // Fetch all leads with signal_source (we only need a few fields, not heavy)
+    const { data: leads, error: leadsErr } = await supabase
+      .from("leads")
+      .select("id, signal_source, tier, icp_score, created_at")
+      .not("signal_source", "is", null);
+
+    if (leadsErr) return res.status(500).json({ error: leadsErr.message });
+
+    // Group leads by signal_source (case-insensitive to handle label drift)
+    const leadsBySource = {};
+    for (const l of leads || []) {
+      const key = (l.signal_source || "").toLowerCase().trim();
+      if (!key) continue;
+      if (!leadsBySource[key]) leadsBySource[key] = [];
+      leadsBySource[key].push(l);
+    }
+
+    // Compute stats per source
+    const stats = (sources || []).map((s) => {
+      const key = (s.source_label || "").toLowerCase().trim();
+      const matched = leadsBySource[key] || [];
+
+      let hot = 0, warm = 0, cold = 0;
+      let scoreSum = 0, scoreCount = 0;
+      let lastLeadAt = null;
+
+      for (const l of matched) {
+        if (l.tier === "hot") hot++;
+        else if (l.tier === "warm") warm++;
+        else if (l.tier === "cold") cold++;
+        if (typeof l.icp_score === "number") { scoreSum += l.icp_score; scoreCount++; }
+        if (l.created_at && (!lastLeadAt || l.created_at > lastLeadAt)) lastLeadAt = l.created_at;
+      }
+
+      const total = matched.length;
+      const avgScore = scoreCount > 0 ? Math.round((scoreSum / scoreCount) * 10) / 10 : null;
+      const hotPct = total > 0 ? Math.round((hot / total) * 100) : 0;
+
+      return {
+        id: s.id,
+        source_type: s.source_type,
+        source_label: s.source_label,
+        source_url: s.source_url,
+        keywords: s.keywords,
+        priority: s.priority,
+        is_active: s.is_active,
+        last_scraped_at: s.last_scraped_at,
+        leads_count: total,
+        hot_count: hot,
+        warm_count: warm,
+        cold_count: cold,
+        hot_pct: hotPct,
+        avg_score: avgScore,
+        last_lead_at: lastLeadAt,
+      };
+    });
+
+    // Also include unmatched signal_sources (leads with a source that doesn't match any watchlist entry)
+    const matchedKeys = new Set((sources || []).map((s) => (s.source_label || "").toLowerCase().trim()));
+    const orphanStats = [];
+    for (const key of Object.keys(leadsBySource)) {
+      if (matchedKeys.has(key)) continue;
+      const matched = leadsBySource[key];
+      let hot = 0, warm = 0, cold = 0, scoreSum = 0, scoreCount = 0, lastLeadAt = null;
+      for (const l of matched) {
+        if (l.tier === "hot") hot++;
+        else if (l.tier === "warm") warm++;
+        else if (l.tier === "cold") cold++;
+        if (typeof l.icp_score === "number") { scoreSum += l.icp_score; scoreCount++; }
+        if (l.created_at && (!lastLeadAt || l.created_at > lastLeadAt)) lastLeadAt = l.created_at;
+      }
+      const total = matched.length;
+      orphanStats.push({
+        id: null,
+        source_type: "unknown",
+        source_label: matched[0].signal_source,
+        source_url: null,
+        keywords: null,
+        priority: null,
+        is_active: null,
+        last_scraped_at: null,
+        leads_count: total,
+        hot_count: hot,
+        warm_count: warm,
+        cold_count: cold,
+        hot_pct: total > 0 ? Math.round((hot / total) * 100) : 0,
+        avg_score: scoreCount > 0 ? Math.round((scoreSum / scoreCount) * 10) / 10 : null,
+        last_lead_at: lastLeadAt,
+        orphan: true,
+      });
+    }
+
+    res.json({ stats: stats.concat(orphanStats), total_leads: (leads || []).length });
+  } catch (err) {
+    console.error("Settings GET /watchlist-stats error:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
 // BeReach credit usage (last 4 days)
 // ────────────────────────────────────────────────────────────
 

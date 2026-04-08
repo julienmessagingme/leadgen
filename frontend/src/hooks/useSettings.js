@@ -119,6 +119,13 @@ export function useBeReachCredits() {
   });
 }
 
+export function useWatchlistStats() {
+  return useQuery({
+    queryKey: ["watchlist-stats"],
+    queryFn: () => api.get("/settings/watchlist-stats"),
+  });
+}
+
 // ── Cron Schedule ──
 
 export function useCronSchedule() {
