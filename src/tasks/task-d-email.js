@@ -112,6 +112,10 @@ async function checkHubSpot(email, lead, runId) {
 /**
  * Step 3 -- EMAIL-03: LinkedIn inbox reply check.
  * Returns true if lead has replied (should be skipped).
+ *
+ * Safe logic: flag as "replied" only if a conversation exists AND lastActivityAt
+ * is strictly AFTER our last outbound contact (invitation_sent_at / message_sent_at).
+ * Sans cette garde, on marquerait "replied" tous les leads que Task C a deja messages.
  */
 async function checkInboxReply(lead, runId) {
   try {
@@ -122,24 +126,31 @@ async function checkInboxReply(lead, runId) {
     }
 
     var result = await searchInbox(searchTerm);
+    var conversations = (result && result.conversations) || [];
 
-    // Parse response: check if any conversation shows a reply from the lead
-    if (result && Array.isArray(result) && result.length > 0) {
-      // Found conversations with this lead -- they replied
-      await log(runId, TASK_NAME, "info", "Lead has replied on LinkedIn, updating status",
-        { lead_id: lead.id, full_name: searchTerm });
-
-      // Update lead status to replied
-      await supabase
-        .from("leads")
-        .update({ status: "replied" })
-        .eq("id", lead.id);
-
-      return true;
+    if (conversations.length === 0) {
+      return false;
     }
 
-    // Also handle object response format
-    if (result && result.data && Array.isArray(result.data) && result.data.length > 0) {
+    // Reference timestamp = last moment we contacted the lead
+    var ourLastContactMs = 0;
+    if (lead.message_sent_at) ourLastContactMs = Math.max(ourLastContactMs, new Date(lead.message_sent_at).getTime());
+    if (lead.invitation_sent_at) ourLastContactMs = Math.max(ourLastContactMs, new Date(lead.invitation_sent_at).getTime());
+    if (lead.follow_up_sent_at) ourLastContactMs = Math.max(ourLastContactMs, new Date(lead.follow_up_sent_at).getTime());
+
+    // Match only conversations where the lead is a participant AND activity is more recent than our last contact
+    var leadUrl = (lead.linkedin_url || "").toLowerCase();
+    var hasReply = conversations.some(function(conv) {
+      if (!conv || !conv.lastActivityAt) return false;
+      if (ourLastContactMs && conv.lastActivityAt <= ourLastContactMs) return false;
+      var participants = conv.participants || [];
+      return participants.some(function(p) {
+        var pUrl = (p && p.profileUrl || "").toLowerCase();
+        return pUrl && leadUrl && pUrl.indexOf(leadUrl) !== -1;
+      });
+    });
+
+    if (hasReply) {
       await log(runId, TASK_NAME, "info", "Lead has replied on LinkedIn, updating status",
         { lead_id: lead.id, full_name: searchTerm });
 

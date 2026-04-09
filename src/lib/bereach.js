@@ -203,11 +203,12 @@ async function sendMessage(profileUrl, text) {
 }
 
 /**
- * Search LinkedIn inbox by keyword.
- * @param {string} keyword - Search keyword
+ * Search LinkedIn inbox by keyword(s).
+ * BeReach expects GET /chats/linkedin/search?keywords=xxx (pluriel) -- pas POST.
+ * @param {string} keywords - Search keywords
  */
-async function searchInbox(keyword) {
-  return bereach("/chats/linkedin/search", { keyword });
+async function searchInbox(keywords) {
+  return bereachGet("/chats/linkedin/search?keywords=" + encodeURIComponent(keywords));
 }
 
 /**
