@@ -1,8 +1,14 @@
 /**
  * Task E: WhatsApp J+14 template creation.
- * Runs daily at 10h30 Mon-Fri.
- * Selects leads at J+14 (7 days after email or 14 days after invitation),
- * generates personalized WhatsApp template body via Claude Sonnet,
+ * Runs daily at 10h30 Mon-Sat.
+ *
+ * Selects leads eligible for WhatsApp at J+14 (the LATEST email sent, 1st or followup).
+ * Two paths:
+ *   - email_followup_sent leads at 14 days after email_followup_sent_at (priority)
+ *   - email_sent leads at 14 days after email_sent_at (AND no pending followup)
+ *   - invitation_sent/messaged leads at 14 days after invitation_sent_at (legacy fallback)
+ *
+ * Generates a personalized WhatsApp template body via Claude Sonnet,
  * and creates a unique Meta template per lead via MessagingMe API.
  */
 
@@ -18,24 +24,38 @@ module.exports = async function taskEWhatsapp(runId) {
   try {
     // Calculate cutoff dates
     var now = new Date();
-    var sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
     var fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString();
 
-    // Query leads eligible for WhatsApp J+14
-    // Two paths: email_sent leads at J+7 after email, or invitation_sent leads at J+14
-    var { data: emailLeads, error: err1 } = await supabase
+    var selectCols = "id, full_name, first_name, last_name, linkedin_url, phone, headline, company_name, signal_type, signal_category, signal_source, signal_detail, metadata, email, icp_score, tier, location, company_location, company_size, company_sector, seniority_years, connections_count";
+
+    // Path 1 (priority): leads whose followup email was sent >= 14 days ago
+    var { data: followupLeads, error: err0 } = await supabase
       .from("leads")
-      .select("id, full_name, first_name, last_name, linkedin_url, phone, headline, company_name, signal_type, signal_category, signal_source, signal_detail, metadata, email, icp_score, tier, location, company_location, company_size, company_sector, seniority_years, connections_count")
-      .eq("status", "email_sent")
-      .lte("email_sent_at", sevenDaysAgo)
+      .select(selectCols)
+      .eq("status", "email_followup_sent")
+      .lte("email_followup_sent_at", fourteenDaysAgo)
       .is("whatsapp_template_created_at", null)
       .not("phone", "is", null)
       .in("tier", ["hot", "warm", "cold"])
       .limit(50);
 
+    // Path 2: leads whose 1st email was sent >= 14 days ago AND no followup was ever sent
+    // (skip if a followup is pending — wait for it to be approved or rejected)
+    var { data: emailLeads, error: err1 } = await supabase
+      .from("leads")
+      .select(selectCols)
+      .eq("status", "email_sent")
+      .lte("email_sent_at", fourteenDaysAgo)
+      .is("email_followup_sent_at", null)
+      .is("whatsapp_template_created_at", null)
+      .not("phone", "is", null)
+      .in("tier", ["hot", "warm", "cold"])
+      .limit(50);
+
+    // Path 3 (legacy): leads that never got an email, still in invitation phase at J+14
     var { data: invitationLeads, error: err2 } = await supabase
       .from("leads")
-      .select("id, full_name, first_name, last_name, linkedin_url, phone, headline, company_name, signal_type, signal_category, signal_source, signal_detail, metadata, email, icp_score, tier, location, company_location, company_size, company_sector, seniority_years, connections_count")
+      .select(selectCols)
       .in("status", ["invitation_sent", "messaged"])
       .or("invitation_sent_at.lte." + fourteenDaysAgo + ",follow_up_sent_at.lte." + fourteenDaysAgo)
       .is("whatsapp_template_created_at", null)
@@ -43,6 +63,9 @@ module.exports = async function taskEWhatsapp(runId) {
       .in("tier", ["hot", "warm", "cold"])
       .limit(50);
 
+    if (err0) {
+      await log(runId, "task-e-whatsapp", "error", "Failed to query followup leads: " + err0.message);
+    }
     if (err1) {
       await log(runId, "task-e-whatsapp", "error", "Failed to query email leads: " + err1.message);
     }
@@ -50,8 +73,8 @@ module.exports = async function taskEWhatsapp(runId) {
       await log(runId, "task-e-whatsapp", "error", "Failed to query invitation leads: " + err2.message);
     }
 
-    // Merge and deduplicate by lead ID
-    var allLeads = [].concat(emailLeads || [], invitationLeads || []);
+    // Merge and deduplicate by lead ID (priority order: followup > email > invitation)
+    var allLeads = [].concat(followupLeads || [], emailLeads || [], invitationLeads || []);
     var seen = {};
     var leads = [];
     for (var i = 0; i < allLeads.length; i++) {
