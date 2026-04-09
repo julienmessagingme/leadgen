@@ -559,7 +559,9 @@ router.post("/:id/approve-email", async (req, res) => {
       draft_email_generated_at: null,
     });
 
-    await supabase
+    // CRITICAL: email is already sent. If DB update fails, do NOT return 500
+    // (would cause duplicate send on retry). Return success with warning.
+    const { error: updateErr } = await supabase
       .from("leads")
       .update({
         status: "email_sent",
@@ -567,6 +569,16 @@ router.post("/:id/approve-email", async (req, res) => {
         metadata: updatedMetadata,
       })
       .eq("id", lead.id);
+
+    if (updateErr) {
+      console.error("CRITICAL: email sent to " + email + " (messageId " + messageId + ") but DB update failed:", updateErr.message);
+      return res.json({
+        ok: true,
+        email,
+        subject,
+        warning: "Email sent but DB update failed: " + updateErr.message + ". Check Gmail Sent folder before re-approving.",
+      });
+    }
 
     res.json({ ok: true, email, subject });
   } catch (err) {
@@ -938,7 +950,10 @@ router.post("/:id/approve-email-followup", async (req, res) => {
       draft_followup_generated_at: null,
     });
 
-    await supabase
+    // CRITICAL: the email is already sent at this point. If the DB update fails,
+    // we must NOT return a 500 that the UI would interpret as "try again" — that
+    // would duplicate the send. Instead, log loudly and return success with a warning flag.
+    const { error: updateErr } = await supabase
       .from("leads")
       .update({
         status: "email_followup_sent",
@@ -946,6 +961,18 @@ router.post("/:id/approve-email-followup", async (req, res) => {
         metadata: updatedMetadata,
       })
       .eq("id", lead.id);
+
+    if (updateErr) {
+      console.error("CRITICAL: followup email sent to " + email + " (messageId " + messageId + ") but DB update failed:", updateErr.message);
+      // Return 200 with a warning — UI should refresh and the lead will still appear
+      // in the validation queue. Julien should manually check Gmail before re-approving.
+      return res.json({
+        ok: true,
+        email,
+        subject,
+        warning: "Email sent but DB update failed: " + updateErr.message + ". Check Gmail Sent folder before re-approving.",
+      });
+    }
 
     res.json({ ok: true, email, subject });
   } catch (err) {

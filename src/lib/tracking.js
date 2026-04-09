@@ -1,8 +1,13 @@
 const crypto = require("crypto");
 
-const SECRET = process.env.TRACKING_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (!SECRET) {
-  console.warn("WARNING: TRACKING_SECRET is not set. Tracking tokens will be insecure.");
+// Must be a non-empty string to avoid crypto.createHmac crashing.
+// Falls back to a known-insecure constant with a loud warning so local dev works
+// but production deployments are obviously misconfigured.
+const SECRET = process.env.TRACKING_SECRET
+  || process.env.SUPABASE_SERVICE_ROLE_KEY
+  || "leadgen-insecure-dev-only-secret-do-not-use-in-prod";
+if (SECRET === "leadgen-insecure-dev-only-secret-do-not-use-in-prod") {
+  console.warn("WARNING: TRACKING_SECRET is not set. Using insecure fallback — tracking tokens are forgeable.");
 }
 const PUBLIC_URL = process.env.PUBLIC_TRACKING_URL || "https://leadgen.messagingme.app";
 const TRACKING_ENABLED = process.env.EMAIL_TRACKING_ENABLED !== "false";
