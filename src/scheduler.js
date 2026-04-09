@@ -9,6 +9,7 @@ const taskCFollowup = require("./tasks/task-c-followup");
 const taskDEmail = require("./tasks/task-d-email");
 const taskEWhatsapp = require("./tasks/task-e-whatsapp");
 const taskFBriefing = require("./tasks/task-f-briefing");
+const taskFEmailFollowup = require("./tasks/task-f-email-followup");
 const whatsappPoll = require("./tasks/whatsapp-poll");
 const { supabase } = require("./lib/supabase");
 
@@ -46,8 +47,9 @@ registerTask("task-b-invitations","25 7 * * 1-6",      taskBInvitations); // 07h
 registerTask("task-a-signals",    "30 7 * * 1-6",      taskASignals);     // 07h30
 // Task F (morning InMail brief) DISABLED — replaced by 10-day InMail validation queue (à implémenter)
 // registerTask("task-f-briefing",   "30 8 * * 1-6",      taskFBriefing);    // 08h30
-registerTask("task-d-email",      "0 10 * * 1-6",      taskDEmail);       // 10h00
-registerTask("task-e-whatsapp",   "30 10 * * 1-6",     taskEWhatsapp);    // 10h30
+registerTask("task-d-email",            "0 10 * * 1-6",      taskDEmail);         // 10h00
+registerTask("task-f-email-followup",   "15 10 * * 1-6",     taskFEmailFollowup); // 10h15 — relance J+14
+registerTask("task-e-whatsapp",         "30 10 * * 1-6",     taskEWhatsapp);      // 10h30
 
 // WhatsApp template approval polling (every 15 min, 9h-18h, lun-sam)
 registerTask("whatsapp-poll",     "*/15 9-18 * * 1-6", whatsappPoll);     // every 15 min
@@ -63,4 +65,4 @@ registerTask("log-cleanup", "0 2 * * *", async (runId) => {
   console.log("Log cleanup completed: deleted " + (count || 0) + " logs older than 30 days");
 });
 
-console.log("Scheduler started: 7 tasks registered (lun-sam pipeline, daily log-cleanup, Europe/Paris)");
+console.log("Scheduler started: 8 tasks registered (lun-sam pipeline, daily log-cleanup, Europe/Paris)");
