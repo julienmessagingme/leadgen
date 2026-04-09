@@ -105,6 +105,20 @@ var DEFAULT_EMAIL_TEMPLATE =
   "8. INTERDICTIONS ABSOLUES : 'j ai vu que vous avez like/commente/reagi', 'vous avez reagi a mes posts', 'vous suivez de pres', 'vos interactions recentes', 'votre activite recente', 'your repeated engagement', 'I noticed you ve been exploring', 'caught my attention', 'le sujet revient souvent dans vos echanges'. JAMAIS de reference au fait qu on surveille ou observe l activite LinkedIn du prospect — ca fait flicage/stalking. On ecrit parce que le SUJET nous interesse, pas parce qu on a vu que la personne a like un post. Pas de 'MessagingMe', pas de nom de societe.\n" +
   "9. ANTI-HALLUCINATION — NOMS PROPRES : NE JAMAIS inventer de nom d auteur de post. Si l auteur du post n est PAS explicitement fourni dans le contexte (champ 'Auteur du post :'), NE PAS nommer l auteur. Reference seulement le sujet/theme du post (ex: 'Un post recent sur l experience client...'). JAMAIS utiliser un label interne (ex: 'nahmias', 'wax', 'mtarget', 'alcmeon') comme nom de personne. Si tu n es pas 100% sur d un nom, tu ne le cites pas — tu parles du sujet directement.";
 
+var DEFAULT_EMAIL_FOLLOWUP_TEMPLATE =
+  "Redige un 2e email de relance (le 1er est reste sans reponse depuis 7 jours).\n\n" +
+  "REGLES :\n" +
+  "1. ANGLE DIFFERENT du 1er email : ne re-cite PAS le signal initial (like/commentaire sur un post). Pars sur un cas client concret.\n" +
+  "2. CITER UN CAS CLIENT : si un cas est fourni dans le contexte (champ 'Cas client a citer'), cite le nom du client + le chiffre + 1 phrase de contexte. Si AUCUN cas n est fourni, parle d une tendance generale du secteur SANS inventer de chiffres precis.\n" +
+  "3. MENTIONNER MessagingMe UNE FOIS MAX : juste pour situer (ex: 'c est le type de sujet qu on travaille chez MessagingMe'). Pas de pitch produit, pas de 'notre solution'.\n" +
+  "4. PAS DE CTA : ne propose PAS de RDV, PAS de lien Calendly, PAS de 'reserver un creneau', PAS de 'programmer un echange'. Le lien sera ajoute automatiquement en signature.\n" +
+  "5. FORMAT : Objet court ET DIFFERENT du 1er email (pas de 'Re:' — la signature de thread est geree automatiquement). Corps : 4-6 phrases. HTML simple. Terminer par une question ouverte.\n" +
+  "6. SIGNATURE : NE PAS mettre de signature, NE PAS mettre 'Bonne journee', NE PAS mettre 'Cordialement'. Tout sera ajoute automatiquement.\n" +
+  "7. EN FRANCAIS si le prospect est en France, EN ANGLAIS si zone GCC/international.\n" +
+  "8. INTERDICTIONS ABSOLUES : 'j ai vu que vous avez like/commente/reagi', 'vous avez reagi a mes posts', 'vous suivez de pres', 'vos interactions recentes', 'votre activite recente', 'your repeated engagement', 'I noticed you ve been exploring', 'caught my attention', 'le sujet revient souvent dans vos echanges'. JAMAIS de reference au fait qu on surveille ou observe l activite LinkedIn du prospect — ca fait flicage/stalking.\n" +
+  "9. ANTI-HALLUCINATION — NOMS PROPRES : NE JAMAIS inventer de nom d auteur de post. Pas de label interne (nahmias, wax, mtarget).\n" +
+  "10. ANTI-FAKE-METRIC : si AUCUN cas client n est fourni dans le contexte, NE PAS inventer de chiffre precis. Tu peux dire 'on observe' ou 'la tendance est' sans donner un pourcentage invente.";
+
 var DEFAULT_WHATSAPP_TEMPLATE =
   "Redige un message WhatsApp pour ce prospect.\n\n" +
   "REGLES :\n" +
@@ -124,7 +138,7 @@ async function loadTemplates() {
     var { data, error } = await supabase
       .from("global_settings")
       .select("key, value")
-      .in("key", ["template_invitation", "template_followup", "template_email", "template_whatsapp"]);
+      .in("key", ["template_invitation", "template_followup", "template_email", "template_email_followup", "template_whatsapp"]);
     if (error || !data) return {};
     return Object.fromEntries(data.map(function (r) { return [r.key, r.value]; }));
   } catch (e) {
@@ -405,6 +419,78 @@ async function generateEmail(lead, templates) {
 }
 
 /**
+ * Generate the 2nd follow-up email (Task F, J+14 from invitation).
+ * Different angle from the 1st email: cites a case study + light MessagingMe mention.
+ *
+ * @param {object} lead - Lead data
+ * @param {object} templates - Loaded templates (optional)
+ * @param {object|null} caseStudy - { client_name, sector, metric_label, metric_value, description } or null
+ * @returns {Promise<{subject: string, body: string}|null>}
+ */
+async function generateFollowupEmail(lead, templates, caseStudy) {
+  try {
+    var calendlyUrl = process.env.CALENDLY_URL || "https://calendly.com/julien-messagingme/30min";
+    var tpl = templates || (await loadTemplates());
+    var instructions = (tpl.template_email_followup || DEFAULT_EMAIL_FOLLOWUP_TEMPLATE);
+    var lang = detectLanguage(lead);
+
+    // Build case study context block
+    var caseContext = "";
+    if (caseStudy && caseStudy.client_name) {
+      caseContext = "\n\nCas client a citer : " + sanitizeForPrompt(caseStudy.client_name) +
+        " (secteur " + sanitizeForPrompt(caseStudy.sector || "") + ") — " +
+        sanitizeForPrompt(caseStudy.metric_label || "") + " : " +
+        sanitizeForPrompt(caseStudy.metric_value || "") +
+        (caseStudy.description ? ". " + sanitizeForPrompt(caseStudy.description, 300) : "");
+    } else {
+      caseContext = "\n\nAUCUN cas client fourni — applique la REGLE 10 (pas de chiffre invente).";
+    }
+
+    var langInstruction = lang === "en"
+      ? "\n\nIMPORTANT: This prospect is NOT French-speaking. Write the ENTIRE email (subject + body) IN ENGLISH. Professional but warm tone."
+      : "";
+
+    var result = await callClaude(SYSTEM,
+      instructions + langInstruction + "\n\n" +
+      buildLeadContext(lead) + caseContext + "\n\n" +
+      'Reponds en JSON: {"subject": "...", "body": "<html>...</html>"}', 1024);
+
+    if (!result.subject || !result.body) return null;
+
+    // Strip any signature Sonnet may have generated (same patterns as generateEmail)
+    result.body = result.body
+      .replace(/<br\s*\/?>\s*(Cordialement|Best regards|Kind regards|Regards|Bien cordialement|A bientot|A tres vite|Bonne journee|Bonne soiree)[,.]?\s*(<br\s*\/?>.*?)?\s*Julien[^<]*/gi, "")
+      .replace(/<p>\s*(Cordialement|Best regards|Kind regards|Regards|Bien cordialement|Bonne journee)[,.]?\s*<\/p>(\s*<p>[^<]*<\/p>)*/gi, "")
+      .replace(/Julien\s+(Poupard|Dumas|MessagingMe)[^<]*/gi, "")
+      .replace(/--\s*<br\s*\/?>\s*Julien[^<]*/gi, "")
+      .replace(/<a[^>]*calendly[^>]*>[^<]*<\/a>/gi, "")
+      .replace(/<p[^>]*>\s*<a[^>]*calendly[^>]*>[^<]*<\/a>\s*<\/p>/gi, "")
+      .replace(/[Rr]eserv(er|ez)\s+un\s+creneau[^<]*/gi, "")
+      .replace(/[Pp]rogramm(er|ez)\s+un\s+echange[^<]*/gi, "")
+      .replace(/<p>\s*(Bonne journee|Bonne soiree|MessagingMe)\s*,?\s*<\/p>/gi, "")
+      .replace(/<br\s*\/?>\s*(Bonne journee|Bonne soiree|MessagingMe)\s*,?\s*(<br\s*\/?>)?/gi, "")
+      .replace(/<p>\s*<\/p>/g, "")
+      .replace(/(<br\s*\/?>){3,}/g, "<br><br>");
+
+    // Add correct signature
+    var ctaLabel = lang === "en" ? "Schedule a call" : "Programmer un echange";
+    var signature = '<br><br>Julien Dumas<br>CEO MessagingMe<br><a href="https://www.messagingme.fr">www.messagingme.fr</a>' +
+      '<br><br><a href="' + calendlyUrl + '" style="display:inline-block;padding:10px 20px;background-color:#4F46E5;color:#ffffff;text-decoration:none;border-radius:6px;font-size:14px;font-weight:600;">' + ctaLabel + '</a>';
+    result.body = result.body.replace(/(<br\s*\/?>){1,3}\s*Julien Dumas\s*<br\s*\/?>.*?messagingme\.fr<\/a>/gi, "");
+    if (result.body.match(/<\/(body|html)>/i)) {
+      result.body = result.body.replace(/<\/(body|html)>/i, signature + "</$1>");
+    } else {
+      result.body = result.body + signature;
+    }
+
+    return { subject: result.subject, body: result.body };
+  } catch (err) {
+    console.warn("generateFollowupEmail failed:", err.message);
+    return null;
+  }
+}
+
+/**
  * Generate a WhatsApp message body.
  * @param {object} lead - Lead data
  * @returns {Promise<string|null>} WhatsApp body text or null on error
@@ -471,6 +557,7 @@ module.exports = {
   generateInvitationNote,
   generateFollowUpMessage,
   generateEmail,
+  generateFollowupEmail,
   generateWhatsAppBody,
   generateInMail,
   isColdLead,
