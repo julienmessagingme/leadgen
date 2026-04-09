@@ -1,6 +1,7 @@
 import { useState } from "react";
 import NavBar from "../components/shared/NavBar";
 import TierBadge from "../components/shared/TierBadge";
+import EngagementBadges from "../components/shared/EngagementBadges";
 import { useLeads } from "../hooks/useLeads";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
@@ -69,10 +70,35 @@ function useRejectReinvite() {
   });
 }
 
+function useApproveEmailFollowup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, subject, body }) => api.post(`/leads/${id}/approve-email-followup`, { subject, body }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["leads"] }),
+  });
+}
+
+function useRejectEmailFollowup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id }) => api.post(`/leads/${id}/reject-email-followup`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["leads"] }),
+  });
+}
+
+function useRegenerateEmailFollowup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, lang }) => api.post(`/leads/${id}/regenerate-email-followup`, { lang }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["leads"] }),
+  });
+}
+
 export default function MessagesDraft() {
-  const [tab, setTab] = useState("linkedin"); // "linkedin" | "email" | "reinvite"
+  const [tab, setTab] = useState("linkedin"); // "linkedin" | "email" | "reinvite" | "followup_email"
   const [editedMessages, setEditedMessages] = useState({});
   const [editedEmails, setEditedEmails] = useState({}); // { id: { subject, body } }
+  const [editedFollowups, setEditedFollowups] = useState({}); // { id: { subject, body } }
   const [editedNotes, setEditedNotes] = useState({}); // { id: note }
   const [pendingIds, setPendingIds] = useState({});
   const [errors, setErrors] = useState({});
@@ -96,6 +122,12 @@ export default function MessagesDraft() {
     order: "desc",
     limit: 100,
   });
+  const { data: followupData, isLoading: followupLoading, refetch: refetchFollowup } = useLeads({
+    status: "email_followup_pending",
+    sort: "icp_score",
+    order: "desc",
+    limit: 100,
+  });
 
   const approve = useApproveMessage();
   const reject = useRejectMessage();
@@ -105,10 +137,14 @@ export default function MessagesDraft() {
   const regenerateMessage = useRegenerateMessage();
   const approveReinvite = useApproveReinvite();
   const rejectReinvite = useRejectReinvite();
+  const approveFollowup = useApproveEmailFollowup();
+  const rejectFollowup = useRejectEmailFollowup();
+  const regenerateFollowup = useRegenerateEmailFollowup();
 
   const linkedinLeads = linkedinData?.leads ?? [];
   const emailLeads = emailData?.leads ?? [];
   const reinviteLeads = reinviteData?.leads ?? [];
+  const followupLeads = followupData?.leads ?? [];
 
   const handleApprove = (lead) => {
     const message = editedMessages[lead.id] ?? lead.metadata?.draft_message ?? "";
@@ -208,8 +244,48 @@ export default function MessagesDraft() {
     );
   };
 
-  const isLoading = tab === "linkedin" ? linkedinLoading : tab === "email" ? emailLoading : reinviteLoading;
-  const leads = tab === "linkedin" ? linkedinLeads : tab === "email" ? emailLeads : reinviteLeads;
+  const handleApproveFollowup = (lead) => {
+    const edited = editedFollowups[lead.id];
+    const subject = edited?.subject ?? lead.metadata?.draft_followup_subject ?? "";
+    const body = edited?.body ?? lead.metadata?.draft_followup_body ?? "";
+    setPendingIds((p) => ({ ...p, [lead.id]: "approving" }));
+    setErrors((e) => ({ ...e, [lead.id]: null }));
+    approveFollowup.mutate(
+      { id: lead.id, subject, body },
+      {
+        onSuccess: () => { setPendingIds((p) => { const n = { ...p }; delete n[lead.id]; return n; }); refetchFollowup(); },
+        onError: (err) => {
+          setPendingIds((p) => { const n = { ...p }; delete n[lead.id]; return n; });
+          if (err?.status === 404) { refetchFollowup(); return; }
+          setErrors((e) => ({ ...e, [lead.id]: err?.message || "Erreur inconnue" }));
+        },
+      }
+    );
+  };
+
+  const handleRejectFollowup = (lead) => {
+    setPendingIds((p) => ({ ...p, [lead.id]: "rejecting" }));
+    rejectFollowup.mutate(
+      { id: lead.id },
+      {
+        onSuccess: () => { setPendingIds((p) => { const n = { ...p }; delete n[lead.id]; return n; }); refetchFollowup(); },
+        onError: (err) => {
+          setPendingIds((p) => { const n = { ...p }; delete n[lead.id]; return n; });
+          if (err?.status === 404) { refetchFollowup(); return; }
+          setErrors((e) => ({ ...e, [lead.id]: err?.message || "Erreur inconnue" }));
+        },
+      }
+    );
+  };
+
+  const isLoading = tab === "linkedin" ? linkedinLoading
+    : tab === "email" ? emailLoading
+    : tab === "reinvite" ? reinviteLoading
+    : followupLoading;
+  const leads = tab === "linkedin" ? linkedinLeads
+    : tab === "email" ? emailLeads
+    : tab === "reinvite" ? reinviteLeads
+    : followupLeads;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -269,6 +345,21 @@ export default function MessagesDraft() {
               </span>
             )}
           </button>
+          <button
+            onClick={() => setTab("followup_email")}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              tab === "followup_email"
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Relances email
+            {followupLeads.length > 0 && (
+              <span className="ml-1.5 inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium bg-pink-100 text-pink-700 rounded-full">
+                {followupLeads.length}
+              </span>
+            )}
+          </button>
         </div>
 
         {isLoading && (
@@ -277,11 +368,10 @@ export default function MessagesDraft() {
 
         {!isLoading && leads.length === 0 && (
           <div className="text-center py-12 text-gray-400">
-            {tab === "linkedin"
-              ? "Aucun message LinkedIn en attente."
-              : tab === "email"
-              ? "Aucun email en attente. Task D n'a pas encore tourné ou tous les emails ont été traités."
-              : "Aucune re-invitation en attente."}
+            {tab === "linkedin" ? "Aucun message LinkedIn en attente."
+             : tab === "email" ? "Aucun email en attente. Task D n'a pas encore tourné ou tous les emails ont été traités."
+             : tab === "reinvite" ? "Aucune re-invitation en attente."
+             : "Aucune relance email en attente."}
           </div>
         )}
 
@@ -647,6 +737,164 @@ export default function MessagesDraft() {
                                   onError: (err) => {
                                     setPendingIds((p) => { const n = { ...p }; delete n[lead.id]; return n; });
                                     setErrors((e) => ({ ...e, [lead.id]: err?.response?.data?.error || err?.message || "Erreur" }));
+                                  },
+                                }
+                              );
+                            }}
+                            disabled={isRegenerating || (lang === isCurrent && !isRegenerating)}
+                            className={`px-2.5 py-1 text-xs font-medium rounded-md border transition-colors ${
+                              lang === isCurrent
+                                ? "bg-indigo-100 text-indigo-700 border-indigo-300 cursor-default"
+                                : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700"
+                            } disabled:opacity-50`}
+                          >
+                            {isRegenerating ? "..." : lang === "fr" ? "FR" : "EN"}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Followup email drafts */}
+        {tab === "followup_email" && (
+          <div className="space-y-4">
+            {followupLeads.map((lead) => {
+              const edited = editedFollowups[lead.id];
+              const subject = edited?.subject ?? lead.metadata?.draft_followup_subject ?? "";
+              const body = edited?.body ?? lead.metadata?.draft_followup_body ?? "";
+              const emailTo = lead.metadata?.draft_followup_to || lead.email;
+              const previousSubject = lead.metadata?.email_subject;
+              const caseId = lead.metadata?.draft_followup_case_id;
+              const isApproving = pendingIds[lead.id] === "approving";
+              const isRejecting = pendingIds[lead.id] === "rejecting";
+              const errorMsg = errors[lead.id];
+
+              return (
+                <div key={lead.id} className="bg-white rounded-xl shadow-sm border border-pink-200 p-5">
+                  {/* Header */}
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <a href={lead.linkedin_url} target="_blank" rel="noopener noreferrer" className="font-semibold text-gray-900 hover:text-blue-600">
+                          {lead.full_name}
+                        </a>
+                        <TierBadge tier={lead.tier} />
+                        <span className="text-xs text-gray-400">#{lead.icp_score}</span>
+                        <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-pink-100 text-pink-700 rounded-full">
+                          Relance #2
+                        </span>
+                        <EngagementBadges leadId={lead.id} />
+                      </div>
+                      <p className="text-sm text-gray-500">{lead.headline}</p>
+                      <p className="text-xs text-gray-400">{lead.company_name} · {emailTo || "Pas d'email"}</p>
+                    </div>
+                  </div>
+
+                  {/* Context: 1st email */}
+                  {previousSubject && (
+                    <div className="mb-3 bg-gray-50 rounded-lg px-3 py-2 text-xs text-gray-600 border border-gray-200">
+                      <span className="font-medium">1er email envoyé :</span> {previousSubject}
+                    </div>
+                  )}
+
+                  {/* Case study used */}
+                  {caseId && (
+                    <div className="mb-3 bg-blue-50 rounded-lg px-3 py-2 text-xs text-blue-700 border border-blue-100">
+                      <span className="font-medium">Cas client utilisé :</span> #{caseId}
+                    </div>
+                  )}
+
+                  {/* Subject input */}
+                  <div className="mb-2">
+                    <label className="text-xs font-medium text-gray-500 mb-1 block">Objet</label>
+                    <input
+                      type="text"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-pink-300"
+                      value={subject}
+                      onChange={(e) => setEditedFollowups((prev) => ({
+                        ...prev,
+                        [lead.id]: { ...(prev[lead.id] || {}), subject: e.target.value, body: prev[lead.id]?.body ?? body },
+                      }))}
+                    />
+                  </div>
+
+                  {/* Body (HTML preview/raw editor toggle) */}
+                  <div className="mb-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-medium text-gray-500">Corps de l'email</label>
+                      <button
+                        type="button"
+                        onClick={() => setEditingHtml((prev) => ({ ...prev, [lead.id]: !prev[lead.id] }))}
+                        className="text-xs text-gray-400 hover:text-gray-600"
+                      >
+                        {editingHtml[lead.id] ? "Apercu" : "Modifier le code"}
+                      </button>
+                    </div>
+                    {editingHtml[lead.id] ? (
+                      <textarea
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 resize-none focus:outline-none focus:ring-2 focus:ring-pink-300 font-mono"
+                        rows={8}
+                        value={body}
+                        onChange={(e) => setEditedFollowups((prev) => ({
+                          ...prev,
+                          [lead.id]: { ...(prev[lead.id] || {}), body: e.target.value, subject: prev[lead.id]?.subject ?? subject },
+                        }))}
+                      />
+                    ) : (
+                      <div
+                        className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-800 bg-white prose prose-sm max-w-none"
+                        dangerouslySetInnerHTML={{ __html: body }}
+                      />
+                    )}
+                  </div>
+
+                  {errorMsg && (
+                    <div className="mt-2 text-xs text-red-600 bg-red-50 rounded px-3 py-2 border border-red-200">
+                      {errorMsg}
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2 mt-3">
+                    <button
+                      onClick={() => handleApproveFollowup(lead)}
+                      disabled={isApproving || !subject.trim() || !body.trim() || !emailTo}
+                      className="px-4 py-2 bg-pink-600 text-white text-sm font-medium rounded-lg hover:bg-pink-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title={!emailTo ? "Email manquant" : ""}
+                    >
+                      {isApproving ? "Envoi…" : !emailTo ? "Email manquant" : "Envoyer la relance"}
+                    </button>
+                    <button
+                      onClick={() => handleRejectFollowup(lead)}
+                      disabled={isRejecting}
+                      className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 disabled:opacity-50"
+                    >
+                      Rejeter
+                    </button>
+                    <div className="ml-auto flex items-center gap-1">
+                      {["fr", "en"].map((lang) => {
+                        const isCurrent = body.includes("Programmer un echange") ? "fr" : body.includes("Schedule a call") ? "en" : "fr";
+                        const isRegenerating = pendingIds[lead.id] === "regen-" + lang;
+                        return (
+                          <button
+                            key={lang}
+                            onClick={() => {
+                              setPendingIds((p) => ({ ...p, [lead.id]: "regen-" + lang }));
+                              regenerateFollowup.mutate(
+                                { id: lead.id, lang },
+                                {
+                                  onSuccess: () => {
+                                    setPendingIds((p) => { const n = { ...p }; delete n[lead.id]; return n; });
+                                    setEditedFollowups((prev) => { const n = { ...prev }; delete n[lead.id]; return n; });
+                                    refetchFollowup();
+                                  },
+                                  onError: (err) => {
+                                    setPendingIds((p) => { const n = { ...p }; delete n[lead.id]; return n; });
+                                    setErrors((e) => ({ ...e, [lead.id]: err?.message || "Erreur" }));
                                   },
                                 }
                               );

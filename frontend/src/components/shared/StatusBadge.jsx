@@ -9,6 +9,8 @@ const STATUS_MAP = {
   messaged: { label: "Connecte", colors: "bg-indigo-100 text-indigo-700" },
   email_pending: { label: "Email en attente", colors: "bg-orange-100 text-orange-700" },
   email_sent: { label: "Email", colors: "bg-purple-100 text-purple-700" },
+  email_followup_pending: { label: "Relance en attente", colors: "bg-pink-100 text-pink-700" },
+  email_followup_sent: { label: "Relance envoyee", colors: "bg-purple-100 text-purple-700" },
   whatsapp_sent: { label: "WhatsApp", colors: "bg-green-100 text-green-700" },
   replied: { label: "Gagne", colors: "bg-emerald-100 text-emerald-700" },
   meeting_booked: { label: "Gagne", colors: "bg-emerald-100 text-emerald-700" },

@@ -1045,4 +1045,23 @@ router.post("/:id/regenerate-email-followup", async (req, res) => {
   }
 });
 
+/**
+ * GET /:id/email-events -- Return all click/open events for a lead (for engagement badges).
+ */
+router.get("/:id/email-events", async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("email_events")
+      .select("id, email_type, event_type, url_clicked, created_at")
+      .eq("lead_id", req.params.id)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ events: data });
+  } catch (err) {
+    console.error("GET /leads/:id/email-events error:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 module.exports = router;
