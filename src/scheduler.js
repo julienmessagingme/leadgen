@@ -1,6 +1,7 @@
 const cron = require("node-cron");
 const { createRunId } = require("./lib/run-context");
 const { logTaskRun } = require("./lib/logger");
+const { checkAndAlert } = require("./lib/alerting");
 
 // Import task modules
 const taskASignals = require("./tasks/task-a-signals");
@@ -22,19 +23,28 @@ const { supabase } = require("./lib/supabase");
  * @param {string} cronExpression - Cron schedule expression
  * @param {Function} taskFn - Async function(runId) to execute
  */
+// Tasks that should NOT trigger alerts (high-frequency / low-signal)
+const NO_ALERT_TASKS = new Set(["log-cleanup", "whatsapp-poll"]);
+
 function registerTask(name, cronExpression, taskFn) {
   cron.schedule(
     cronExpression,
     async () => {
       const runId = createRunId();
+      let thrownError = null;
       try {
         await logTaskRun(runId, name, "started");
         await taskFn(runId);
         await logTaskRun(runId, name, "completed");
       } catch (err) {
+        thrownError = err;
         await logTaskRun(runId, name, "error", err.message);
         console.error("Task " + name + " failed:", err.message);
         // Do NOT re-throw -- error isolation ensures other tasks continue
+      }
+      // Alerting (best-effort, never throws) -- skipped for high-frequency tasks
+      if (!NO_ALERT_TASKS.has(name)) {
+        await checkAndAlert({ runId: runId, task: name, thrownError: thrownError });
       }
     },
     { timezone: "Europe/Paris" }

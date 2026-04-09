@@ -88,12 +88,15 @@ module.exports = async function taskBInvitations(runId) {
   }
 
   // Step 3: Select leads to invite (hot/warm, ordered by ICP score)
+  // BUG #2 fix: exclude leads without linkedin_url -- they would trigger
+  // 422 "profile: expected string, received undefined" on BeReach.
   var { data: leads, error: selectErr } = await supabase
     .from("leads")
     .select("id, full_name, first_name, last_name, linkedin_url, headline, company_name, signal_type, signal_category, signal_source, signal_detail, metadata, email, icp_score, tier, status, last_processed_run_id, location, company_location, company_size, company_sector, seniority_years, connections_count")
     .in("status", ["new", "enriched", "scored"])
     .in("tier", ["hot", "warm"])
     .gte("icp_score", 50)
+    .not("linkedin_url", "is", null)
     .order("icp_score", { ascending: false })
     .limit(remaining);
 
@@ -135,6 +138,15 @@ module.exports = async function taskBInvitations(runId) {
     var lead = leads[i];
 
     try {
+      // Defensive guard: skip leads with no linkedin_url (would crash BeReach with
+      // "profile: expected string, received undefined"). Double safety on top of SELECT filter.
+      if (!lead.linkedin_url) {
+        await log(runId, "task-b-invitations", "warn",
+          "Skipping lead " + (lead.full_name || lead.id) + " -- linkedin_url is null");
+        skipped++;
+        continue;
+      }
+
       // LIN-08: Idempotence check -- skip if already processed in this run
       if (lead.last_processed_run_id === runId) {
         skipped++;
