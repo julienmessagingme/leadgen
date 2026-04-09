@@ -885,4 +885,164 @@ router.get("/:id/hubspot-email", async (req, res) => {
   }
 });
 
+/**
+ * POST /:id/approve-email-followup -- Send the followup email as a reply-in-thread.
+ * Uses the original email's messageId to thread the conversation.
+ * Injects click+open tracking before sending.
+ */
+router.post("/:id/approve-email-followup", async (req, res) => {
+  try {
+    const { sendEmail } = require("../lib/gmail");
+    const { injectTracking } = require("../lib/tracking");
+
+    const { data: lead, error: fetchErr } = await supabase
+      .from("leads")
+      .select("*")
+      .eq("id", req.params.id)
+      .single();
+
+    if (fetchErr || !lead) return res.status(404).json({ error: "Lead not found" });
+    if (lead.status !== "email_followup_pending") {
+      return res.status(400).json({ error: "Lead is not in email_followup_pending status" });
+    }
+
+    const email = lead.metadata?.draft_followup_to || lead.email;
+    if (!email) return res.status(400).json({ error: "No email address" });
+
+    let subject = (req.body.subject || "").trim() || lead.metadata?.draft_followup_subject;
+    const body = (req.body.body || "").trim() || lead.metadata?.draft_followup_body;
+    if (!subject || !body) return res.status(400).json({ error: "No email content to send" });
+
+    // Prefix with "Re: " if not already present — Gmail will thread it with the original
+    if (!/^re\s*:/i.test(subject)) {
+      subject = "Re: " + subject;
+    }
+
+    // Inject click + open tracking before sending
+    const trackedBody = injectTracking(body, lead.id, "email_followup");
+
+    // Reply in thread via Nodemailer inReplyTo/references headers
+    const inReplyTo = lead.metadata?.email_message_id || null;
+    const messageId = await sendEmail(email, subject, trackedBody, null, {
+      inReplyTo: inReplyTo,
+      references: inReplyTo,
+    });
+
+    const updatedMetadata = Object.assign({}, lead.metadata || {}, {
+      followup_subject: subject,
+      followup_message_id: messageId,
+      draft_followup_subject: null,
+      draft_followup_body: null,
+      draft_followup_to: null,
+      draft_followup_run_id: null,
+      draft_followup_generated_at: null,
+    });
+
+    await supabase
+      .from("leads")
+      .update({
+        status: "email_followup_sent",
+        email_followup_sent_at: new Date().toISOString(),
+        metadata: updatedMetadata,
+      })
+      .eq("id", lead.id);
+
+    res.json({ ok: true, email, subject });
+  } catch (err) {
+    console.error("POST /leads/:id/approve-email-followup error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /:id/reject-email-followup -- Delete the lead + add to suppression list.
+ * Same pattern as reject-email / reject-reinvite.
+ */
+router.post("/:id/reject-email-followup", async (req, res) => {
+  try {
+    const { addToSuppressionList } = require("../lib/suppression");
+
+    const { data: lead, error: fetchErr } = await supabase
+      .from("leads")
+      .select("id, status, full_name, linkedin_url, email")
+      .eq("id", req.params.id)
+      .single();
+
+    if (fetchErr || !lead) return res.status(404).json({ error: "Lead not found" });
+    if (lead.status !== "email_followup_pending") {
+      return res.status(400).json({ error: "Lead is not in email_followup_pending status" });
+    }
+
+    await addToSuppressionList({
+      email: lead.email,
+      linkedinUrl: lead.linkedin_url,
+      reason: "rejected_followup",
+    });
+
+    const { error: delErr } = await supabase.from("leads").delete().eq("id", lead.id);
+    if (delErr) return res.status(500).json({ error: "Delete failed: " + delErr.message });
+
+    console.log("Lead deleted + suppressed via reject-email-followup:", lead.full_name || lead.id);
+    res.json({ ok: true, deleted: true, suppressed: true });
+  } catch (err) {
+    console.error("POST /leads/:id/reject-email-followup error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /:id/regenerate-email-followup -- Regenerate followup draft with forced language.
+ * Body: { lang: "fr" | "en" }
+ */
+router.post("/:id/regenerate-email-followup", async (req, res) => {
+  try {
+    const { generateFollowupEmail, loadTemplates } = require("../lib/message-generator");
+
+    const { data: lead, error: fetchErr } = await supabase
+      .from("leads")
+      .select("*")
+      .eq("id", req.params.id)
+      .single();
+
+    if (fetchErr || !lead) return res.status(404).json({ error: "Lead not found" });
+    if (lead.status !== "email_followup_pending") {
+      return res.status(400).json({ error: "Lead is not in email_followup_pending status" });
+    }
+
+    const lang = req.body.lang === "en" ? "en" : "fr";
+
+    // Override language detection by temporarily injecting a location hint
+    const originalLocation = lead.location;
+    lead.location = lang === "en" ? "New York, US" : "Paris, France";
+
+    // Re-fetch the same case study that was used originally (if any)
+    let caseStudy = null;
+    const caseId = lead.metadata?.draft_followup_case_id;
+    if (caseId) {
+      const { data: cs } = await supabase.from("case_studies").select("*").eq("id", caseId).single();
+      caseStudy = cs;
+    }
+
+    const templates = await loadTemplates();
+    const emailContent = await generateFollowupEmail(lead, templates, caseStudy);
+
+    lead.location = originalLocation; // restore
+
+    if (!emailContent) return res.status(500).json({ error: "Failed to regenerate" });
+
+    const updatedMetadata = Object.assign({}, lead.metadata || {}, {
+      draft_followup_subject: emailContent.subject,
+      draft_followup_body: emailContent.body,
+      draft_followup_generated_at: new Date().toISOString(),
+      forced_lang: lang,
+    });
+
+    await supabase.from("leads").update({ metadata: updatedMetadata }).eq("id", lead.id);
+    res.json({ ok: true, lang, subject: emailContent.subject });
+  } catch (err) {
+    console.error("POST /leads/:id/regenerate-email-followup error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
