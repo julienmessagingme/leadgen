@@ -241,7 +241,7 @@ async function resolveLinkedInParam(query, type) {
   try {
     var resp = await bereachGet(
       "/search/linkedin/parameters?type=" + encodeURIComponent(type) +
-      "&query=" + encodeURIComponent(query)
+      "&keywords=" + encodeURIComponent(query)
     );
     var items = resp.items || resp.results || resp.data || [];
     if (Array.isArray(items) && items.length > 0) {
