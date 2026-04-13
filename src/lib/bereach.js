@@ -232,16 +232,64 @@ async function withdrawInvitation(invitationUrn) {
 }
 
 /**
+ * Resolve a human-readable name to a LinkedIn numeric ID.
+ * @param {string} query - Human text (e.g. "Carrefour", "France", "SaaS")
+ * @param {string} type - One of: COMPANY, GEO, INDUSTRY, SCHOOL
+ * @returns {Promise<string|null>} LinkedIn numeric ID or null
+ */
+async function resolveLinkedInParam(query, type) {
+  try {
+    var resp = await bereachGet(
+      "/search/linkedin/parameters?type=" + encodeURIComponent(type) +
+      "&query=" + encodeURIComponent(query)
+    );
+    var items = resp.items || resp.results || resp.data || [];
+    if (Array.isArray(items) && items.length > 0) {
+      return String(items[0].id || items[0].value || items[0].urn || "");
+    }
+    return null;
+  } catch (err) {
+    console.error("resolveLinkedInParam error (" + type + ", " + query + "):", err.message);
+    return null;
+  }
+}
+
+/**
  * Search LinkedIn people by criteria.
- * @param {object} params - Search parameters
+ * Automatically resolves company names, locations, and industries to LinkedIn IDs.
+ * @param {object} params - Search parameters (human-readable)
  * @param {string} [params.keywords] - Job title / keywords
- * @param {string} [params.currentCompany] - Company name
- * @param {string} [params.location] - Geography
- * @param {string} [params.industry] - Sector / industry
- * Cost: ~1 credit.
+ * @param {string} [params.currentCompany] - Company name (resolved to ID)
+ * @param {string} [params.location] - Geography (resolved to ID)
+ * @param {string} [params.industry] - Sector / industry (resolved to ID)
+ * Cost: ~1 credit for search + 0 for parameter resolution.
  */
 async function searchPeople(params) {
-  return bereach("/search/linkedin/people", params);
+  var searchBody = {};
+  if (params.keywords) searchBody.keywords = params.keywords;
+
+  // Resolve company name → numeric ID
+  if (params.currentCompany) {
+    var companyName = Array.isArray(params.currentCompany) ? params.currentCompany[0] : params.currentCompany;
+    var companyId = await resolveLinkedInParam(companyName, "COMPANY");
+    if (companyId) searchBody.currentCompany = [companyId];
+  }
+
+  // Resolve location → numeric ID
+  if (params.location) {
+    var geoId = await resolveLinkedInParam(params.location, "GEO");
+    if (geoId) searchBody.location = [geoId];
+  }
+
+  // Resolve industry → numeric ID
+  if (params.industry) {
+    var industryId = await resolveLinkedInParam(params.industry, "INDUSTRY");
+    if (industryId) searchBody.industry = [industryId];
+  }
+
+  if (params.companySize) searchBody.companySize = params.companySize;
+
+  return bereach("/search/linkedin/people", searchBody);
 }
 
 module.exports = {
@@ -261,4 +309,5 @@ module.exports = {
   getConnections,
   withdrawInvitation,
   searchPeople,
+  resolveLinkedInParam,
 };
