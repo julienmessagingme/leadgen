@@ -269,16 +269,18 @@ async function searchPeople(params) {
   var resolutionWarnings = [];
   if (params.keywords) searchBody.keywords = params.keywords;
 
-  // Resolve company name → numeric ID, fallback to keywords if not found
+  // Resolve company name → numeric ID, then try search; fallback to keywords if 0 results
+  var _companyName = null;
+  var _companyId = null;
   if (params.currentCompany) {
-    var companyName = Array.isArray(params.currentCompany) ? params.currentCompany[0] : params.currentCompany;
-    var companyId = await resolveLinkedInParam(companyName, "COMPANY");
-    if (companyId) {
-      searchBody.currentCompany = [companyId];
+    _companyName = Array.isArray(params.currentCompany) ? params.currentCompany[0] : params.currentCompany;
+    _companyId = await resolveLinkedInParam(_companyName, "COMPANY");
+    if (_companyId) {
+      searchBody.currentCompany = [_companyId];
     } else {
-      // Fallback: inject company name into keywords so LinkedIn still filters
-      searchBody.keywords = (searchBody.keywords || "") + " " + companyName;
-      resolutionWarnings.push("Entreprise \"" + companyName + "\" non trouvee comme page LinkedIn — recherche par mots-cles");
+      // No ID found — go straight to keywords fallback
+      searchBody.keywords = (searchBody.keywords || "") + " " + _companyName;
+      resolutionWarnings.push("Entreprise \"" + _companyName + "\" non trouvee comme page LinkedIn — recherche par mots-cles");
     }
   }
 
@@ -305,6 +307,16 @@ async function searchPeople(params) {
   if (params.companySize) searchBody.companySize = params.companySize;
 
   var result = await bereach("/search/linkedin/people", searchBody);
+
+  // If company ID filter returned 0 results, retry with keywords fallback
+  var items = result.items || result.profiles || result.results || [];
+  if (_companyId && _companyName && (!Array.isArray(items) || items.length === 0)) {
+    delete searchBody.currentCompany;
+    searchBody.keywords = (params.keywords || "") + " " + _companyName;
+    resolutionWarnings.push("Filtre entreprise par ID n'a retourne aucun resultat — recherche par mots-cles");
+    result = await bereach("/search/linkedin/people", searchBody);
+  }
+
   result._warnings = resolutionWarnings;
   return result;
 }
