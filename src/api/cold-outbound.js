@@ -86,10 +86,26 @@ router.post("/search", async (req, res) => {
         companyName = p.currentPositions[0].companyName || p.currentPositions[0].company || "";
       }
       if (!companyName && p.headline) {
-        // Only use high-confidence patterns: "at Company", "chez Company", "@Company"
-        var atMatch = p.headline.match(/\b(?:at|chez)\s+(.+?)(?:\s*[|·\-–—]|$)/i);
+        // Pattern 1: "at Company" / "chez Company" (high confidence)
+        var atMatch = p.headline.match(/\b(?:at|chez)\s+(.+?)(?:\s*[|·]|$)/i);
+        // Pattern 2: "@Company"
         var aroMatch = p.headline.match(/@\s*(.+?)(?:\s*[|·\-–—]|$)/);
-        companyName = ((atMatch && atMatch[1]) || (aroMatch && aroMatch[1]) || "").trim();
+        // Pattern 3: "Title | Company" — take the LAST segment after the last | or -
+        var lastSegMatch = null;
+        if (!atMatch && !aroMatch) {
+          var segments = p.headline.split(/\s*[|]\s*/);
+          if (segments.length >= 2) {
+            var lastSeg = segments[segments.length - 1].trim();
+            // If last segment after | contains " - ", take the part after the last " - "
+            var dashParts = lastSeg.split(/\s*[-–—]\s*/);
+            lastSeg = dashParts[dashParts.length - 1].trim();
+            // Skip if it looks like a skill/domain (single generic word)
+            if (lastSeg.length > 2 && !/^(Digital|Marketing|Sales|IT|Tech|Finance|HR|RH|Data|AI|Web)$/i.test(lastSeg)) {
+              lastSegMatch = lastSeg;
+            }
+          }
+        }
+        companyName = ((atMatch && atMatch[1]) || (aroMatch && aroMatch[1]) || lastSegMatch || "").trim();
       }
 
       return {
