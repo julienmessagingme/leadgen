@@ -33,6 +33,7 @@ router.post("/search", async (req, res) => {
     if (geography && geography.trim()) searchParams.location = geography.trim();
     if (sector && sector.trim()) searchParams.industry = sector.trim();
     if (company_size) searchParams.companySize = company_size;
+    searchParams.count = parsedMax;
 
     // Track which resolutions failed so we can warn the user
     var warnings = [];

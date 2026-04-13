@@ -305,6 +305,7 @@ async function searchPeople(params) {
   }
 
   if (params.companySize) searchBody.companySize = params.companySize;
+  if (params.count) searchBody.count = params.count;
 
   var result = await bereach("/search/linkedin/people", searchBody);
 
