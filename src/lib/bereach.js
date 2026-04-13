@@ -269,14 +269,16 @@ async function searchPeople(params) {
   var resolutionWarnings = [];
   if (params.keywords) searchBody.keywords = params.keywords;
 
-  // Resolve company name → numeric ID
+  // Resolve company name → numeric ID, fallback to keywords if not found
   if (params.currentCompany) {
     var companyName = Array.isArray(params.currentCompany) ? params.currentCompany[0] : params.currentCompany;
     var companyId = await resolveLinkedInParam(companyName, "COMPANY");
     if (companyId) {
       searchBody.currentCompany = [companyId];
     } else {
-      resolutionWarnings.push("Entreprise \"" + companyName + "\" non trouvee sur LinkedIn");
+      // Fallback: inject company name into keywords so LinkedIn still filters
+      searchBody.keywords = (searchBody.keywords || "") + " " + companyName;
+      resolutionWarnings.push("Entreprise \"" + companyName + "\" non trouvee comme page LinkedIn — recherche par mots-cles");
     }
   }
 
@@ -301,13 +303,6 @@ async function searchPeople(params) {
   }
 
   if (params.companySize) searchBody.companySize = params.companySize;
-
-  // If company was requested but not resolved, fail explicitly — don't search without it
-  if (params.currentCompany && !searchBody.currentCompany) {
-    var err = new Error(resolutionWarnings.join(". ") || "Impossible de resoudre l'entreprise");
-    err.warnings = resolutionWarnings;
-    throw err;
-  }
 
   var result = await bereach("/search/linkedin/people", searchBody);
   result._warnings = resolutionWarnings;
