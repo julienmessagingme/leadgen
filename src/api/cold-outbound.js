@@ -29,7 +29,7 @@ router.post("/search", async (req, res) => {
 
     // Build BeReach search params
     var searchParams = { keywords: job_title.trim() };
-    if (company && company.trim()) searchParams.currentCompany = company.trim();
+    if (company && company.trim()) searchParams.currentCompany = [company.trim()];
     if (geography && geography.trim()) searchParams.location = geography.trim();
     if (sector && sector.trim()) searchParams.industry = sector.trim();
     if (company_size) searchParams.companySize = company_size;
