@@ -78,11 +78,18 @@ router.post("/search", async (req, res) => {
     var normalized = rawProfiles.map(function (p, i) {
       var linkedinUrl = p.profileUrl || p.profile_url || p.url || p.linkedin_url || null;
 
-      // Company: BeReach search doesn't return structured company data.
-      // Only use explicit fields or currentPositions. Filled properly at enrichment (visitProfile).
-      var companyName = p.company || p.companyName || p.company_name || "";
-      if (!companyName && Array.isArray(p.currentPositions) && p.currentPositions.length > 0) {
+      // Company: BeReach search doesn't return a company field.
+      // Best-effort extraction from headline using reliable patterns only.
+      // Filled properly at enrichment (visitProfile).
+      var companyName = "";
+      if (Array.isArray(p.currentPositions) && p.currentPositions.length > 0) {
         companyName = p.currentPositions[0].companyName || p.currentPositions[0].company || "";
+      }
+      if (!companyName && p.headline) {
+        // Only use high-confidence patterns: "at Company", "chez Company", "@Company"
+        var atMatch = p.headline.match(/\b(?:at|chez)\s+(.+?)(?:\s*[|·\-–—]|$)/i);
+        var aroMatch = p.headline.match(/@\s*(.+?)(?:\s*[|·\-–—]|$)/);
+        companyName = ((atMatch && atMatch[1]) || (aroMatch && aroMatch[1]) || "").trim();
       }
 
       return {

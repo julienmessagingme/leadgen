@@ -160,7 +160,7 @@ export default function ColdSearchResults({ search, onUpdate }) {
                         </a>
                       )}
                     </td>
-                    <td className="px-3 py-3 text-sm text-gray-600 max-w-xs truncate">{r.headline || "--"}</td>
+                    <td className="px-3 py-3 text-sm text-gray-600 max-w-md">{r.headline || "--"}</td>
                     <td className="px-3 py-3 text-sm text-gray-600">{r.company || "--"}</td>
                     <td className="px-3 py-3 text-sm text-gray-500">{r.location || "--"}</td>
                     <td className="px-3 py-3 text-center">
