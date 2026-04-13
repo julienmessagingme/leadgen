@@ -27,12 +27,15 @@ router.post("/search", async (req, res) => {
     var parsedMax = parseInt(max_leads, 10);
     if (!parsedMax || parsedMax < 1 || parsedMax > 50) parsedMax = 25;
 
-    // Build BeReach search params
+    // Build BeReach search params — names are resolved to IDs inside searchPeople()
     var searchParams = { keywords: job_title.trim() };
     if (company && company.trim()) searchParams.currentCompany = company.trim();
     if (geography && geography.trim()) searchParams.location = geography.trim();
     if (sector && sector.trim()) searchParams.industry = sector.trim();
     if (company_size) searchParams.companySize = company_size;
+
+    // Track which resolutions failed so we can warn the user
+    var warnings = [];
 
     var filters = {
       job_title: job_title.trim(),
@@ -52,11 +55,16 @@ router.post("/search", async (req, res) => {
       }
     } catch (_limErr) { /* fail open */ }
 
-    // Call BeReach
+    // Call BeReach (searchPeople resolves names → IDs, throws if company not found)
     var beReachResult;
     try {
       beReachResult = await searchPeople(searchParams);
+      if (beReachResult._warnings) warnings = warnings.concat(beReachResult._warnings);
     } catch (beErr) {
+      // If it's a resolution failure, return 422 with clear message
+      if (beErr.warnings) {
+        return res.status(422).json({ error: beErr.message, warnings: beErr.warnings });
+      }
       return res.status(502).json({ error: "BeReach search failed: " + beErr.message });
     }
 
@@ -142,7 +150,9 @@ router.post("/search", async (req, res) => {
       return res.status(500).json({ error: "Failed to save search results" });
     }
 
-    res.status(201).json(search);
+    var response = { ...search };
+    if (warnings.length > 0) response.warnings = warnings;
+    res.status(201).json(response);
   } catch (err) {
     console.error("Cold outbound POST /search error:", err.message);
     res.status(500).json({ error: "Internal server error" });

@@ -266,30 +266,52 @@ async function resolveLinkedInParam(query, type) {
  */
 async function searchPeople(params) {
   var searchBody = {};
+  var resolutionWarnings = [];
   if (params.keywords) searchBody.keywords = params.keywords;
 
   // Resolve company name → numeric ID
   if (params.currentCompany) {
     var companyName = Array.isArray(params.currentCompany) ? params.currentCompany[0] : params.currentCompany;
     var companyId = await resolveLinkedInParam(companyName, "COMPANY");
-    if (companyId) searchBody.currentCompany = [companyId];
+    if (companyId) {
+      searchBody.currentCompany = [companyId];
+    } else {
+      resolutionWarnings.push("Entreprise \"" + companyName + "\" non trouvee sur LinkedIn");
+    }
   }
 
   // Resolve location → numeric ID
   if (params.location) {
     var geoId = await resolveLinkedInParam(params.location, "GEO");
-    if (geoId) searchBody.location = [geoId];
+    if (geoId) {
+      searchBody.location = [geoId];
+    } else {
+      resolutionWarnings.push("Localisation \"" + params.location + "\" non trouvee sur LinkedIn");
+    }
   }
 
   // Resolve industry → numeric ID
   if (params.industry) {
     var industryId = await resolveLinkedInParam(params.industry, "INDUSTRY");
-    if (industryId) searchBody.industry = [industryId];
+    if (industryId) {
+      searchBody.industry = [industryId];
+    } else {
+      resolutionWarnings.push("Secteur \"" + params.industry + "\" non trouve sur LinkedIn");
+    }
   }
 
   if (params.companySize) searchBody.companySize = params.companySize;
 
-  return bereach("/search/linkedin/people", searchBody);
+  // If company was requested but not resolved, fail explicitly — don't search without it
+  if (params.currentCompany && !searchBody.currentCompany) {
+    var err = new Error(resolutionWarnings.join(". ") || "Impossible de resoudre l'entreprise");
+    err.warnings = resolutionWarnings;
+    throw err;
+  }
+
+  var result = await bereach("/search/linkedin/people", searchBody);
+  result._warnings = resolutionWarnings;
+  return result;
 }
 
 module.exports = {
