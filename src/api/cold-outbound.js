@@ -78,21 +78,11 @@ router.post("/search", async (req, res) => {
     var normalized = rawProfiles.map(function (p, i) {
       var linkedinUrl = p.profileUrl || p.profile_url || p.url || p.linkedin_url || null;
 
-      // Extract company from multiple sources
+      // Company: BeReach search doesn't return structured company data.
+      // Only use explicit fields or currentPositions. Filled properly at enrichment (visitProfile).
       var companyName = p.company || p.companyName || p.company_name || "";
-      // Try currentPositions array
       if (!companyName && Array.isArray(p.currentPositions) && p.currentPositions.length > 0) {
         companyName = p.currentPositions[0].companyName || p.currentPositions[0].company || "";
-      }
-      // Fallback: parse headline for company patterns
-      if (!companyName && p.headline) {
-        var hl = p.headline;
-        var atMatch = hl.match(/@\s*([^|@,\-]+)/);
-        var chezMatch = hl.match(/(?:chez|at|for)\s+([^|@,\-]+)/i);
-        var pipeMatch = hl.match(/\|\s*([^|@,]+?)$/);
-        var dashMatch = hl.match(/\s[-–—]\s+([^|@,\-–—]+?)$/);
-        var extracted = (atMatch && atMatch[1]) || (chezMatch && chezMatch[1]) || (pipeMatch && pipeMatch[1]) || (dashMatch && dashMatch[1]) || "";
-        companyName = extracted.trim();
       }
 
       return {
@@ -274,9 +264,14 @@ router.post("/searches/:id/enrich", async (req, res) => {
         // Score prise (Haiku)
         var priseResult = await scorePrise(priseInput);
 
-        // Update result
+        // Update result — fill company from enrichment if missing
+        var enrichedCompany = enrichData.company || enrichData.companyName || enrichData.company_name || "";
+        if (!enrichedCompany && Array.isArray(enrichData.experience) && enrichData.experience.length > 0) {
+          enrichedCompany = enrichData.experience[0].companyName || enrichData.experience[0].company || "";
+        }
         results[idx] = {
           ...profile,
+          company: enrichedCompany || profile.company,
           enriched: true,
           enrichment_data: {
             summary: enrichData.summary || enrichData.about || null,
