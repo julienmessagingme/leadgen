@@ -2,11 +2,12 @@ const crypto = require("crypto");
 const { Router } = require("express");
 const authMiddleware = require("./middleware");
 const { supabase } = require("../lib/supabase");
-const { searchPeople, visitProfile, sleep } = require("../lib/bereach");
+const { searchPeople, visitProfile, sleep, checkLimits } = require("../lib/bereach");
 const { canonicalizeLinkedInUrl } = require("../lib/url-utils");
 const { existsInHubspot } = require("../lib/hubspot");
 const { scorePrise } = require("../lib/cold-outbound-scoring");
 const { enrichContactInfo } = require("../lib/fullenrich");
+const { getAnthropicClient } = require("../lib/anthropic");
 const { log } = require("../lib/logger");
 
 const router = Router();
@@ -31,6 +32,7 @@ router.post("/search", async (req, res) => {
     if (company && company.trim()) searchParams.currentCompany = company.trim();
     if (geography && geography.trim()) searchParams.location = geography.trim();
     if (sector && sector.trim()) searchParams.industry = sector.trim();
+    if (company_size) searchParams.companySize = company_size;
 
     var filters = {
       job_title: job_title.trim(),
@@ -40,6 +42,15 @@ router.post("/search", async (req, res) => {
       geography: (geography || "").trim() || null,
       max_leads: parsedMax,
     };
+
+    // Credit budget check
+    try {
+      var limits = await checkLimits();
+      var daily = limits && limits.daily;
+      if (daily && daily.remaining !== undefined && daily.remaining < 5) {
+        return res.status(429).json({ error: "Budget BeReach insuffisant (" + daily.remaining + " credits restants)" });
+      }
+    } catch (_limErr) { /* fail open */ }
 
     // Call BeReach
     var beReachResult;
@@ -54,48 +65,52 @@ router.post("/search", async (req, res) => {
     if (!Array.isArray(rawProfiles)) rawProfiles = [];
     rawProfiles = rawProfiles.slice(0, parsedMax);
 
-    // Build results with HubSpot check + dedup
-    var results = [];
-    for (var i = 0; i < rawProfiles.length; i++) {
-      var p = rawProfiles[i];
+    // Normalize profile fields
+    var normalized = rawProfiles.map(function (p, i) {
       var linkedinUrl = p.profileUrl || p.profile_url || p.url || p.linkedin_url || null;
-      var firstName = p.firstName || p.first_name || (p.name || "").split(" ")[0] || "";
-      var lastName = p.lastName || p.last_name || (p.name || "").split(" ").slice(1).join(" ") || "";
-      var companyName = p.company || p.companyName || p.company_name || "";
-      var canonical = canonicalizeLinkedInUrl(linkedinUrl);
-
-      // Dedup: check if already in leads table
-      var alreadyInPipeline = false;
-      var existingLeadId = null;
-      if (canonical) {
-        var { data: existing } = await supabase
-          .from("leads")
-          .select("id")
-          .eq("linkedin_url_canonical", canonical)
-          .limit(1);
-        if (existing && existing.length > 0) {
-          alreadyInPipeline = true;
-          existingLeadId = existing[0].id;
-        }
-      }
-
-      // HubSpot check
-      var hs = await existsInHubspot(firstName, lastName, companyName);
-
-      results.push({
+      return {
         index: i,
         linkedin_url: linkedinUrl,
-        linkedin_url_canonical: canonical,
-        first_name: firstName,
-        last_name: lastName,
+        linkedin_url_canonical: canonicalizeLinkedInUrl(linkedinUrl),
+        first_name: p.firstName || p.first_name || (p.name || "").split(" ")[0] || "",
+        last_name: p.lastName || p.last_name || (p.name || "").split(" ").slice(1).join(" ") || "",
         headline: p.headline || p.title || null,
-        company: companyName || null,
+        company: p.company || p.companyName || p.company_name || "",
         location: p.location || null,
+      };
+    });
+
+    // Batch dedup: single query for all canonical URLs
+    var canonicals = normalized.map(function (n) { return n.linkedin_url_canonical; }).filter(Boolean);
+    var dedupMap = {};
+    if (canonicals.length > 0) {
+      var { data: existingLeads } = await supabase
+        .from("leads")
+        .select("id, linkedin_url_canonical")
+        .in("linkedin_url_canonical", canonicals);
+      if (existingLeads) {
+        existingLeads.forEach(function (l) { dedupMap[l.linkedin_url_canonical] = l.id; });
+      }
+    }
+
+    // HubSpot checks (parallel, max 10 concurrent)
+    var hsResults = await Promise.allSettled(
+      normalized.map(function (n) {
+        return existsInHubspot(n.first_name, n.last_name, n.company);
+      })
+    );
+
+    // Build final results
+    var results = normalized.map(function (n, i) {
+      var hs = hsResults[i].status === "fulfilled" ? hsResults[i].value : { found: false, contactId: null, ownerName: null };
+      var existingId = n.linkedin_url_canonical ? (dedupMap[n.linkedin_url_canonical] || null) : null;
+      return {
+        ...n,
         hubspot_found: hs.found,
         hubspot_contact_id: hs.contactId || null,
         hubspot_owner: hs.ownerName || null,
-        already_in_pipeline: alreadyInPipeline,
-        existing_lead_id: existingLeadId,
+        already_in_pipeline: !!existingId,
+        existing_lead_id: existingId,
         enriched: false,
         enrichment_data: null,
         prise_score: null,
@@ -105,8 +120,8 @@ router.post("/search", async (req, res) => {
         email_draft: null,
         added_to_pipeline: false,
         pipeline_lead_id: null,
-      });
-    }
+      };
+    });
 
     // Insert search record
     var { data: search, error: insertErr } = await supabase
@@ -259,12 +274,21 @@ router.post("/searches/:id/enrich", async (req, res) => {
       }
     }
 
-    // Save updated results
+    // Re-fetch to avoid race condition, then merge our changes
+    var { data: freshSearch } = await supabase
+      .from("cold_searches").select("results").eq("id", req.params.id).single();
+    var freshResults = (freshSearch && freshSearch.results) || results;
+    for (var mergeIdx of profile_indexes) {
+      if (mergeIdx >= 0 && mergeIdx < results.length && results[mergeIdx].enriched) {
+        freshResults[mergeIdx] = results[mergeIdx];
+      }
+    }
+
     var { error: updateErr } = await supabase
       .from("cold_searches")
       .update({
-        results: results,
-        leads_enriched: results.filter(function (r) { return r.enriched; }).length,
+        results: freshResults,
+        leads_enriched: freshResults.filter(function (r) { return r.enriched; }).length,
       })
       .eq("id", req.params.id);
 
@@ -277,7 +301,7 @@ router.post("/searches/:id/enrich", async (req, res) => {
       ok: true,
       enriched: enriched,
       errors: errors,
-      results: results,
+      results: freshResults,
     });
   } catch (err) {
     console.error("Cold outbound POST /searches/:id/enrich error:", err.message);
@@ -366,13 +390,19 @@ router.post("/searches/:id/to-pipeline", async (req, res) => {
       }
     }
 
-    // Save updated results
+    // Re-fetch to avoid race condition, merge our changes
+    var { data: freshPipe } = await supabase
+      .from("cold_searches").select("results").eq("id", req.params.id).single();
+    var freshPipeResults = (freshPipe && freshPipe.results) || results;
+    for (var mi of profile_indexes) {
+      if (mi >= 0 && mi < results.length) freshPipeResults[mi] = results[mi];
+    }
     await supabase
       .from("cold_searches")
-      .update({ results: results })
+      .update({ results: freshPipeResults })
       .eq("id", req.params.id);
 
-    res.json({ ok: true, inserted: inserted, errors: errors, results: results });
+    res.json({ ok: true, inserted: inserted, errors: errors, results: freshPipeResults });
   } catch (err) {
     console.error("Cold outbound POST /searches/:id/to-pipeline error:", err.message);
     res.status(500).json({ error: "Internal server error" });
@@ -478,13 +508,19 @@ router.post("/searches/:id/to-email", async (req, res) => {
       }
     }
 
-    // Save updated results
+    // Re-fetch to avoid race condition, merge our changes
+    var { data: freshEmail } = await supabase
+      .from("cold_searches").select("results").eq("id", req.params.id).single();
+    var freshEmailResults = (freshEmail && freshEmail.results) || results;
+    for (var ei of profile_indexes) {
+      if (ei >= 0 && ei < results.length) freshEmailResults[ei] = results[ei];
+    }
     await supabase
       .from("cold_searches")
-      .update({ results: results })
+      .update({ results: freshEmailResults })
       .eq("id", req.params.id);
 
-    res.json({ ok: true, processed: processed, errors: errors, results: results });
+    res.json({ ok: true, processed: processed, errors: errors, results: freshEmailResults });
   } catch (err) {
     console.error("Cold outbound POST /searches/:id/to-email error:", err.message);
     res.status(500).json({ error: "Internal server error" });
@@ -497,7 +533,6 @@ router.post("/searches/:id/to-email", async (req, res) => {
 
 async function generateColdEmailDraft(profile, email) {
   try {
-    var { getAnthropicClient } = require("../lib/anthropic");
     var client = getAnthropicClient();
     var calendlyUrl = process.env.CALENDLY_URL || "https://calendly.com/julien-messagingme/30min";
 

@@ -1,4 +1,5 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, Fragment } from "react";
+import DOMPurify from "dompurify";
 import { useEnrichMutation, useToPipelineMutation, useToEmailMutation } from "../../hooks/useColdOutbound";
 
 function priseBadge(score) {
@@ -128,9 +129,8 @@ export default function ColdSearchResults({ search, onUpdate }) {
               const isExpanded = expandedIdx === idx;
               const pending = actionPending[idx];
               return (
-                <>
+                <Fragment key={idx}>
                   <tr
-                    key={idx}
                     className={`${r.added_to_pipeline ? "bg-green-50/40" : ""} ${
                       selected.has(idx) ? "bg-indigo-50/30" : ""
                     } hover:bg-gray-50 cursor-pointer`}
@@ -216,7 +216,7 @@ export default function ColdSearchResults({ search, onUpdate }) {
 
                   {/* Expanded enrichment detail */}
                   {isExpanded && r.enriched && r.enrichment_data && (
-                    <tr key={`exp-${idx}`}>
+                    <tr>
                       <td colSpan={8} className="px-6 py-4 bg-gray-50/50">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                           {r.enrichment_data.summary && (
@@ -254,14 +254,14 @@ export default function ColdSearchResults({ search, onUpdate }) {
                             <div className="md:col-span-2 bg-purple-50 rounded p-3">
                               <span className="font-medium text-purple-700">Draft email:</span>
                               <p className="text-purple-900 font-medium mt-1">Objet: {r.email_draft.subject}</p>
-                              <div className="text-purple-800 mt-1 text-xs" dangerouslySetInnerHTML={{ __html: r.email_draft.body }} />
+                              <div className="text-purple-800 mt-1 text-xs" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(r.email_draft.body) }} />
                             </div>
                           )}
                         </div>
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               );
             })}
           </tbody>
