@@ -2,71 +2,132 @@ const crypto = require("crypto");
 const { Router } = require("express");
 const authMiddleware = require("./middleware");
 const { supabase } = require("../lib/supabase");
-const { executeColdSearch } = require("../lib/cold-outbound-pipeline");
+const { searchPeople, visitProfile, sleep } = require("../lib/bereach");
+const { canonicalizeLinkedInUrl } = require("../lib/url-utils");
+const { existsInHubspot } = require("../lib/hubspot");
+const { scorePrise } = require("../lib/cold-outbound-scoring");
+const { enrichContactInfo } = require("../lib/fullenrich");
+const { log } = require("../lib/logger");
 
 const router = Router();
 router.use(authMiddleware);
 
 // ────────────────────────────────────────────────────────────
-// POST /search -- Create a new cold outbound search & trigger async execution
+// POST /search -- Search LinkedIn people via BeReach + auto HubSpot/dedup
 // ────────────────────────────────────────────────────────────
 
 router.post("/search", async (req, res) => {
   try {
-    const { sector, company_size, job_title, geography, max_leads } = req.body;
+    var { job_title, company, sector, company_size, geography, max_leads } = req.body;
 
-    // Validation
-    if (!sector || typeof sector !== "string" || !sector.trim()) {
-      return res.status(400).json({ error: "sector is required (non-empty string)" });
-    }
     if (!job_title || typeof job_title !== "string" || !job_title.trim()) {
-      return res.status(400).json({ error: "job_title is required (non-empty string)" });
+      return res.status(400).json({ error: "job_title is required" });
     }
+    var parsedMax = parseInt(max_leads, 10);
+    if (!parsedMax || parsedMax < 1 || parsedMax > 50) parsedMax = 25;
 
-    const parsedMaxLeads = parseInt(max_leads, 10);
-    if (!parsedMaxLeads || parsedMaxLeads < 1 || parsedMaxLeads > 50) {
-      return res.status(400).json({ error: "max_leads must be between 1 and 50" });
-    }
+    // Build BeReach search params
+    var searchParams = { keywords: job_title.trim() };
+    if (company && company.trim()) searchParams.currentCompany = company.trim();
+    if (geography && geography.trim()) searchParams.location = geography.trim();
+    if (sector && sector.trim()) searchParams.industry = sector.trim();
 
-    // Stop safeguard: only one cold search can run at a time (single browser instance)
-    const { data: running } = await supabase
-      .from("cold_searches")
-      .select("id")
-      .eq("status", "running")
-      .limit(1);
-
-    if (running && running.length > 0) {
-      return res.status(409).json({ error: "A cold search is already running. Please wait for it to complete." });
-    }
-
-    const filters = {
-      sector: sector.trim(),
-      company_size: company_size || null,
+    var filters = {
       job_title: job_title.trim(),
-      geography: geography ? geography.trim() : null,
-      max_leads: parsedMaxLeads,
+      company: (company || "").trim() || null,
+      sector: (sector || "").trim() || null,
+      company_size: company_size || null,
+      geography: (geography || "").trim() || null,
+      max_leads: parsedMax,
     };
 
-    const { data, error } = await supabase
+    // Call BeReach
+    var beReachResult;
+    try {
+      beReachResult = await searchPeople(searchParams);
+    } catch (beErr) {
+      return res.status(502).json({ error: "BeReach search failed: " + beErr.message });
+    }
+
+    // Normalize results from BeReach response
+    var rawProfiles = beReachResult.items || beReachResult.profiles || beReachResult.results || [];
+    if (!Array.isArray(rawProfiles)) rawProfiles = [];
+    rawProfiles = rawProfiles.slice(0, parsedMax);
+
+    // Build results with HubSpot check + dedup
+    var results = [];
+    for (var i = 0; i < rawProfiles.length; i++) {
+      var p = rawProfiles[i];
+      var linkedinUrl = p.profileUrl || p.profile_url || p.url || p.linkedin_url || null;
+      var firstName = p.firstName || p.first_name || (p.name || "").split(" ")[0] || "";
+      var lastName = p.lastName || p.last_name || (p.name || "").split(" ").slice(1).join(" ") || "";
+      var companyName = p.company || p.companyName || p.company_name || "";
+      var canonical = canonicalizeLinkedInUrl(linkedinUrl);
+
+      // Dedup: check if already in leads table
+      var alreadyInPipeline = false;
+      var existingLeadId = null;
+      if (canonical) {
+        var { data: existing } = await supabase
+          .from("leads")
+          .select("id")
+          .eq("linkedin_url_canonical", canonical)
+          .limit(1);
+        if (existing && existing.length > 0) {
+          alreadyInPipeline = true;
+          existingLeadId = existing[0].id;
+        }
+      }
+
+      // HubSpot check
+      var hs = await existsInHubspot(firstName, lastName, companyName);
+
+      results.push({
+        index: i,
+        linkedin_url: linkedinUrl,
+        linkedin_url_canonical: canonical,
+        first_name: firstName,
+        last_name: lastName,
+        headline: p.headline || p.title || null,
+        company: companyName || null,
+        location: p.location || null,
+        hubspot_found: hs.found,
+        hubspot_contact_id: hs.contactId || null,
+        hubspot_owner: hs.ownerName || null,
+        already_in_pipeline: alreadyInPipeline,
+        existing_lead_id: existingLeadId,
+        enriched: false,
+        enrichment_data: null,
+        prise_score: null,
+        prise_reasoning: null,
+        email: null,
+        email_status: null,
+        email_draft: null,
+        added_to_pipeline: false,
+        pipeline_lead_id: null,
+      });
+    }
+
+    // Insert search record
+    var { data: search, error: insertErr } = await supabase
       .from("cold_searches")
-      .insert({ filters, status: "pending" })
+      .insert({
+        filters: filters,
+        status: "completed",
+        leads_found: results.length,
+        leads_enriched: 0,
+        results: results,
+        completed_at: new Date().toISOString(),
+      })
       .select()
       .single();
 
-    if (error) {
-      console.error("Cold outbound POST /search error:", error.message);
-      return res.status(500).json({ error: "Internal server error" });
+    if (insertErr) {
+      console.error("Cold outbound POST /search insert error:", insertErr.message);
+      return res.status(500).json({ error: "Failed to save search results" });
     }
 
-    // Cold search execution delegated to local PC watcher (Playwright).
-    // The local watcher.js polls for pending searches and executes via Playwright.
-    // OLD: Fire-and-forget server-side execution (disabled - needs browser on VPS)
-    const runId = crypto.randomUUID();
-    // executeColdSearch disabled - cold search via bookmarklet
-    // executeColdSearch(data.id, filters, runId)
-    //   .catch(err => console.error("Cold search execution error:", err.message));
-
-    res.status(201).json(data);
+    res.status(201).json(search);
   } catch (err) {
     console.error("Cold outbound POST /search error:", err.message);
     res.status(500).json({ error: "Internal server error" });
@@ -74,14 +135,14 @@ router.post("/search", async (req, res) => {
 });
 
 // ────────────────────────────────────────────────────────────
-// GET /searches -- List all cold searches (history)
+// GET /searches -- List search history (lightweight, no results)
 // ────────────────────────────────────────────────────────────
 
 router.get("/searches", async (req, res) => {
   try {
-    const { data, error } = await supabase
+    var { data, error } = await supabase
       .from("cold_searches")
-      .select("*")
+      .select("id, filters, status, leads_found, leads_enriched, created_at, completed_at")
       .order("created_at", { ascending: false })
       .limit(50);
 
@@ -89,7 +150,6 @@ router.get("/searches", async (req, res) => {
       console.error("Cold outbound GET /searches error:", error.message);
       return res.status(500).json({ error: "Internal server error" });
     }
-
     res.json({ searches: data });
   } catch (err) {
     console.error("Cold outbound GET /searches error:", err.message);
@@ -98,35 +158,21 @@ router.get("/searches", async (req, res) => {
 });
 
 // ────────────────────────────────────────────────────────────
-// GET /searches/:id -- Single search with its leads
+// GET /searches/:id -- Single search with full results
 // ────────────────────────────────────────────────────────────
 
 router.get("/searches/:id", async (req, res) => {
   try {
-    const { id } = req.params;
-
-    const { data: search, error: searchError } = await supabase
+    var { data: search, error } = await supabase
       .from("cold_searches")
       .select("*")
-      .eq("id", id)
+      .eq("id", req.params.id)
       .single();
 
-    if (searchError) {
-      console.error("Cold outbound GET /searches/:id error:", searchError.message);
+    if (error || !search) {
       return res.status(404).json({ error: "Search not found" });
     }
-
-    // Get leads associated with this search via metadata
-    const { data: leads, error: leadsError } = await supabase
-      .from("leads")
-      .select("*")
-      .eq("metadata->>search_id", id);
-
-    if (leadsError) {
-      console.error("Cold outbound leads query error:", leadsError.message);
-    }
-
-    res.json({ ...search, leads: leads || [] });
+    res.json(search);
   } catch (err) {
     console.error("Cold outbound GET /searches/:id error:", err.message);
     res.status(500).json({ error: "Internal server error" });
@@ -134,38 +180,387 @@ router.get("/searches/:id", async (req, res) => {
 });
 
 // ────────────────────────────────────────────────────────────
-// GET /searches/:id/status -- Lightweight polling endpoint
+// POST /searches/:id/enrich -- Enrich selected profiles (visitProfile + prise score)
 // ────────────────────────────────────────────────────────────
 
-router.get("/searches/:id/status", async (req, res) => {
+router.post("/searches/:id/enrich", async (req, res) => {
   try {
-    const { id } = req.params;
+    var { profile_indexes } = req.body;
+    if (!Array.isArray(profile_indexes) || profile_indexes.length === 0) {
+      return res.status(400).json({ error: "profile_indexes required (array of integers)" });
+    }
 
-    const { data, error } = await supabase
+    // Load search
+    var { data: search, error: fetchErr } = await supabase
       .from("cold_searches")
-      .select("id, status, leads_found, leads_enriched, error_message, filters")
-      .eq("id", id)
+      .select("*")
+      .eq("id", req.params.id)
       .single();
 
-    if (error) {
-      console.error("Cold outbound GET /searches/:id/status error:", error.message);
+    if (fetchErr || !search) {
       return res.status(404).json({ error: "Search not found" });
     }
 
-    // Include max_leads from filters for frontend progress bar
+    var results = search.results || [];
+    var enriched = 0;
+    var errors = [];
+
+    for (var idx of profile_indexes) {
+      if (idx < 0 || idx >= results.length) continue;
+      var profile = results[idx];
+      if (profile.enriched) { enriched++; continue; } // Already enriched
+      if (!profile.linkedin_url) { errors.push(idx); continue; }
+
+      try {
+        // visitProfile with posts (1 credit)
+        var enrichData = await visitProfile(profile.linkedin_url, { includePosts: true });
+
+        // Extract key data for prise scoring
+        var priseInput = {
+          first_name: profile.first_name,
+          last_name: profile.last_name,
+          headline: enrichData.headline || profile.headline,
+          company: enrichData.company || profile.company,
+          location: enrichData.location || profile.location,
+          summary: enrichData.summary || enrichData.about || null,
+          recent_posts: enrichData.posts || enrichData.recentPosts || [],
+          connections_count: enrichData.connectionsCount || enrichData.connections_count || null,
+        };
+
+        // Score prise (Haiku)
+        var priseResult = await scorePrise(priseInput);
+
+        // Update result
+        results[idx] = {
+          ...profile,
+          enriched: true,
+          enrichment_data: {
+            summary: enrichData.summary || enrichData.about || null,
+            experience: enrichData.experience || null,
+            headline: enrichData.headline || null,
+            company_description: enrichData.companyDescription || enrichData.company_description || null,
+            posts: (enrichData.posts || enrichData.recentPosts || []).slice(0, 3).map(function (p) {
+              return { text: (p.text || p.content || "").slice(0, 300), date: p.date || null };
+            }),
+            connections_count: enrichData.connectionsCount || enrichData.connections_count || null,
+          },
+          prise_score: priseResult.score,
+          prise_reasoning: priseResult.reasoning,
+        };
+        enriched++;
+      } catch (enrichErr) {
+        console.error("Enrich error for index " + idx + ":", enrichErr.message);
+        errors.push(idx);
+      }
+
+      // Rate limit between calls
+      if (idx !== profile_indexes[profile_indexes.length - 1]) {
+        await sleep(1500);
+      }
+    }
+
+    // Save updated results
+    var { error: updateErr } = await supabase
+      .from("cold_searches")
+      .update({
+        results: results,
+        leads_enriched: results.filter(function (r) { return r.enriched; }).length,
+      })
+      .eq("id", req.params.id);
+
+    if (updateErr) {
+      console.error("Cold outbound enrich update error:", updateErr.message);
+      return res.status(500).json({ error: "Failed to save enrichment results" });
+    }
+
     res.json({
-      id: data.id,
-      status: data.status,
-      leads_found: data.leads_found,
-      leads_enriched: data.leads_enriched,
-      max_leads: data.filters ? data.filters.max_leads : null,
-      error_message: data.error_message,
-      filters: data.filters,
+      ok: true,
+      enriched: enriched,
+      errors: errors,
+      results: results,
     });
   } catch (err) {
-    console.error("Cold outbound GET /searches/:id/status error:", err.message);
+    console.error("Cold outbound POST /searches/:id/enrich error:", err.message);
     res.status(500).json({ error: "Internal server error" });
   }
 });
+
+// ────────────────────────────────────────────────────────────
+// POST /searches/:id/to-pipeline -- Add selected leads to classic pipeline
+// ────────────────────────────────────────────────────────────
+
+router.post("/searches/:id/to-pipeline", async (req, res) => {
+  try {
+    var { profile_indexes } = req.body;
+    if (!Array.isArray(profile_indexes) || profile_indexes.length === 0) {
+      return res.status(400).json({ error: "profile_indexes required" });
+    }
+
+    var { data: search, error: fetchErr } = await supabase
+      .from("cold_searches")
+      .select("*")
+      .eq("id", req.params.id)
+      .single();
+
+    if (fetchErr || !search) {
+      return res.status(404).json({ error: "Search not found" });
+    }
+
+    var results = search.results || [];
+    var inserted = 0;
+    var errors = [];
+
+    for (var idx of profile_indexes) {
+      if (idx < 0 || idx >= results.length) continue;
+      var profile = results[idx];
+      if (profile.added_to_pipeline) continue; // Already added
+      if (!profile.linkedin_url_canonical) { errors.push(idx); continue; }
+
+      try {
+        var leadRow = {
+          linkedin_url: profile.linkedin_url,
+          linkedin_url_canonical: profile.linkedin_url_canonical,
+          first_name: profile.first_name || null,
+          last_name: profile.last_name || null,
+          full_name: ((profile.first_name || "") + " " + (profile.last_name || "")).trim() || null,
+          headline: profile.enriched ? (profile.enrichment_data?.headline || profile.headline) : profile.headline,
+          company_name: profile.company || null,
+          location: profile.location || null,
+          status: profile.hubspot_found ? "hubspot_existing" : "new",
+          signal_type: "cold_search",
+          signal_category: "cold_outbound",
+          signal_date: new Date().toISOString(),
+          icp_score: profile.prise_score || 0,
+          tier: (profile.prise_score || 0) >= 60 ? "warm" : "cold",
+          metadata: {
+            search_id: search.id,
+            source_origin: "bereach_search",
+            cold_outbound: true,
+            prise_score: profile.prise_score,
+            prise_reasoning: profile.prise_reasoning,
+            hubspot_contact_id: profile.hubspot_contact_id || null,
+          },
+        };
+
+        var { data: lead, error: upsertErr } = await supabase
+          .from("leads")
+          .upsert(leadRow, { onConflict: "linkedin_url_canonical" })
+          .select("id")
+          .single();
+
+        if (upsertErr) {
+          console.error("to-pipeline upsert error:", upsertErr.message);
+          errors.push(idx);
+          continue;
+        }
+
+        results[idx] = {
+          ...profile,
+          added_to_pipeline: true,
+          pipeline_lead_id: lead.id,
+        };
+        inserted++;
+      } catch (pipeErr) {
+        console.error("to-pipeline error for index " + idx + ":", pipeErr.message);
+        errors.push(idx);
+      }
+    }
+
+    // Save updated results
+    await supabase
+      .from("cold_searches")
+      .update({ results: results })
+      .eq("id", req.params.id);
+
+    res.json({ ok: true, inserted: inserted, errors: errors, results: results });
+  } catch (err) {
+    console.error("Cold outbound POST /searches/:id/to-pipeline error:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
+// POST /searches/:id/to-email -- FullEnrich + Sonnet email draft
+// ────────────────────────────────────────────────────────────
+
+router.post("/searches/:id/to-email", async (req, res) => {
+  try {
+    var { profile_indexes } = req.body;
+    if (!Array.isArray(profile_indexes) || profile_indexes.length === 0) {
+      return res.status(400).json({ error: "profile_indexes required" });
+    }
+
+    var { data: search, error: fetchErr } = await supabase
+      .from("cold_searches")
+      .select("*")
+      .eq("id", req.params.id)
+      .single();
+
+    if (fetchErr || !search) {
+      return res.status(404).json({ error: "Search not found" });
+    }
+
+    var results = search.results || [];
+    var processed = 0;
+    var errors = [];
+    var runId = crypto.randomUUID();
+
+    for (var idx of profile_indexes) {
+      if (idx < 0 || idx >= results.length) continue;
+      var profile = results[idx];
+      if (!profile.linkedin_url) { errors.push({ idx: idx, reason: "no_url" }); continue; }
+
+      try {
+        // Step 1: FullEnrich for email
+        var enrichResult = await enrichContactInfo(profile.linkedin_url, runId);
+
+        if (!enrichResult || !enrichResult.email) {
+          results[idx] = { ...profile, email_status: "not_found" };
+          errors.push({ idx: idx, reason: "no_email" });
+          continue;
+        }
+
+        var email = enrichResult.email;
+
+        // Step 2: Generate email draft with Sonnet
+        var draft = await generateColdEmailDraft(profile, email);
+
+        // Step 3: Insert lead with email_pending status
+        var leadRow = {
+          linkedin_url: profile.linkedin_url,
+          linkedin_url_canonical: profile.linkedin_url_canonical,
+          first_name: profile.first_name || null,
+          last_name: profile.last_name || null,
+          full_name: ((profile.first_name || "") + " " + (profile.last_name || "")).trim() || null,
+          headline: profile.enriched ? (profile.enrichment_data?.headline || profile.headline) : profile.headline,
+          company_name: profile.company || null,
+          location: profile.location || null,
+          email: email,
+          status: "email_pending",
+          signal_type: "cold_search",
+          signal_category: "cold_outbound",
+          signal_date: new Date().toISOString(),
+          icp_score: profile.prise_score || 0,
+          tier: (profile.prise_score || 0) >= 60 ? "warm" : "cold",
+          metadata: {
+            search_id: search.id,
+            source_origin: "bereach_search",
+            cold_outbound: true,
+            email_status: "found",
+            draft_email_subject: draft ? draft.subject : null,
+            draft_email_body: draft ? draft.body : null,
+          },
+        };
+
+        var { data: lead, error: upsertErr } = await supabase
+          .from("leads")
+          .upsert(leadRow, { onConflict: "linkedin_url_canonical" })
+          .select("id")
+          .single();
+
+        if (upsertErr) {
+          errors.push({ idx: idx, reason: "upsert_failed" });
+          continue;
+        }
+
+        results[idx] = {
+          ...profile,
+          email: email,
+          email_status: "found",
+          email_draft: draft,
+          added_to_pipeline: true,
+          pipeline_lead_id: lead ? lead.id : null,
+        };
+        processed++;
+      } catch (emailErr) {
+        console.error("to-email error for index " + idx + ":", emailErr.message);
+        errors.push({ idx: idx, reason: emailErr.message.slice(0, 100) });
+      }
+    }
+
+    // Save updated results
+    await supabase
+      .from("cold_searches")
+      .update({ results: results })
+      .eq("id", req.params.id);
+
+    res.json({ ok: true, processed: processed, errors: errors, results: results });
+  } catch (err) {
+    console.error("Cold outbound POST /searches/:id/to-email error:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
+// Helper: Generate cold email draft via Sonnet
+// ────────────────────────────────────────────────────────────
+
+async function generateColdEmailDraft(profile, email) {
+  try {
+    var { getAnthropicClient } = require("../lib/anthropic");
+    var client = getAnthropicClient();
+    var calendlyUrl = process.env.CALENDLY_URL || "https://calendly.com/julien-messagingme/30min";
+
+    var contextLines = [
+      "Prospect: " + (profile.first_name || "") + " " + (profile.last_name || ""),
+      "Titre: " + (profile.headline || "inconnu"),
+      "Entreprise: " + (profile.company || "inconnue"),
+      "Localisation: " + (profile.location || "inconnue"),
+      "Email: " + email,
+    ];
+
+    if (profile.enrichment_data) {
+      var ed = profile.enrichment_data;
+      if (ed.summary) contextLines.push("Bio: " + ed.summary.slice(0, 300));
+      if (ed.company_description) contextLines.push("Description entreprise: " + ed.company_description.slice(0, 200));
+      if (ed.posts && ed.posts.length > 0) {
+        contextLines.push("Publications recentes:");
+        ed.posts.slice(0, 3).forEach(function (p, i) {
+          contextLines.push("  Post " + (i + 1) + ": " + (p.text || "").slice(0, 200));
+        });
+      }
+    }
+
+    var systemPrompt = "Tu es Julien Dumas, expert en strategie conversationnelle et messaging (WhatsApp, RCS, SMS). Tu diriges MessagingMe (messagingme.fr)." +
+      " Tu ecris un PREMIER email de prospection a froid a un prospect que tu ne connais pas." +
+      " TON : Direct, naturel, pair a pair. Pas corporate, pas commercial. Vouvoiement." +
+      " STRUCTURE : Objet court et intrigant (pas vendeur). Corps : 3-5 phrases. Commence par une observation sur le secteur/poste du prospect. Pose une question ouverte." +
+      " INTERDICTIONS : 'je me permets', 'n hesitez pas', 'serait-il possible', 'MessagingMe', 'je tombe sur votre profil', 'j ai vu que', 'Chez MessagingMe'." +
+      " JAMAIS de signature dans le body (elle est ajoutee automatiquement)." +
+      " Reponds UNIQUEMENT en JSON: {\"subject\": \"...\", \"body\": \"<html>...</html>\"}";
+
+    var resp = await client.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages: [{ role: "user", content: contextLines.join("\n") }],
+    });
+
+    var raw = resp.content[0].text.trim();
+    raw = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+    var jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return null;
+
+    var parsed = JSON.parse(jsonMatch[0]);
+    if (!parsed.subject || !parsed.body) return null;
+
+    // Add signature
+    var signature = '<br><br>Julien Dumas<br>CEO MessagingMe<br><a href="https://www.messagingme.fr">www.messagingme.fr</a>' +
+      '<br><br><a href="' + calendlyUrl + '" style="display:inline-block;padding:10px 20px;background-color:#4F46E5;color:#ffffff;text-decoration:none;border-radius:6px;font-size:14px;font-weight:600;">Programmer un echange</a>';
+
+    parsed.body = parsed.body
+      .replace(/<\/(body|html)>/i, signature + "</$1>")
+      .replace(/(<br\s*\/?>){3,}/g, "<br><br>");
+
+    if (!parsed.body.includes("messagingme.fr")) {
+      parsed.body = parsed.body + signature;
+    }
+
+    return parsed;
+  } catch (err) {
+    console.error("generateColdEmailDraft error:", err.message);
+    return null;
+  }
+}
 
 module.exports = router;

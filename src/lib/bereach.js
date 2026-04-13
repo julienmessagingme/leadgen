@@ -231,6 +231,19 @@ async function withdrawInvitation(invitationUrn) {
   return bereach("/withdraw/linkedin/invitation", { invitationUrn: invitationUrn });
 }
 
+/**
+ * Search LinkedIn people by criteria.
+ * @param {object} params - Search parameters
+ * @param {string} [params.keywords] - Job title / keywords
+ * @param {string} [params.currentCompany] - Company name
+ * @param {string} [params.location] - Geography
+ * @param {string} [params.industry] - Sector / industry
+ * Cost: ~1 credit.
+ */
+async function searchPeople(params) {
+  return bereach("/search/linkedin/people", params);
+}
+
 module.exports = {
   collectPostLikers,
   collectPostCommenters,
@@ -247,4 +260,5 @@ module.exports = {
   searchInbox,
   getConnections,
   withdrawInvitation,
+  searchPeople,
 };
