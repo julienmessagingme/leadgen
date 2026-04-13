@@ -1,6 +1,26 @@
 import { useState, useCallback, Fragment } from "react";
 import DOMPurify from "dompurify";
+import { useDraggable } from "@dnd-kit/core";
 import { useEnrichMutation, useToPipelineMutation, useToEmailMutation } from "../../hooks/useColdOutbound";
+
+function DraggableRow({ idx, profile, children, className, onClick }) {
+  var { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: "profile-" + idx,
+    data: { index: idx, profile: profile },
+  });
+  return (
+    <tr
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      className={className}
+      style={{ opacity: isDragging ? 0.35 : 1, cursor: "grab" }}
+      onClick={onClick}
+    >
+      {children}
+    </tr>
+  );
+}
 
 function priseBadge(score) {
   if (score === null || score === undefined) return <span className="text-xs text-gray-300">--</span>;
@@ -15,7 +35,7 @@ function priseBadge(score) {
   );
 }
 
-export default function ColdSearchResults({ search, onUpdate }) {
+export default function ColdSearchResults({ search, onUpdate, bucketedIndexes }) {
   const [selected, setSelected] = useState(new Set());
   const [expandedIdx, setExpandedIdx] = useState(null);
   const [actionPending, setActionPending] = useState({}); // { idx: "pipeline"|"email"|"enriching" }
@@ -130,10 +150,12 @@ export default function ColdSearchResults({ search, onUpdate }) {
               const pending = actionPending[idx];
               return (
                 <Fragment key={idx}>
-                  <tr
+                  <DraggableRow
+                    idx={idx}
+                    profile={r}
                     className={`${r.added_to_pipeline ? "bg-green-50/40" : ""} ${
                       selected.has(idx) ? "bg-indigo-50/30" : ""
-                    } hover:bg-gray-50 cursor-pointer`}
+                    } ${bucketedIndexes && bucketedIndexes.has(idx) ? "bg-teal-50/40" : ""} hover:bg-gray-50`}
                     onClick={() => setExpandedIdx(isExpanded ? null : idx)}
                   >
                     <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
@@ -185,6 +207,11 @@ export default function ColdSearchResults({ search, onUpdate }) {
                             No email
                           </span>
                         )}
+                        {bucketedIndexes && bucketedIndexes.has(idx) && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 text-xs font-medium rounded bg-teal-100 text-teal-700">
+                            Bucket
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="px-3 py-3 text-center">{priseBadge(r.prise_score)}</td>
@@ -212,7 +239,7 @@ export default function ColdSearchResults({ search, onUpdate }) {
                         </div>
                       )}
                     </td>
-                  </tr>
+                  </DraggableRow>
 
                   {/* Expanded enrichment detail */}
                   {isExpanded && r.enriched && r.enrichment_data && (
