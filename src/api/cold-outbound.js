@@ -84,12 +84,14 @@ router.post("/search", async (req, res) => {
       if (!companyName && Array.isArray(p.currentPositions) && p.currentPositions.length > 0) {
         companyName = p.currentPositions[0].companyName || p.currentPositions[0].company || "";
       }
-      // Fallback: parse headline for patterns like "@Company", "chez Company", "| Company"
+      // Fallback: parse headline for company patterns
       if (!companyName && p.headline) {
-        var atMatch = p.headline.match(/@\s*([^|@,]+)/);
-        var chezMatch = p.headline.match(/(?:chez|at|for)\s+([^|@,]+)/i);
-        var pipeMatch = p.headline.match(/\|\s*([^|@,]+?)$/);
-        var extracted = (atMatch && atMatch[1]) || (chezMatch && chezMatch[1]) || (pipeMatch && pipeMatch[1]) || "";
+        var hl = p.headline;
+        var atMatch = hl.match(/@\s*([^|@,\-]+)/);
+        var chezMatch = hl.match(/(?:chez|at|for)\s+([^|@,\-]+)/i);
+        var pipeMatch = hl.match(/\|\s*([^|@,]+?)$/);
+        var dashMatch = hl.match(/\s[-–—]\s+([^|@,\-–—]+?)$/);
+        var extracted = (atMatch && atMatch[1]) || (chezMatch && chezMatch[1]) || (pipeMatch && pipeMatch[1]) || (dashMatch && dashMatch[1]) || "";
         companyName = extracted.trim();
       }
 
