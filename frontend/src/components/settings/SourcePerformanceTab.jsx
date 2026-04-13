@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useWatchlistStats } from "../../hooks/useSettings";
+import { useWatchlistStats, useUpdateWatchlistEntry } from "../../hooks/useSettings";
 
 const SOURCE_TYPE_LABELS = {
   competitor_page: "Concurrent",
@@ -96,6 +96,7 @@ function tierBreakdown(hot, warm, cold) {
 
 export default function SourcePerformanceTab() {
   const { data, isLoading } = useWatchlistStats();
+  const updateEntry = useUpdateWatchlistEntry();
   const [filter, setFilter] = useState("all");
   const [sort, setSort] = useState("leads_desc");
   const [typeFilter, setTypeFilter] = useState("all");
@@ -250,7 +251,7 @@ export default function SourcePerformanceTab() {
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">% Hot</th>
               <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Score moy.</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Dernier lead</th>
-              <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actif</th>
+              <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -264,10 +265,11 @@ export default function SourcePerformanceTab() {
               filtered.map((s) => {
                 const rowKey = s.id;
                 const isZero = s.leads_count === 0;
+                const isInactive = s.is_active === false;
                 return (
                   <tr
                     key={rowKey}
-                    className={isZero ? "bg-red-50/30" : "hover:bg-gray-50"}
+                    className={`${isInactive ? "opacity-50" : isZero ? "bg-red-50/30" : "hover:bg-gray-50"}`}
                   >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
@@ -307,10 +309,20 @@ export default function SourcePerformanceTab() {
                     <td className="px-4 py-3 text-center">{avgScoreBadge(s.avg_score)}</td>
                     <td className="px-4 py-3 text-xs text-gray-500">{formatDate(s.last_lead_at)}</td>
                     <td className="px-4 py-3 text-center">
-                      {s.is_active === null ? (
-                        <span className="text-xs text-gray-300">—</span>
+                      {s.id ? (
+                        <button
+                          onClick={() => updateEntry.mutate({ id: s.id, is_active: !s.is_active })}
+                          disabled={updateEntry.isPending}
+                          className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
+                            s.is_active
+                              ? "bg-red-50 text-red-600 hover:bg-red-100"
+                              : "bg-green-50 text-green-600 hover:bg-green-100"
+                          } disabled:opacity-50`}
+                        >
+                          {s.is_active ? "Desactiver" : "Reactiver"}
+                        </button>
                       ) : (
-                        <span className={`inline-block w-2.5 h-2.5 rounded-full ${s.is_active ? "bg-green-500" : "bg-gray-300"}`} />
+                        <span className="text-xs text-gray-300">—</span>
                       )}
                     </td>
                   </tr>
