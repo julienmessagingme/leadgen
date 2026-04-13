@@ -77,6 +77,22 @@ router.post("/search", async (req, res) => {
     // Normalize profile fields
     var normalized = rawProfiles.map(function (p, i) {
       var linkedinUrl = p.profileUrl || p.profile_url || p.url || p.linkedin_url || null;
+
+      // Extract company from multiple sources
+      var companyName = p.company || p.companyName || p.company_name || "";
+      // Try currentPositions array
+      if (!companyName && Array.isArray(p.currentPositions) && p.currentPositions.length > 0) {
+        companyName = p.currentPositions[0].companyName || p.currentPositions[0].company || "";
+      }
+      // Fallback: parse headline for patterns like "@Company", "chez Company", "| Company"
+      if (!companyName && p.headline) {
+        var atMatch = p.headline.match(/@\s*([^|@,]+)/);
+        var chezMatch = p.headline.match(/(?:chez|at|for)\s+([^|@,]+)/i);
+        var pipeMatch = p.headline.match(/\|\s*([^|@,]+?)$/);
+        var extracted = (atMatch && atMatch[1]) || (chezMatch && chezMatch[1]) || (pipeMatch && pipeMatch[1]) || "";
+        companyName = extracted.trim();
+      }
+
       return {
         index: i,
         linkedin_url: linkedinUrl,
@@ -84,7 +100,7 @@ router.post("/search", async (req, res) => {
         first_name: p.firstName || p.first_name || (p.name || "").split(" ")[0] || "",
         last_name: p.lastName || p.last_name || (p.name || "").split(" ").slice(1).join(" ") || "",
         headline: p.headline || p.title || null,
-        company: p.company || p.companyName || p.company_name || "",
+        company: companyName,
         location: p.location || null,
       };
     });
