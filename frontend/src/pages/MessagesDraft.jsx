@@ -95,7 +95,7 @@ function useRegenerateEmailFollowup() {
 }
 
 export default function MessagesDraft() {
-  const [tab, setTab] = useState("linkedin"); // "linkedin" | "email" | "reinvite" | "followup_email"
+  const [tab, setTab] = useState("linkedin"); // "linkedin" | "email" | "cold_email" | "reinvite" | "followup_email"
   const [editedMessages, setEditedMessages] = useState({});
   const [editedEmails, setEditedEmails] = useState({}); // { id: { subject, body } }
   const [editedFollowups, setEditedFollowups] = useState({}); // { id: { subject, body } }
@@ -142,7 +142,9 @@ export default function MessagesDraft() {
   const regenerateFollowup = useRegenerateEmailFollowup();
 
   const linkedinLeads = linkedinData?.leads ?? [];
-  const emailLeads = emailData?.leads ?? [];
+  const allEmailLeads = emailData?.leads ?? [];
+  const emailLeads = allEmailLeads.filter(function (l) { return !l.metadata?.cold_outbound; });
+  const coldEmailLeads = allEmailLeads.filter(function (l) { return !!l.metadata?.cold_outbound; });
   const reinviteLeads = reinviteData?.leads ?? [];
   const followupLeads = followupData?.leads ?? [];
 
@@ -280,10 +282,12 @@ export default function MessagesDraft() {
 
   const isLoading = tab === "linkedin" ? linkedinLoading
     : tab === "email" ? emailLoading
+    : tab === "cold_email" ? emailLoading
     : tab === "reinvite" ? reinviteLoading
     : followupLoading;
   const leads = tab === "linkedin" ? linkedinLeads
     : tab === "email" ? emailLeads
+    : tab === "cold_email" ? coldEmailLeads
     : tab === "reinvite" ? reinviteLeads
     : followupLeads;
 
@@ -331,6 +335,21 @@ export default function MessagesDraft() {
             )}
           </button>
           <button
+            onClick={() => setTab("cold_email")}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              tab === "cold_email"
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Cold Email
+            {coldEmailLeads.length > 0 && (
+              <span className="ml-1.5 inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium bg-teal-100 text-teal-700 rounded-full">
+                {coldEmailLeads.length}
+              </span>
+            )}
+          </button>
+          <button
             onClick={() => setTab("reinvite")}
             className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
               tab === "reinvite"
@@ -370,6 +389,7 @@ export default function MessagesDraft() {
           <div className="text-center py-12 text-gray-400">
             {tab === "linkedin" ? "Aucun message LinkedIn en attente."
              : tab === "email" ? "Aucun email en attente. Task D n'a pas encore tourné ou tous les emails ont été traités."
+             : tab === "cold_email" ? "Aucun cold email en attente."
              : tab === "reinvite" ? "Aucune re-invitation en attente."
              : "Aucune relance email en attente."}
           </div>
@@ -551,9 +571,9 @@ export default function MessagesDraft() {
         )}
 
         {/* Email drafts */}
-        {tab === "email" && (
+        {(tab === "email" || tab === "cold_email") && (
           <div className="space-y-4">
-            {emailLeads.map((lead) => {
+            {(tab === "cold_email" ? coldEmailLeads : emailLeads).map((lead) => {
               const edited = editedEmails[lead.id];
               const subject = edited?.subject ?? lead.metadata?.draft_email_subject ?? "";
               const body = edited?.body ?? lead.metadata?.draft_email_body ?? "";

@@ -139,10 +139,31 @@ router.post("/search", async (req, res) => {
       })
     );
 
-    // Build final results
+    // Build enrichment cache from past searches (reuse enrichments, 0 credits)
+    var enrichCache = {};
+    var allUrls = normalized.map(function (n) { return n.linkedin_url; }).filter(Boolean);
+    if (allUrls.length > 0) {
+      var { data: pastSearches } = await supabase
+        .from("cold_searches")
+        .select("results")
+        .order("created_at", { ascending: false })
+        .limit(30);
+      if (pastSearches) {
+        pastSearches.forEach(function (ps) {
+          (ps.results || []).forEach(function (pr) {
+            if (pr.enriched && pr.linkedin_url && !enrichCache[pr.linkedin_url]) {
+              enrichCache[pr.linkedin_url] = pr;
+            }
+          });
+        });
+      }
+    }
+
+    // Build final results — reuse cached enrichment when available
     var results = normalized.map(function (n, i) {
       var hs = hsResults[i].status === "fulfilled" ? hsResults[i].value : { found: false, contactId: null, ownerName: null };
       var existingId = n.linkedin_url_canonical ? (dedupMap[n.linkedin_url_canonical] || null) : null;
+      var cached = n.linkedin_url ? enrichCache[n.linkedin_url] : null;
       return {
         ...n,
         hubspot_found: hs.found,
@@ -150,10 +171,11 @@ router.post("/search", async (req, res) => {
         hubspot_owner: hs.ownerName || null,
         already_in_pipeline: !!existingId,
         existing_lead_id: existingId,
-        enriched: false,
-        enrichment_data: null,
-        prise_score: null,
-        prise_reasoning: null,
+        enriched: cached ? true : false,
+        enrichment_data: cached ? cached.enrichment_data : null,
+        prise_score: cached ? cached.prise_score : null,
+        prise_reasoning: cached ? cached.prise_reasoning : null,
+        company: (cached && cached.company) || n.company,
         email: null,
         email_status: null,
         email_draft: null,
