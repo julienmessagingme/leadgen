@@ -8,16 +8,16 @@ import ColdBuckets from "../components/cold/ColdBuckets";
 import { useColdSearch } from "../hooks/useColdOutbound";
 
 var DEFAULT_BUCKETS = [
-  { id: "bucket-1", name: "Bucket 1", profileIndexes: [] },
-  { id: "bucket-2", name: "Bucket 2", profileIndexes: [] },
-  { id: "bucket-3", name: "Bucket 3", profileIndexes: [] },
+  { id: "bucket-1", name: "Bucket 1", items: [] },
+  { id: "bucket-2", name: "Bucket 2", items: [] },
+  { id: "bucket-3", name: "Bucket 3", items: [] },
 ];
 
 export default function ColdOutbound() {
   var [activeSearch, setActiveSearch] = useState(null);
   var [prefillFilters, setPrefillFilters] = useState(null);
   var [viewSearchId, setViewSearchId] = useState(null);
-  var [buckets, setBuckets] = useState(DEFAULT_BUCKETS.map(function (b) { return { ...b, profileIndexes: [] }; }));
+  var [buckets, setBuckets] = useState(DEFAULT_BUCKETS.map(function (b) { return { ...b, items: [] }; }));
   var [activeDrag, setActiveDrag] = useState(null);
   var formRef = useRef(null);
 
@@ -25,19 +25,24 @@ export default function ColdOutbound() {
   var { data: loadedSearch } = useColdSearch(viewSearchId);
   var displaySearch = activeSearch || loadedSearch || null;
 
-  // Clear buckets when search changes
-  useEffect(function () {
-    setBuckets(function (prev) {
-      return prev.map(function (b) { return { ...b, profileIndexes: [] }; });
-    });
-  }, [displaySearch?.id]);
-
-  // Compute bucketed indexes set
-  var bucketedIndexes = useMemo(function () {
+  // Compute bucketed keys set (linkedin_url as unique key across searches)
+  var bucketedKeys = useMemo(function () {
     var s = new Set();
-    buckets.forEach(function (b) { b.profileIndexes.forEach(function (idx) { s.add(idx); }); });
+    buckets.forEach(function (b) {
+      b.items.forEach(function (item) { if (item.linkedin_url) s.add(item.linkedin_url); });
+    });
     return s;
   }, [buckets]);
+
+  // Compute bucketed indexes for CURRENT search only (for table badges)
+  var bucketedIndexes = useMemo(function () {
+    if (!displaySearch || !displaySearch.results) return new Set();
+    var s = new Set();
+    displaySearch.results.forEach(function (r, idx) {
+      if (r.linkedin_url && bucketedKeys.has(r.linkedin_url)) s.add(idx);
+    });
+    return s;
+  }, [bucketedKeys, displaySearch]);
 
   // DnD sensors
   var pointerSensor = useSensor(PointerSensor, { activationConstraint: { distance: 8 } });
@@ -73,20 +78,23 @@ export default function ColdOutbound() {
   }, [activeSearch]);
 
   var handleDropIntoBucket = useCallback(function (profileIndex, targetBucketId) {
+    if (!displaySearch || !displaySearch.results) return;
+    var profile = displaySearch.results[profileIndex];
+    if (!profile) return;
+    var item = { ...profile, _sourceSearchId: displaySearch.id, _sourceIndex: profileIndex };
+
     setBuckets(function (prev) {
       return prev.map(function (b) {
-        // Remove from any bucket first
-        var filtered = b.profileIndexes.filter(function (idx) { return idx !== profileIndex; });
+        // Remove this profile from any bucket (by linkedin_url)
+        var filtered = b.items.filter(function (it) { return it.linkedin_url !== profile.linkedin_url; });
         // Add to target
         if (b.id === targetBucketId) {
-          if (!filtered.includes(profileIndex)) {
-            filtered.push(profileIndex);
-          }
+          filtered.push(item);
         }
-        return { ...b, profileIndexes: filtered };
+        return { ...b, items: filtered };
       });
     });
-  }, []);
+  }, [displaySearch]);
 
   var handleRenameBucket = useCallback(function (bucketId, newName) {
     setBuckets(function (prev) {
@@ -96,11 +104,11 @@ export default function ColdOutbound() {
     });
   }, []);
 
-  var handleRemoveFromBucket = useCallback(function (profileIndex, bucketId) {
+  var handleRemoveFromBucket = useCallback(function (linkedinUrl, bucketId) {
     setBuckets(function (prev) {
       return prev.map(function (b) {
         if (b.id !== bucketId) return b;
-        return { ...b, profileIndexes: b.profileIndexes.filter(function (idx) { return idx !== profileIndex; }) };
+        return { ...b, items: b.items.filter(function (it) { return it.linkedin_url !== linkedinUrl; }) };
       });
     });
   }, []);
@@ -172,11 +180,8 @@ export default function ColdOutbound() {
                 <div className="sticky top-4">
                   <ColdBuckets
                     buckets={buckets}
-                    results={displaySearch.results}
-                    searchId={displaySearch.id}
                     onRenameBucket={handleRenameBucket}
                     onRemoveFromBucket={handleRemoveFromBucket}
-                    onUpdate={handleBucketResultsUpdate}
                   />
                 </div>
               </div>
