@@ -64,6 +64,31 @@ registerTask("task-e-whatsapp",         "30 10 * * 1-6",     taskEWhatsapp);    
 // WhatsApp template approval polling (every 15 min, 9h-18h, lun-sam)
 registerTask("whatsapp-poll",     "*/15 9-18 * * 1-6", whatsappPoll);     // every 15 min
 
+// Stale lead cleanup -- disqualify low-score leads stuck in "new" for 30+ days
+registerTask("lead-cleanup", "30 2 * * *", async (runId) => {
+  var cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  var { count, error } = await supabase
+    .from("leads")
+    .update({ status: "disqualified", metadata: supabase.raw("metadata || '{\"disqualified_reason\": \"stale_low_score\"}'::jsonb") })
+    .lt("created_at", cutoff)
+    .lt("icp_score", 50)
+    .in("status", ["new", "scored", "enriched"])
+    .select("id", { count: "exact", head: true });
+  if (error) {
+    // Fallback without raw metadata merge
+    var { count: c2, error: e2 } = await supabase
+      .from("leads")
+      .update({ status: "disqualified" })
+      .lt("created_at", cutoff)
+      .lt("icp_score", 50)
+      .in("status", ["new", "scored", "enriched"]);
+    if (e2) throw e2;
+    console.log("Lead cleanup completed: disqualified " + (c2 || 0) + " stale leads (score < 50, 30+ days)");
+    return;
+  }
+  console.log("Lead cleanup completed: disqualified " + (count || 0) + " stale leads (score < 50, 30+ days)");
+});
+
 // Log cleanup -- delete logs older than 30 days (daily at 02:00, every day including weekends)
 registerTask("log-cleanup", "0 2 * * *", async (runId) => {
   const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
@@ -75,4 +100,4 @@ registerTask("log-cleanup", "0 2 * * *", async (runId) => {
   console.log("Log cleanup completed: deleted " + (count || 0) + " logs older than 30 days");
 });
 
-console.log("Scheduler started: 8 tasks registered (lun-sam pipeline, daily log-cleanup, Europe/Paris)");
+console.log("Scheduler started: 9 tasks registered (lun-sam pipeline, daily log/lead-cleanup, Europe/Paris)");

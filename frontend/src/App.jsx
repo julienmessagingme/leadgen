@@ -10,6 +10,7 @@ import ColdOutbound from "./pages/ColdOutbound";
 import HubspotSignals from "./pages/HubspotSignals";
 import MessagesDraft from "./pages/MessagesDraft";
 import Invitations from "./pages/Invitations";
+import EmailTracking from "./pages/EmailTracking";
 
 const queryClient = new QueryClient();
 
@@ -113,6 +114,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <ColdOutbound />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/email-tracking"
+        element={
+          <ProtectedRoute>
+            <EmailTracking />
           </ProtectedRoute>
         }
       />

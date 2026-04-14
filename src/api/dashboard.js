@@ -138,6 +138,7 @@ router.get("/cron", async (req, res) => {
       { task: "task-f-email-followup", label: "F - Relance email J+14 (10h15)" },
       { task: "task-e-whatsapp", label: "E - WhatsApp (10h30)" },
       { task: "whatsapp-poll", label: "WhatsApp poll (toutes les 15min)" },
+      { task: "lead-cleanup", label: "Nettoyage leads stale (02h30)" },
       { task: "log-cleanup", label: "Purge logs (02h00)" },
     ];
 
@@ -186,6 +187,74 @@ router.get("/cron", async (req, res) => {
     res.json({ tasks });
   } catch (err) {
     console.error("Dashboard /cron error:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
+// GET /email-tracking -- All sent emails with open/click tracking
+// ────────────────────────────────────────────────────────────
+
+router.get("/email-tracking", async (req, res) => {
+  try {
+    // Get all leads that had an email sent
+    var { data: leads, error: leadsErr } = await supabase
+      .from("leads")
+      .select("id, full_name, company_name, email, status, icp_score, tier, email_sent_at, email_followup_sent_at, linkedin_url, metadata")
+      .not("email_sent_at", "is", null)
+      .order("email_sent_at", { ascending: false })
+      .limit(200);
+
+    if (leadsErr) {
+      return res.status(500).json({ error: "Failed to fetch leads" });
+    }
+
+    if (!leads || leads.length === 0) {
+      return res.json({ leads: [] });
+    }
+
+    // Get all email events for these leads
+    var leadIds = leads.map(function (l) { return l.id; });
+    var { data: events } = await supabase
+      .from("email_events")
+      .select("lead_id, email_type, event_type, created_at")
+      .in("lead_id", leadIds)
+      .order("created_at", { ascending: true });
+
+    // Group events by lead
+    var eventsByLead = {};
+    (events || []).forEach(function (e) {
+      if (!eventsByLead[e.lead_id]) eventsByLead[e.lead_id] = [];
+      eventsByLead[e.lead_id].push(e);
+    });
+
+    // Build response
+    var result = leads.map(function (l) {
+      var evts = eventsByLead[l.id] || [];
+      var opens = evts.filter(function (e) { return e.event_type === "open"; });
+      var clicks = evts.filter(function (e) { return e.event_type === "click"; });
+      return {
+        id: l.id,
+        full_name: l.full_name,
+        company_name: l.company_name,
+        email: l.email,
+        status: l.status,
+        icp_score: l.icp_score,
+        tier: l.tier,
+        linkedin_url: l.linkedin_url,
+        cold_outbound: !!(l.metadata && l.metadata.cold_outbound),
+        email_sent_at: l.email_sent_at,
+        email_followup_sent_at: l.email_followup_sent_at,
+        opens: opens.length,
+        first_open: opens.length > 0 ? opens[0].created_at : null,
+        clicks: clicks.length,
+        first_click: clicks.length > 0 ? clicks[0].created_at : null,
+      };
+    });
+
+    res.json({ leads: result });
+  } catch (err) {
+    console.error("Dashboard /email-tracking error:", err.message);
     res.status(500).json({ error: "Internal server error" });
   }
 });
