@@ -342,9 +342,18 @@ export default function ColdSearchResults({ search, onUpdate, bucketedIndexes, o
                                         {c.logoUrl && (
                                           <img src={c.logoUrl} alt="" className="w-7 h-7 rounded flex-shrink-0" />
                                         )}
-                                        <div className="min-w-0 flex-1">
-                                          <div className="text-xs font-medium text-gray-900">{c.name}</div>
+                                        <div className="min-w-0 flex-1 relative group/simco">
+                                          <div className="text-xs font-medium text-gray-900 cursor-default">{c.name}</div>
                                           <div className="text-[10px] text-gray-400">{c.industry || "--"}{c.followerCount > 0 ? " · " + c.followerCount.toLocaleString() + " followers" : ""}</div>
+                                          {/* Hover tooltip */}
+                                          <div className="absolute z-50 left-0 top-full mt-1 w-64 bg-white rounded-lg shadow-xl border border-gray-200 p-3 hidden group-hover/simco:block">
+                                            <div className="text-xs font-semibold text-gray-900 mb-1">{c.name}</div>
+                                            {c.industry && <div className="text-[11px] text-gray-500 mb-0.5">Secteur : {c.industry}</div>}
+                                            {c.followerCount > 0 && <div className="text-[11px] text-gray-500 mb-0.5">{c.followerCount.toLocaleString()} followers LinkedIn</div>}
+                                            {c.url && (
+                                              <a href={c.url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-500 hover:underline mt-1 block" onClick={(e) => e.stopPropagation()}>Voir sur LinkedIn</a>
+                                            )}
+                                          </div>
                                         </div>
                                         {!sub || (!sub.loading && !sub.search) ? (
                                           <button
