@@ -190,7 +190,26 @@ export default function ColdSearchResults({ search, onUpdate, bucketedIndexes, o
                       )}
                     </td>
                     <td className="px-3 py-3 text-sm text-gray-600 max-w-md">{r.headline || "--"}</td>
-                    <td className="px-3 py-3 text-sm text-gray-600">{r.company || "--"}</td>
+                    <td className="px-3 py-3 text-sm text-gray-600 relative group/company">
+                      <span className="cursor-default">{r.company || "--"}</span>
+                      {r.enriched && r.enrichment_data && (r.enrichment_data.company_description || r.enrichment_data.company_industry) && (
+                        <div className="absolute z-50 left-0 top-full mt-1 w-72 bg-white rounded-lg shadow-xl border border-gray-200 p-3 hidden group-hover/company:block">
+                          <div className="text-xs font-semibold text-gray-900 mb-1">{r.company}</div>
+                          {r.enrichment_data.company_industry && (
+                            <div className="text-[11px] text-gray-500 mb-1">Secteur : {r.enrichment_data.company_industry}</div>
+                          )}
+                          {r.enrichment_data.company_size && (
+                            <div className="text-[11px] text-gray-500 mb-1">Taille : {r.enrichment_data.company_size.start || "?"}-{r.enrichment_data.company_size.end || "?"} employes</div>
+                          )}
+                          {r.enrichment_data.company_description && (
+                            <p className="text-[11px] text-gray-600 leading-relaxed">{r.enrichment_data.company_description.slice(0, 250)}{r.enrichment_data.company_description.length > 250 ? "..." : ""}</p>
+                          )}
+                          {r.enrichment_data.company_url && (
+                            <a href={r.enrichment_data.company_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-500 hover:underline mt-1 block" onClick={(e) => e.stopPropagation()}>Voir sur LinkedIn</a>
+                          )}
+                        </div>
+                      )}
+                    </td>
                     <td className="px-3 py-3 text-sm text-gray-500">{r.location || "--"}</td>
                     <td className="px-3 py-3 text-center">
                       <div className="flex items-center justify-center gap-1">
