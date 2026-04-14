@@ -97,29 +97,23 @@ function BucketColumn({ bucket, onRename, onRemove }) {
         )}
       </div>
 
-      {/* Action buttons — disabled for now since items come from multiple searches */}
-      {items.length > 0 && (unenriched.length > 0 || enrichedNotAdded.length > 0) && (
+      {/* Email with scenario — applies to ALL items in bucket */}
+      {items.length > 0 && (
         <div className="px-1.5 py-1.5 border-t border-gray-200 bg-white rounded-b-lg">
-          <BucketActions
-            items={items}
-            searchGroups={searchGroups}
-            unenriched={unenriched}
-            enrichedNotAdded={enrichedNotAdded}
-          />
+          <BucketEmailAction searchGroups={searchGroups} items={items} />
         </div>
       )}
     </div>
   );
 }
 
-function BucketActions({ searchGroups, unenriched, enrichedNotAdded }) {
-  var [pending, setPending] = useState(null); // "enrich" | "pipeline" | "email"
+function BucketEmailAction({ searchGroups, items }) {
+  var [pending, setPending] = useState(false);
   var [emailOpen, setEmailOpen] = useState(false);
   var { data: scenarioData } = useColdScenarios();
   var scenarios = scenarioData?.scenarios || [];
   var searchIds = Object.keys(searchGroups);
 
-  // Close dropdown on outside click
   useEffect(function () {
     if (!emailOpen) return;
     var handler = function () { setEmailOpen(false); };
@@ -127,87 +121,49 @@ function BucketActions({ searchGroups, unenriched, enrichedNotAdded }) {
     return function () { document.removeEventListener("click", handler); };
   }, [emailOpen]);
 
-  var callPerSearch = async function (endpoint, bodyFn) {
-    for (var sid of searchIds) {
-      var items = searchGroups[sid];
-      var body = bodyFn(items);
-      if (body) {
-        try { await api.post("/cold-outbound/searches/" + sid + "/" + endpoint, body); } catch (_e) {}
-      }
-    }
-  };
-
-  var handleEnrich = async function () {
-    setPending("enrich");
-    await callPerSearch("enrich", function (items) {
-      var indexes = items.filter(function (p) { return !p.enriched; }).map(function (p) { return p._sourceIndex; });
-      return indexes.length > 0 ? { profile_indexes: indexes } : null;
-    });
-    setPending(null);
-  };
-
-  var handlePipeline = async function () {
-    setPending("pipeline");
-    await callPerSearch("to-pipeline", function (items) {
-      var indexes = items.filter(function (p) { return !p.added_to_pipeline; }).map(function (p) { return p._sourceIndex; });
-      return indexes.length > 0 ? { profile_indexes: indexes } : null;
-    });
-    setPending(null);
-  };
-
   var handleEmail = async function (scenarioIndex) {
     setEmailOpen(false);
-    setPending("email");
-    await callPerSearch("to-email", function (items) {
-      var indexes = items.filter(function (p) { return !p.added_to_pipeline; }).map(function (p) { return p._sourceIndex; });
-      return indexes.length > 0 ? { profile_indexes: indexes, scenario_index: scenarioIndex } : null;
-    });
-    setPending(null);
+    setPending(true);
+    for (var sid of searchIds) {
+      var groupItems = searchGroups[sid];
+      var indexes = groupItems.map(function (p) { return p._sourceIndex; });
+      if (indexes.length > 0) {
+        try {
+          await api.post("/cold-outbound/searches/" + sid + "/to-email", {
+            profile_indexes: indexes,
+            scenario_index: scenarioIndex,
+          });
+        } catch (_e) {}
+      }
+    }
+    setPending(false);
   };
 
   return (
-    <div className="space-y-1">
-      {unenriched.length > 0 && (
-        <button
-          onClick={handleEnrich}
-          disabled={!!pending}
-          className="w-full px-2 py-1 text-[10px] font-medium rounded bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50"
-        >
-          {pending === "enrich" ? "..." : "Enrichir (" + unenriched.length + ")"}
-        </button>
-      )}
+    <div className="relative">
       <button
-        onClick={handlePipeline}
-        disabled={!!pending || enrichedNotAdded.length === 0}
-        className="w-full px-2 py-1 text-[10px] font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+        onClick={function (e) { e.stopPropagation(); setEmailOpen(!emailOpen); }}
+        disabled={pending}
+        className="w-full px-2 py-1.5 text-[10px] font-medium rounded bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50"
       >
-        {pending === "pipeline" ? "..." : "Pipeline (" + enrichedNotAdded.length + ")"}
+        {pending ? "Envoi en cours..." : "Email (" + items.length + ") ▾"}
       </button>
-      <div className="relative">
-        <button
-          onClick={function (e) { e.stopPropagation(); setEmailOpen(!emailOpen); }}
-          disabled={!!pending || enrichedNotAdded.length === 0}
-          className="w-full px-2 py-1 text-[10px] font-medium rounded bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50"
-        >
-          {pending === "email" ? "..." : "Email (" + enrichedNotAdded.length + ") ▾"}
-        </button>
-        {emailOpen && (
-          <div className="absolute z-50 left-0 bottom-full mb-1 w-full bg-white rounded-lg shadow-xl border border-gray-200 py-1" onClick={function (e) { e.stopPropagation(); }}>
-            {scenarios.length > 0 ? scenarios.map(function (sc, i) {
-              return (
-                <button key={i} onClick={function () { handleEmail(i); }} className="w-full text-left px-2 py-1.5 text-[10px] hover:bg-purple-50">
-                  <span className="font-medium text-gray-900">{sc.name}</span>
-                </button>
-              );
-            }) : (
-              <div className="px-2 py-1.5 text-[10px] text-gray-400 italic">Aucun scenario</div>
-            )}
-            <div className="border-t border-gray-100 mt-0.5 pt-0.5">
-              <button onClick={function () { handleEmail(null); }} className="w-full text-left px-2 py-1.5 text-[10px] text-gray-500 hover:bg-gray-50">Sans scenario</button>
-            </div>
+      {emailOpen && (
+        <div className="absolute z-50 left-0 bottom-full mb-1 w-full bg-white rounded-lg shadow-xl border border-gray-200 py-1" onClick={function (e) { e.stopPropagation(); }}>
+          {scenarios.length > 0 ? scenarios.map(function (sc, i) {
+            return (
+              <button key={i} onClick={function () { handleEmail(i); }} className="w-full text-left px-2 py-1.5 text-[10px] hover:bg-purple-50">
+                <span className="font-medium text-gray-900">{sc.name}</span>
+              </button>
+            );
+          }) : (
+            <div className="px-2 py-1.5 text-[10px] text-gray-400 italic">Creez des scenarios dans Parametres</div>
+          )}
+          <div className="border-t border-gray-100 mt-0.5 pt-0.5">
+            <button onClick={function () { handleEmail(null); }} className="w-full text-left px-2 py-1.5 text-[10px] text-gray-500 hover:bg-gray-50">Sans scenario</button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
