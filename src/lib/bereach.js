@@ -290,17 +290,20 @@ async function searchPeople(params) {
     if (geoId) {
       searchBody.location = [geoId];
     } else {
-      resolutionWarnings.push("Localisation \"" + params.location + "\" non trouvee sur LinkedIn");
+      searchBody.keywords = (searchBody.keywords || "") + " " + params.location;
+      resolutionWarnings.push("Localisation \"" + params.location + "\" injectee dans les mots-cles");
     }
   }
 
-  // Resolve industry → numeric ID
+  // Resolve industry → numeric ID (LinkedIn only accepts English industry names)
+  // Fallback: inject into keywords if resolution fails (common for French terms)
   if (params.industry) {
     var industryId = await resolveLinkedInParam(params.industry, "INDUSTRY");
     if (industryId) {
       searchBody.industry = [industryId];
     } else {
-      resolutionWarnings.push("Secteur \"" + params.industry + "\" non trouve sur LinkedIn");
+      searchBody.keywords = (searchBody.keywords || "") + " " + params.industry;
+      resolutionWarnings.push("Secteur \"" + params.industry + "\" injecte dans les mots-cles (LinkedIn n accepte que l anglais pour les industries)");
     }
   }
 
