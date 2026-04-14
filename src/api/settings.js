@@ -18,6 +18,8 @@ const ALLOWED_CONFIG_KEYS = [
   "followup_delay_days",
   "email_delay_days",
   "whatsapp_delay_days",
+  "cold_templates",
+  "cold_scenarios",
 ];
 
 const VALID_ICP_CATEGORIES = [
