@@ -261,11 +261,51 @@ router.post("/searches/:id/enrich", async (req, res) => {
     var enriched = 0;
     var errors = [];
 
+    // Build enrichment cache from all past searches to avoid re-paying credits
+    var enrichCache = {};
+    var urlsToEnrich = profile_indexes
+      .filter(function (i) { return i >= 0 && i < results.length && !results[i].enriched && results[i].linkedin_url; })
+      .map(function (i) { return results[i].linkedin_url; });
+
+    if (urlsToEnrich.length > 0) {
+      var { data: pastSearches } = await supabase
+        .from("cold_searches")
+        .select("results")
+        .neq("id", req.params.id)
+        .order("created_at", { ascending: false })
+        .limit(20);
+
+      if (pastSearches) {
+        pastSearches.forEach(function (ps) {
+          (ps.results || []).forEach(function (pr) {
+            if (pr.enriched && pr.linkedin_url && !enrichCache[pr.linkedin_url]) {
+              enrichCache[pr.linkedin_url] = pr;
+            }
+          });
+        });
+      }
+    }
+
     for (var idx of profile_indexes) {
       if (idx < 0 || idx >= results.length) continue;
       var profile = results[idx];
-      if (profile.enriched) { enriched++; continue; } // Already enriched
+      if (profile.enriched) { enriched++; continue; } // Already enriched in this search
       if (!profile.linkedin_url) { errors.push(idx); continue; }
+
+      // Check cache first — reuse enrichment from a previous search (0 credits)
+      var cached = enrichCache[profile.linkedin_url];
+      if (cached) {
+        results[idx] = {
+          ...profile,
+          company: cached.company || profile.company,
+          enriched: true,
+          enrichment_data: cached.enrichment_data,
+          prise_score: cached.prise_score,
+          prise_reasoning: cached.prise_reasoning,
+        };
+        enriched++;
+        continue;
+      }
 
       try {
         // visitProfile with posts (1 credit)
@@ -389,7 +429,17 @@ router.post("/searches/:id/to-pipeline", async (req, res) => {
       if (profile.added_to_pipeline) continue; // Already added
       if (!profile.linkedin_url_canonical) { errors.push(idx); continue; }
 
-      // Auto-enrich if not yet enriched (1 credit)
+      // Auto-enrich if not yet enriched — check cache first (0 credits), then visitProfile (1 credit)
+      if (!profile.enriched && profile.linkedin_url) {
+        // Quick cache check in same search results
+        var cachedP = null;
+        results.forEach(function (rr) { if (rr.enriched && rr.linkedin_url === profile.linkedin_url) cachedP = rr; });
+        if (cachedP) {
+          profile = { ...profile, company: cachedP.company || profile.company, enriched: true,
+            enrichment_data: cachedP.enrichment_data, prise_score: cachedP.prise_score, prise_reasoning: cachedP.prise_reasoning };
+          results[idx] = profile;
+        }
+      }
       if (!profile.enriched && profile.linkedin_url) {
         try {
           var enrichData = await visitProfile(profile.linkedin_url, { includePosts: true });
