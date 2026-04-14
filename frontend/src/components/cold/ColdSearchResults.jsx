@@ -398,7 +398,19 @@ export default function ColdSearchResults({ search, onUpdate, bucketedIndexes, o
                                         <div className="border-t border-teal-100 bg-teal-50/30">
                                           <table className="min-w-full">
                                             <tbody className="divide-y divide-teal-100">
-                                              {sub.search.results.map((sr, sri) => (
+                                              {sub.search.results.map((sr, sri) => {
+                                                var updateSubResults = function (newResults) {
+                                                  setSubSearches(function (prev) {
+                                                    return {
+                                                      ...prev,
+                                                      [idx]: {
+                                                        ...(prev[idx] || {}),
+                                                        [c.name]: { ...sub, search: { ...sub.search, results: newResults } },
+                                                      },
+                                                    };
+                                                  });
+                                                };
+                                                return (
                                                 <tr key={sri} className="hover:bg-teal-50">
                                                   <td className="px-3 py-1.5 text-xs font-medium text-gray-900 w-36">
                                                     {sr.first_name} {sr.last_name}
@@ -407,33 +419,43 @@ export default function ColdSearchResults({ search, onUpdate, bucketedIndexes, o
                                                     )}
                                                   </td>
                                                   <td className="px-3 py-1.5 text-[11px] text-gray-600">{sr.headline || "--"}</td>
-                                                  <td className="px-3 py-1.5 text-center w-20" onClick={(e) => e.stopPropagation()}>
-                                                    {sr.added_to_pipeline ? (
-                                                      <span className="text-[10px] text-green-600">Ajoute</span>
-                                                    ) : (
-                                                      <button
-                                                        onClick={() => {
-                                                          api.post("/cold-outbound/searches/" + sub.search.id + "/to-pipeline", { profile_indexes: [sri] })
-                                                            .then((resp) => {
-                                                              if (resp.results) {
-                                                                setSubSearches((prev) => ({
-                                                                  ...prev,
-                                                                  [idx]: {
-                                                                    ...(prev[idx] || {}),
-                                                                    [c.name]: { ...sub, search: { ...sub.search, results: resp.results } },
-                                                                  },
-                                                                }));
-                                                              }
-                                                            }).catch(() => {});
-                                                        }}
-                                                        className="px-2 py-0.5 text-[10px] font-medium rounded bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
-                                                      >
-                                                        Pipeline
-                                                      </button>
-                                                    )}
+                                                  <td className="px-3 py-1.5 text-center">
+                                                    {sr.enriched ? priseBadge(sr.prise_score) : <span className="text-[10px] text-gray-300">--</span>}
+                                                  </td>
+                                                  <td className="px-3 py-1.5 text-center" onClick={(e) => e.stopPropagation()}>
+                                                    <div className="flex items-center justify-center gap-1">
+                                                      {!sr.enriched && (
+                                                        <button
+                                                          onClick={() => {
+                                                            api.post("/cold-outbound/searches/" + sub.search.id + "/enrich", { profile_indexes: [sri] })
+                                                              .then((resp) => { if (resp.results) updateSubResults(resp.results); })
+                                                              .catch(() => {});
+                                                          }}
+                                                          className="px-2 py-0.5 text-[10px] font-medium rounded bg-amber-50 text-amber-600 hover:bg-amber-100"
+                                                        >
+                                                          Enrichir
+                                                        </button>
+                                                      )}
+                                                      {sr.added_to_pipeline ? (
+                                                        <span className="text-[10px] text-green-600">Ajoute</span>
+                                                      ) : (
+                                                        <button
+                                                          onClick={() => {
+                                                            api.post("/cold-outbound/searches/" + sub.search.id + "/to-pipeline", { profile_indexes: [sri] })
+                                                              .then((resp) => { if (resp.results) updateSubResults(resp.results); })
+                                                              .catch(() => {});
+                                                          }}
+                                                          disabled={!sr.enriched}
+                                                          className="px-2 py-0.5 text-[10px] font-medium rounded bg-indigo-50 text-indigo-600 hover:bg-indigo-100 disabled:opacity-30"
+                                                        >
+                                                          Pipeline
+                                                        </button>
+                                                      )}
+                                                    </div>
                                                   </td>
                                                 </tr>
-                                              ))}
+                                                );
+                                              })}
                                             </tbody>
                                           </table>
                                         </div>
