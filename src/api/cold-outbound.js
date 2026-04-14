@@ -2,7 +2,7 @@ const crypto = require("crypto");
 const { Router } = require("express");
 const authMiddleware = require("./middleware");
 const { supabase } = require("../lib/supabase");
-const { searchPeople, visitProfile, sleep, checkLimits } = require("../lib/bereach");
+const { searchPeople, visitProfile, visitCompany, sleep, checkLimits } = require("../lib/bereach");
 const { canonicalizeLinkedInUrl } = require("../lib/url-utils");
 const { existsInHubspot } = require("../lib/hubspot");
 const { scorePrise } = require("../lib/cold-outbound-scoring");
@@ -300,6 +300,9 @@ router.post("/searches/:id/enrich", async (req, res) => {
             experience: enrichData.experience || null,
             headline: enrichData.headline || null,
             company_description: enrichData.companyDescription || enrichData.company_description || null,
+            company_url: (Array.isArray(enrichData.positions) && enrichData.positions.length > 0)
+              ? (enrichData.positions[0].companyUrl || enrichData.positions[0].company_url || null)
+              : null,
             posts: (enrichData.posts || enrichData.recentPosts || []).slice(0, 3).map(function (p) {
               return { text: (p.text || p.content || "").slice(0, 300), date: p.date || null };
             }),
@@ -644,5 +647,134 @@ async function generateColdEmailDraft(profile, email) {
     return null;
   }
 }
+
+// ────────────────────────────────────────────────────────────
+// POST /searches/:id/similar-companies -- Find similar companies from a profile's company
+// ────────────────────────────────────────────────────────────
+
+router.post("/searches/:id/similar-companies", async (req, res) => {
+  try {
+    var { profile_index } = req.body;
+    if (profile_index === undefined || profile_index === null) {
+      return res.status(400).json({ error: "profile_index required" });
+    }
+
+    var { data: search, error: fetchErr } = await supabase
+      .from("cold_searches")
+      .select("*")
+      .eq("id", req.params.id)
+      .single();
+
+    if (fetchErr || !search) {
+      return res.status(404).json({ error: "Search not found" });
+    }
+
+    var results = search.results || [];
+    if (profile_index < 0 || profile_index >= results.length) {
+      return res.status(400).json({ error: "Invalid profile_index" });
+    }
+
+    var profile = results[profile_index];
+
+    // Need enrichment data to get company URL
+    var companyUrl = null;
+    if (profile.enrichment_data && profile.enrichment_data.company_url) {
+      companyUrl = profile.enrichment_data.company_url;
+    }
+
+    // If no company URL from enrichment, try to build one from company name
+    if (!companyUrl && profile.company) {
+      // Try resolving the company to get its URL
+      var { resolveLinkedInParam } = require("../lib/bereach");
+      var companyId = await resolveLinkedInParam(profile.company, "COMPANY");
+      if (companyId) {
+        // We have the ID but need the URL — visitCompany needs a URL, not an ID
+        // Try common pattern: linkedin.com/company/<universalName>
+        // For now, search with the company name directly
+      }
+    }
+
+    // If still no URL, try visitProfile to get company info
+    if (!companyUrl && profile.linkedin_url) {
+      try {
+        var profileData = await visitProfile(profile.linkedin_url);
+        // Extract company URL from positions
+        if (Array.isArray(profileData.positions) && profileData.positions.length > 0) {
+          companyUrl = profileData.positions[0].companyUrl || profileData.positions[0].company_url || null;
+        }
+        // Also update enrichment data with company URL for future use
+        if (companyUrl) {
+          results[profile_index] = {
+            ...profile,
+            enrichment_data: {
+              ...(profile.enrichment_data || {}),
+              company_url: companyUrl,
+            },
+          };
+        }
+      } catch (_visitErr) {
+        // Ignore — will try other methods
+      }
+    }
+
+    if (!companyUrl) {
+      return res.status(422).json({ error: "Impossible de trouver l'URL de l'entreprise. Enrichissez d'abord le profil." });
+    }
+
+    // Visit the company page to get similar companies (1 credit)
+    var companyData;
+    try {
+      companyData = await visitCompany(companyUrl);
+    } catch (compErr) {
+      return res.status(502).json({ error: "Erreur BeReach visitCompany: " + compErr.message });
+    }
+
+    var similarCompanies = (companyData.similarCompanies || []).map(function (c) {
+      return {
+        id: c.id || null,
+        name: c.name || null,
+        url: c.url || null,
+        industry: c.industry || null,
+        followerCount: c.followerCount || 0,
+        logoUrl: c.logoUrl || null,
+      };
+    });
+
+    // Store similar companies in the profile's enrichment data
+    results[profile_index] = {
+      ...results[profile_index],
+      enrichment_data: {
+        ...(results[profile_index].enrichment_data || {}),
+        company_url: companyUrl,
+        company_industry: companyData.industry || null,
+        company_size: companyData.employeeCountRange || null,
+        company_headquarters: companyData.headquarter || null,
+        similar_companies: similarCompanies,
+      },
+    };
+
+    // Save updated results
+    await supabase
+      .from("cold_searches")
+      .update({ results: results })
+      .eq("id", req.params.id);
+
+    res.json({
+      ok: true,
+      company: {
+        name: companyData.name,
+        industry: companyData.industry,
+        employeeCountRange: companyData.employeeCountRange,
+        headquarter: companyData.headquarter,
+        url: companyUrl,
+      },
+      similar_companies: similarCompanies,
+      results: results,
+    });
+  } catch (err) {
+    console.error("Cold outbound POST /searches/:id/similar-companies error:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 module.exports = router;

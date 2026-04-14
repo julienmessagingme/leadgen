@@ -160,6 +160,10 @@ export default function ColdOutbound() {
                   search={displaySearch}
                   onUpdate={handleResultsUpdate}
                   bucketedIndexes={bucketedIndexes}
+                  onSearchCompany={function (companyName) {
+                    setPrefillFilters({ company: companyName, job_title: displaySearch.filters?.job_title || "" });
+                    formRef.current?.scrollIntoView({ behavior: "smooth" });
+                  }}
                 />
               </div>
 

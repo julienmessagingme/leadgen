@@ -71,3 +71,16 @@ export function useToEmailMutation(searchId) {
     },
   });
 }
+
+// ── Find similar companies from a profile's company ──
+
+export function useSimilarCompaniesMutation(searchId) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (profile_index) =>
+      api.post(`/cold-outbound/searches/${searchId}/similar-companies`, { profile_index }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cold-search", searchId] });
+    },
+  });
+}

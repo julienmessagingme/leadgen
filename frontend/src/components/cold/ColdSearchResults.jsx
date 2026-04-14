@@ -1,7 +1,7 @@
 import { useState, useCallback, Fragment } from "react";
 import DOMPurify from "dompurify";
 import { useDraggable } from "@dnd-kit/core";
-import { useEnrichMutation, useToPipelineMutation, useToEmailMutation } from "../../hooks/useColdOutbound";
+import { useEnrichMutation, useToPipelineMutation, useToEmailMutation, useSimilarCompaniesMutation } from "../../hooks/useColdOutbound";
 
 function DraggableRow({ idx, profile, children, className, onClick }) {
   var { attributes, listeners, setNodeRef, isDragging } = useDraggable({
@@ -35,7 +35,7 @@ function priseBadge(score) {
   );
 }
 
-export default function ColdSearchResults({ search, onUpdate, bucketedIndexes }) {
+export default function ColdSearchResults({ search, onUpdate, bucketedIndexes, onSearchCompany }) {
   const [selected, setSelected] = useState(new Set());
   const [expandedIdx, setExpandedIdx] = useState(null);
   const [actionPending, setActionPending] = useState({}); // { idx: "pipeline"|"email"|"enriching" }
@@ -46,6 +46,26 @@ export default function ColdSearchResults({ search, onUpdate, bucketedIndexes })
   const enrichMutation = useEnrichMutation(searchId);
   const pipelineMutation = useToPipelineMutation(searchId);
   const emailMutation = useToEmailMutation(searchId);
+  const similarMutation = useSimilarCompaniesMutation(searchId);
+
+  const handleEnrichOne = async (idx) => {
+    setActionPending((prev) => ({ ...prev, [idx]: "enriching" }));
+    try {
+      const resp = await enrichMutation.mutateAsync([idx]);
+      if (onUpdate && resp.results) onUpdate({ ...search, results: resp.results });
+    } catch (_err) {}
+    setActionPending((prev) => { const n = { ...prev }; delete n[idx]; return n; });
+  };
+
+  const handleSimilarCompanies = async (idx) => {
+    setActionPending((prev) => ({ ...prev, [idx]: "similar" }));
+    try {
+      const resp = await similarMutation.mutateAsync(idx);
+      if (onUpdate && resp.results) onUpdate({ ...search, results: resp.results });
+      setExpandedIdx(idx); // Auto-expand to show results
+    } catch (_err) {}
+    setActionPending((prev) => { const n = { ...prev }; delete n[idx]; return n; });
+  };
 
   const handleToggleSelect = useCallback((idx) => {
     setSelected((prev) => {
@@ -216,28 +236,47 @@ export default function ColdSearchResults({ search, onUpdate, bucketedIndexes })
                     </td>
                     <td className="px-3 py-3 text-center">{priseBadge(r.prise_score)}</td>
                     <td className="px-3 py-3 text-center" onClick={(e) => e.stopPropagation()}>
-                      {r.added_to_pipeline ? (
-                        <span className="text-xs text-green-600 font-medium">Ajoute</span>
-                      ) : (
-                        <div className="flex items-center justify-center gap-1">
+                      <div className="flex items-center justify-center gap-1 flex-wrap">
+                        {!r.enriched && (
                           <button
-                            onClick={() => handleToPipeline(idx)}
-                            disabled={!r.enriched || pending}
-                            className="px-2 py-1 text-xs font-medium rounded bg-indigo-50 text-indigo-600 hover:bg-indigo-100 disabled:opacity-30 disabled:cursor-not-allowed"
-                            title={!r.enriched ? "Enrichir d'abord" : "Ajouter au pipeline classique"}
+                            onClick={() => handleEnrichOne(idx)}
+                            disabled={pending}
+                            className="px-2 py-1 text-xs font-medium rounded bg-amber-50 text-amber-600 hover:bg-amber-100 disabled:opacity-50"
                           >
-                            {pending === "pipeline" ? "..." : "Pipeline"}
+                            {pending === "enriching" ? "..." : "Enrichir"}
                           </button>
+                        )}
+                        {r.added_to_pipeline ? (
+                          <span className="text-xs text-green-600 font-medium">Ajoute</span>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => handleToPipeline(idx)}
+                              disabled={!r.enriched || pending}
+                              className="px-2 py-1 text-xs font-medium rounded bg-indigo-50 text-indigo-600 hover:bg-indigo-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                            >
+                              {pending === "pipeline" ? "..." : "Pipeline"}
+                            </button>
+                            <button
+                              onClick={() => handleToEmail(idx)}
+                              disabled={!r.enriched || pending}
+                              className="px-2 py-1 text-xs font-medium rounded bg-purple-50 text-purple-600 hover:bg-purple-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                            >
+                              {pending === "email" ? "..." : "Email"}
+                            </button>
+                          </>
+                        )}
+                        {r.enriched && (
                           <button
-                            onClick={() => handleToEmail(idx)}
-                            disabled={!r.enriched || pending}
-                            className="px-2 py-1 text-xs font-medium rounded bg-purple-50 text-purple-600 hover:bg-purple-100 disabled:opacity-30 disabled:cursor-not-allowed"
-                            title={!r.enriched ? "Enrichir d'abord" : "Email direct (FullEnrich + Sonnet)"}
+                            onClick={() => handleSimilarCompanies(idx)}
+                            disabled={pending || (r.enrichment_data?.similar_companies?.length > 0)}
+                            className="px-2 py-1 text-xs font-medium rounded bg-teal-50 text-teal-600 hover:bg-teal-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                            title="Trouver des entreprises similaires"
                           >
-                            {pending === "email" ? "..." : "Email"}
+                            {pending === "similar" ? "..." : r.enrichment_data?.similar_companies?.length > 0 ? "Similaires ✓" : "Similaires"}
                           </button>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </td>
                   </DraggableRow>
 
@@ -282,6 +321,35 @@ export default function ColdSearchResults({ search, onUpdate, bucketedIndexes })
                               <span className="font-medium text-purple-700">Draft email:</span>
                               <p className="text-purple-900 font-medium mt-1">Objet: {r.email_draft.subject}</p>
                               <div className="text-purple-800 mt-1 text-xs" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(r.email_draft.body) }} />
+                            </div>
+                          )}
+                          {r.enrichment_data.similar_companies && r.enrichment_data.similar_companies.length > 0 && (
+                            <div className="md:col-span-2">
+                              <span className="font-medium text-teal-700">Entreprises similaires ({r.enrichment_data.similar_companies.length}):</span>
+                              <div className="mt-2 grid grid-cols-2 lg:grid-cols-3 gap-2">
+                                {r.enrichment_data.similar_companies.map((c, ci) => (
+                                  <button
+                                    key={ci}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (onSearchCompany) onSearchCompany(c.name);
+                                    }}
+                                    className="flex items-center gap-2 p-2 bg-white rounded-md border border-teal-100 hover:border-teal-300 hover:bg-teal-50 transition-colors text-left group"
+                                  >
+                                    {c.logoUrl && (
+                                      <img src={c.logoUrl} alt="" className="w-8 h-8 rounded flex-shrink-0" />
+                                    )}
+                                    <div className="min-w-0">
+                                      <div className="text-xs font-medium text-gray-900 truncate group-hover:text-teal-700">{c.name}</div>
+                                      <div className="text-[10px] text-gray-400 truncate">{c.industry || "--"}</div>
+                                      {c.followerCount > 0 && (
+                                        <div className="text-[10px] text-gray-400">{c.followerCount.toLocaleString()} followers</div>
+                                      )}
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                              <p className="text-[10px] text-gray-400 mt-1">Cliquez sur une entreprise pour lancer une recherche dessus</p>
                             </div>
                           )}
                         </div>
