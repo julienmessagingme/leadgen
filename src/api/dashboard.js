@@ -131,12 +131,14 @@ router.get("/charts", async (req, res) => {
 router.get("/cron", async (req, res) => {
   try {
     const taskDefs = [
-      { task: "task-a-signals", label: "A - Signaux" },
-      { task: "task-b-invitations", label: "B - Invitations" },
-      { task: "task-c-followup", label: "C - Follow-up" },
-      { task: "task-d-email", label: "D - Email" },
-      { task: "task-e-whatsapp", label: "E - WhatsApp" },
-      { task: "task-f-briefing", label: "F - Briefing" },
+      { task: "task-c-followup", label: "C - Connexions + Messages (07h20)" },
+      { task: "task-b-invitations", label: "B - Invitations LinkedIn (07h25)" },
+      { task: "task-a-signals", label: "A - Collecte signaux (07h30)" },
+      { task: "task-d-email", label: "D - Email J+7 (10h00)" },
+      { task: "task-f-email-followup", label: "F - Relance email J+14 (10h15)" },
+      { task: "task-e-whatsapp", label: "E - WhatsApp (10h30)" },
+      { task: "whatsapp-poll", label: "WhatsApp poll (toutes les 15min)" },
+      { task: "log-cleanup", label: "Purge logs (02h00)" },
     ];
 
     const { data: lastRuns, error } = await supabase.rpc("cron_last_runs");

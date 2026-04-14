@@ -27,7 +27,7 @@ export default function CronMonitor({ data }) {
       <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">
         Taches cron
       </h3>
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {data.tasks.map((t) => (
           <div key={t.task} className="flex flex-col items-center gap-1.5 p-3 rounded-lg bg-gray-50">
             <span className={`inline-block w-3 h-3 rounded-full ${STATUS[t.status] || STATUS.never}`} />
