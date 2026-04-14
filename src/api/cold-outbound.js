@@ -711,6 +711,41 @@ router.get("/scenarios", async (req, res) => {
 });
 
 // ────────────────────────────────────────────────────────────
+// POST /scenarios/suggest -- AI-generate scenario suggestions from target profile
+// ────────────────────────────────────────────────────────────
+
+router.post("/scenarios/suggest", async (req, res) => {
+  try {
+    var { target_profile } = req.body;
+    if (!target_profile || !target_profile.trim()) {
+      return res.status(400).json({ error: "target_profile required" });
+    }
+
+    var client = getAnthropicClient();
+    var resp = await client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 512,
+      system: "Tu es un expert en prospection B2B pour MessagingMe, une agence specialisee en automatisation conversationnelle WhatsApp/RCS/SMS pour grandes entreprises. Genere des suggestions realistes et percutantes pour un scenario de cold email. Reponds UNIQUEMENT en JSON valide.",
+      messages: [{
+        role: "user",
+        content: "Profil cible: " + target_profile.trim() + "\n\nGenere un JSON avec:\n- matching_keywords: mots-cles pertinents pour matcher ce profil (5-8 mots, separes par virgule)\n- pain_point: le probleme principal de ce type de profil que le conversationnel WhatsApp/RCS peut resoudre (2-3 phrases)\n- value_prop: la proposition de valeur MessagingMe pour ce profil (2-3 phrases, concret avec des chiffres si possible)\n- social_proof: une phrase de preuve sociale credible (on travaille deja avec des acteurs de ce secteur)\n\nJSON:",
+      }],
+    });
+
+    var raw = resp.content[0].text.trim();
+    raw = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+    var jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return res.json({ suggestions: null });
+
+    var parsed = JSON.parse(jsonMatch[0]);
+    res.json({ suggestions: parsed });
+  } catch (err) {
+    console.error("Scenario suggest error:", err.message);
+    res.json({ suggestions: null });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
 // Helper: Generate cold email draft via Sonnet
 // ────────────────────────────────────────────────────────────
 

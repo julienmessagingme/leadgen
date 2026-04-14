@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useConfig, useUpdateConfig } from "../../hooks/useSettings";
+import { api } from "../../api/client";
 
 var EMPTY_SCENARIO = {
   name: "",
@@ -16,6 +17,7 @@ export default function ColdTemplatesTab() {
 
   var [scenarios, setScenarios] = useState([]);
   var [saved, setSaved] = useState(false);
+  var [suggesting, setSuggesting] = useState({}); // { idx: true }
 
   var configs = data?.settings ?? [];
 
@@ -60,6 +62,33 @@ export default function ColdTemplatesTab() {
     } catch (_e) {}
   };
 
+  var handleSuggest = async function (idx) {
+    var sc = scenarios[idx];
+    if (!sc || !sc.target_profile || !sc.target_profile.trim()) return;
+    // Don't overwrite if user already filled fields
+    if (sc.pain_point && sc.value_prop) return;
+    setSuggesting(function (prev) { return { ...prev, [idx]: true }; });
+    try {
+      var resp = await api.post("/cold-outbound/scenarios/suggest", { target_profile: sc.target_profile });
+      if (resp.suggestions) {
+        var s = resp.suggestions;
+        setScenarios(function (prev) {
+          return prev.map(function (existing, i) {
+            if (i !== idx) return existing;
+            return {
+              ...existing,
+              matching_keywords: existing.matching_keywords || s.matching_keywords || "",
+              pain_point: existing.pain_point || s.pain_point || "",
+              value_prop: existing.value_prop || s.value_prop || "",
+              social_proof: existing.social_proof || s.social_proof || "",
+            };
+          });
+        });
+      }
+    } catch (_e) {}
+    setSuggesting(function (prev) { var n = { ...prev }; delete n[idx]; return n; });
+  };
+
   if (isLoading) {
     return <div className="h-48 bg-gray-200 rounded animate-pulse" />;
   }
@@ -95,11 +124,15 @@ export default function ColdTemplatesTab() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Profil cible</label>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">
+                    Profil cible
+                    {suggesting[idx] && <span className="ml-2 text-indigo-500 animate-pulse">IA en cours...</span>}
+                  </label>
                   <input
                     type="text"
                     value={sc.target_profile}
                     onChange={function (e) { updateField(idx, "target_profile", e.target.value); }}
+                    onBlur={function () { handleSuggest(idx); }}
                     placeholder="ex: Directeur d'agence de courtage en assurance"
                     className="w-full rounded border-gray-300 text-sm px-2 py-1.5"
                   />
