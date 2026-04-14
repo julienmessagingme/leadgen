@@ -279,7 +279,7 @@ router.post("/searches/:id/enrich", async (req, res) => {
           company: enrichData.company || profile.company,
           location: enrichData.location || profile.location,
           summary: enrichData.summary || enrichData.about || null,
-          recent_posts: enrichData.posts || enrichData.recentPosts || [],
+          recent_posts: enrichData.lastPosts || enrichData.posts || enrichData.recentPosts || [],
           connections_count: enrichData.connectionsCount || enrichData.connections_count || null,
         };
 
@@ -303,7 +303,7 @@ router.post("/searches/:id/enrich", async (req, res) => {
             company_url: (Array.isArray(enrichData.positions) && enrichData.positions.length > 0)
               ? (enrichData.positions[0].companyUrl || enrichData.positions[0].company_url || null)
               : null,
-            posts: (enrichData.posts || enrichData.recentPosts || []).slice(0, 3).map(function (p) {
+            posts: (enrichData.lastPosts || enrichData.posts || enrichData.recentPosts || []).slice(0, 3).map(function (p) {
               return { text: (p.text || p.content || "").slice(0, 300), date: p.date || null };
             }),
             connections_count: enrichData.connectionsCount || enrichData.connections_count || null,
