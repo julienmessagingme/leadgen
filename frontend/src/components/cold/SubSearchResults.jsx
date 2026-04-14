@@ -1,8 +1,28 @@
 import { useState } from "react";
 import DOMPurify from "dompurify";
+import { useDraggable } from "@dnd-kit/core";
 import { api } from "../../api/client";
 
 var MAX_DEPTH = 3;
+
+function DraggableSubProfile({ searchId, idx, profile, children, className, onClick }) {
+  var { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: "sub-" + searchId + "-" + idx,
+    data: { index: idx, profile: profile, searchId: searchId },
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      className={className}
+      style={{ opacity: isDragging ? 0.35 : 1, cursor: "grab" }}
+      onClick={onClick}
+    >
+      {children}
+    </div>
+  );
+}
 
 function priseBadge(score) {
   if (score === null || score === undefined) return <span className="text-[10px] text-gray-300">--</span>;
@@ -96,8 +116,11 @@ export default function SubSearchResults({ searchData, depth, jobTitle }) {
         var pending = actionPending[sri];
         return (
           <div key={sri} className={"border-b " + borderColor}>
-            {/* Profile row */}
-            <div
+            {/* Profile row — draggable to buckets */}
+            <DraggableSubProfile
+              searchId={searchId}
+              idx={sri}
+              profile={sr}
               className="flex items-center gap-2 px-3 py-2 hover:bg-white/50 cursor-pointer"
               onClick={function () { setExpandedIdx(isExpanded ? null : sri); }}
             >
@@ -141,7 +164,7 @@ export default function SubSearchResults({ searchData, depth, jobTitle }) {
                   </button>
                 )}
               </div>
-            </div>
+            </DraggableSubProfile>
 
             {/* Expanded detail */}
             {isExpanded && sr.enriched && sr.enrichment_data && (

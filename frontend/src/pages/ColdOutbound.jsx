@@ -77,17 +77,19 @@ export default function ColdOutbound() {
     }
   }, [activeSearch]);
 
-  var handleDropIntoBucket = useCallback(function (profileIndex, targetBucketId) {
-    if (!displaySearch || !displaySearch.results) return;
-    var profile = displaySearch.results[profileIndex];
-    if (!profile) return;
-    var item = { ...profile, _sourceSearchId: displaySearch.id, _sourceIndex: profileIndex };
+  var handleDropIntoBucket = useCallback(function (dragData, targetBucketId) {
+    // dragData comes from useDraggable data: { index, profile, searchId }
+    var profile = dragData.profile;
+    if (!profile || !profile.linkedin_url) return;
+    var item = {
+      ...profile,
+      _sourceSearchId: dragData.searchId || (displaySearch && displaySearch.id) || null,
+      _sourceIndex: dragData.index,
+    };
 
     setBuckets(function (prev) {
       return prev.map(function (b) {
-        // Remove this profile from any bucket (by linkedin_url)
         var filtered = b.items.filter(function (it) { return it.linkedin_url !== profile.linkedin_url; });
-        // Add to target
         if (b.id === targetBucketId) {
           filtered.push(item);
         }
@@ -123,9 +125,9 @@ export default function ColdOutbound() {
     setActiveDrag(null);
     if (!event.over) return;
     var targetId = event.over.id;
-    var profileIndex = event.active.data.current?.index;
-    if (profileIndex !== undefined && typeof targetId === "string" && targetId.startsWith("bucket-")) {
-      handleDropIntoBucket(profileIndex, targetId);
+    var dragData = event.active.data.current;
+    if (dragData && typeof targetId === "string" && targetId.startsWith("bucket-")) {
+      handleDropIntoBucket(dragData, targetId);
     }
   };
 

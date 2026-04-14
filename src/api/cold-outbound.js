@@ -517,8 +517,8 @@ router.post("/searches/:id/to-pipeline", async (req, res) => {
           signal_type: "cold_search",
           signal_category: "cold_outbound",
           signal_date: new Date().toISOString(),
-          icp_score: profile.prise_score || 0,
-          tier: (profile.prise_score || 0) >= 60 ? "warm" : "cold",
+          icp_score: Math.max(profile.prise_score || 0, 55),
+          tier: "warm",
           metadata: {
             search_id: search.id,
             source_origin: "bereach_search",
@@ -633,8 +633,8 @@ router.post("/searches/:id/to-email", async (req, res) => {
           signal_type: "cold_search",
           signal_category: "cold_outbound",
           signal_date: new Date().toISOString(),
-          icp_score: profile.prise_score || 0,
-          tier: (profile.prise_score || 0) >= 60 ? "warm" : "cold",
+          icp_score: Math.max(profile.prise_score || 0, 55),
+          tier: "warm",
           metadata: {
             search_id: search.id,
             source_origin: "bereach_search",
