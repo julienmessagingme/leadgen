@@ -239,15 +239,15 @@ export default function ColdSearchResults({ search, onUpdate, bucketedIndexes, o
                           <>
                             <button
                               onClick={() => handleToPipeline(idx)}
-                              disabled={!r.enriched || pending}
-                              className="px-2 py-1 text-xs font-medium rounded bg-indigo-50 text-indigo-600 hover:bg-indigo-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                              disabled={!!pending}
+                              className="px-2 py-1 text-xs font-medium rounded bg-indigo-50 text-indigo-600 hover:bg-indigo-100 disabled:opacity-50"
                             >
                               {pending === "pipeline" ? "..." : "Pipeline"}
                             </button>
                             <button
                               onClick={() => handleToEmail(idx)}
-                              disabled={!r.enriched || pending}
-                              className="px-2 py-1 text-xs font-medium rounded bg-purple-50 text-purple-600 hover:bg-purple-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                              disabled={!!pending}
+                              className="px-2 py-1 text-xs font-medium rounded bg-purple-50 text-purple-600 hover:bg-purple-100 disabled:opacity-50"
                             >
                               {pending === "email" ? "..." : "Email"}
                             </button>
@@ -397,8 +397,7 @@ export default function ColdSearchResults({ search, onUpdate, bucketedIndexes, o
                                                               .then((resp) => { if (resp.results) updateSubResults(resp.results); })
                                                               .catch(() => {});
                                                           }}
-                                                          disabled={!sr.enriched}
-                                                          className="px-2 py-0.5 text-[10px] font-medium rounded bg-indigo-50 text-indigo-600 hover:bg-indigo-100 disabled:opacity-30"
+                                                          className="px-2 py-0.5 text-[10px] font-medium rounded bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
                                                         >
                                                           Pipeline
                                                         </button>

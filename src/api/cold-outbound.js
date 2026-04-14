@@ -389,6 +389,48 @@ router.post("/searches/:id/to-pipeline", async (req, res) => {
       if (profile.added_to_pipeline) continue; // Already added
       if (!profile.linkedin_url_canonical) { errors.push(idx); continue; }
 
+      // Auto-enrich if not yet enriched (1 credit)
+      if (!profile.enriched && profile.linkedin_url) {
+        try {
+          var enrichData = await visitProfile(profile.linkedin_url, { includePosts: true });
+          var enrichedCompany = enrichData.company || enrichData.companyName || "";
+          if (!enrichedCompany && Array.isArray(enrichData.experience) && enrichData.experience.length > 0) {
+            enrichedCompany = enrichData.experience[0].companyName || "";
+          }
+          var priseResult = await scorePrise({
+            first_name: profile.first_name,
+            last_name: profile.last_name,
+            headline: enrichData.headline || profile.headline,
+            company: enrichedCompany || profile.company,
+            location: enrichData.location || profile.location,
+            summary: enrichData.summary || enrichData.about || null,
+            recent_posts: enrichData.lastPosts || enrichData.posts || [],
+            connections_count: enrichData.connectionsCount || null,
+          });
+          profile = {
+            ...profile,
+            company: enrichedCompany || profile.company,
+            enriched: true,
+            enrichment_data: {
+              summary: enrichData.summary || enrichData.about || null,
+              headline: enrichData.headline || null,
+              company_description: enrichData.companyDescription || null,
+              company_url: (Array.isArray(enrichData.positions) && enrichData.positions.length > 0)
+                ? (enrichData.positions[0].companyUrl || null) : null,
+              posts: (enrichData.lastPosts || enrichData.posts || []).slice(0, 3).map(function (p) {
+                return { text: (p.text || "").slice(0, 300), date: p.date || null };
+              }),
+            },
+            prise_score: priseResult.score,
+            prise_reasoning: priseResult.reasoning,
+          };
+          results[idx] = profile;
+        } catch (enrichErr) {
+          console.error("Auto-enrich before pipeline failed for idx " + idx + ":", enrichErr.message);
+          // Continue anyway — insert with what we have
+        }
+      }
+
       try {
         var leadRow = {
           linkedin_url: profile.linkedin_url,
