@@ -93,12 +93,6 @@ export default function ColdOutbound() {
     }
   }, [activeSearch]);
 
-  var handleBucketResultsUpdate = useCallback(function (updatedResults) {
-    if (activeSearch) {
-      setActiveSearch(function (prev) { return { ...prev, results: updatedResults }; });
-    }
-  }, [activeSearch]);
-
   var handleDropIntoBucket = useCallback(function (dragData, targetBucketId) {
     // dragData comes from useDraggable data: { index, profile, searchId }
     var profile = dragData.profile;

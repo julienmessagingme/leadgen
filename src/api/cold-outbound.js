@@ -751,7 +751,7 @@ router.post("/scenarios/suggest", async (req, res) => {
 
 async function loadColdScenarios() {
   try {
-    var { data } = await supabase.from("config").select("value").eq("key", "cold_scenarios").single();
+    var { data } = await supabase.from("global_settings").select("value").eq("key", "cold_scenarios").single();
     if (data && data.value) return JSON.parse(data.value);
   } catch (_e) {}
   return [];
