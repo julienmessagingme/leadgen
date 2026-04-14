@@ -1,6 +1,7 @@
 import { useState, useCallback, Fragment } from "react";
 import DOMPurify from "dompurify";
 import { useDraggable } from "@dnd-kit/core";
+import { api } from "../../api/client";
 import { useEnrichMutation, useToPipelineMutation, useToEmailMutation, useSimilarCompaniesMutation } from "../../hooks/useColdOutbound";
 
 function DraggableRow({ idx, profile, children, className, onClick }) {
@@ -39,6 +40,7 @@ export default function ColdSearchResults({ search, onUpdate, bucketedIndexes, o
   const [selected, setSelected] = useState(new Set());
   const [expandedIdx, setExpandedIdx] = useState(null);
   const [actionPending, setActionPending] = useState({}); // { idx: "pipeline"|"email"|"enriching" }
+  const [subSearches, setSubSearches] = useState({}); // { [parentIdx]: { [companyName]: { loading, search, error } } }
 
   const searchId = search?.id;
   const results = search?.results || [];
@@ -55,6 +57,39 @@ export default function ColdSearchResults({ search, onUpdate, bucketedIndexes, o
       if (onUpdate && resp.results) onUpdate({ ...search, results: resp.results });
     } catch (_err) {}
     setActionPending((prev) => { const n = { ...prev }; delete n[idx]; return n; });
+  };
+
+  const handleSubSearch = async (parentIdx, companyName) => {
+    setSubSearches((prev) => ({
+      ...prev,
+      [parentIdx]: {
+        ...(prev[parentIdx] || {}),
+        [companyName]: { loading: true, search: null, error: null },
+      },
+    }));
+    try {
+      var jobTitle = search.filters?.job_title || "";
+      var result = await api.post("/cold-outbound/search", {
+        company: companyName,
+        job_title: jobTitle,
+        max_leads: 10,
+      });
+      setSubSearches((prev) => ({
+        ...prev,
+        [parentIdx]: {
+          ...(prev[parentIdx] || {}),
+          [companyName]: { loading: false, search: result, error: null },
+        },
+      }));
+    } catch (err) {
+      setSubSearches((prev) => ({
+        ...prev,
+        [parentIdx]: {
+          ...(prev[parentIdx] || {}),
+          [companyName]: { loading: false, search: null, error: err.message },
+        },
+      }));
+    }
   };
 
   const handleSimilarCompanies = async (idx) => {
@@ -326,30 +361,90 @@ export default function ColdSearchResults({ search, onUpdate, bucketedIndexes, o
                           {r.enrichment_data.similar_companies && r.enrichment_data.similar_companies.length > 0 && (
                             <div className="md:col-span-2">
                               <span className="font-medium text-teal-700">Entreprises similaires ({r.enrichment_data.similar_companies.length}):</span>
-                              <div className="mt-2 grid grid-cols-2 lg:grid-cols-3 gap-2">
-                                {r.enrichment_data.similar_companies.map((c, ci) => (
-                                  <button
-                                    key={ci}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (onSearchCompany) onSearchCompany(c.name);
-                                    }}
-                                    className="flex items-center gap-2 p-2 bg-white rounded-md border border-teal-100 hover:border-teal-300 hover:bg-teal-50 transition-colors text-left group"
-                                  >
-                                    {c.logoUrl && (
-                                      <img src={c.logoUrl} alt="" className="w-8 h-8 rounded flex-shrink-0" />
-                                    )}
-                                    <div className="min-w-0">
-                                      <div className="text-xs font-medium text-gray-900 truncate group-hover:text-teal-700">{c.name}</div>
-                                      <div className="text-[10px] text-gray-400 truncate">{c.industry || "--"}</div>
-                                      {c.followerCount > 0 && (
-                                        <div className="text-[10px] text-gray-400">{c.followerCount.toLocaleString()} followers</div>
+                              <div className="mt-2 space-y-2">
+                                {r.enrichment_data.similar_companies.map((c, ci) => {
+                                  var sub = subSearches[idx] && subSearches[idx][c.name];
+                                  return (
+                                    <div key={ci} className="border border-teal-100 rounded-lg overflow-hidden">
+                                      {/* Company header */}
+                                      <div className="flex items-center gap-2 p-2 bg-white">
+                                        {c.logoUrl && (
+                                          <img src={c.logoUrl} alt="" className="w-7 h-7 rounded flex-shrink-0" />
+                                        )}
+                                        <div className="min-w-0 flex-1">
+                                          <div className="text-xs font-medium text-gray-900">{c.name}</div>
+                                          <div className="text-[10px] text-gray-400">{c.industry || "--"}{c.followerCount > 0 ? " · " + c.followerCount.toLocaleString() + " followers" : ""}</div>
+                                        </div>
+                                        {!sub || (!sub.loading && !sub.search) ? (
+                                          <button
+                                            onClick={(e) => { e.stopPropagation(); handleSubSearch(idx, c.name); }}
+                                            disabled={sub && sub.loading}
+                                            className="px-2.5 py-1 text-[10px] font-medium rounded bg-teal-500 text-white hover:bg-teal-600 disabled:opacity-50 flex-shrink-0"
+                                          >
+                                            {sub && sub.loading ? "..." : "Rechercher"}
+                                          </button>
+                                        ) : sub && sub.search ? (
+                                          <span className="text-[10px] text-teal-600 font-medium flex-shrink-0">{(sub.search.results || []).length} resultats</span>
+                                        ) : null}
+                                      </div>
+
+                                      {/* Sub-search error */}
+                                      {sub && sub.error && (
+                                        <div className="px-2 py-1 bg-red-50 text-xs text-red-600">{sub.error}</div>
+                                      )}
+
+                                      {/* Sub-search results */}
+                                      {sub && sub.search && sub.search.results && sub.search.results.length > 0 && (
+                                        <div className="border-t border-teal-100 bg-teal-50/30">
+                                          <table className="min-w-full">
+                                            <tbody className="divide-y divide-teal-100">
+                                              {sub.search.results.map((sr, sri) => (
+                                                <tr key={sri} className="hover:bg-teal-50">
+                                                  <td className="px-3 py-1.5 text-xs font-medium text-gray-900 w-36">
+                                                    {sr.first_name} {sr.last_name}
+                                                    {sr.linkedin_url && (
+                                                      <a href={sr.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline ml-1 text-[10px]">LinkedIn</a>
+                                                    )}
+                                                  </td>
+                                                  <td className="px-3 py-1.5 text-[11px] text-gray-600">{sr.headline || "--"}</td>
+                                                  <td className="px-3 py-1.5 text-center w-20" onClick={(e) => e.stopPropagation()}>
+                                                    {sr.added_to_pipeline ? (
+                                                      <span className="text-[10px] text-green-600">Ajoute</span>
+                                                    ) : (
+                                                      <button
+                                                        onClick={() => {
+                                                          api.post("/cold-outbound/searches/" + sub.search.id + "/to-pipeline", { profile_indexes: [sri] })
+                                                            .then((resp) => {
+                                                              if (resp.results) {
+                                                                setSubSearches((prev) => ({
+                                                                  ...prev,
+                                                                  [idx]: {
+                                                                    ...(prev[idx] || {}),
+                                                                    [c.name]: { ...sub, search: { ...sub.search, results: resp.results } },
+                                                                  },
+                                                                }));
+                                                              }
+                                                            }).catch(() => {});
+                                                        }}
+                                                        className="px-2 py-0.5 text-[10px] font-medium rounded bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
+                                                      >
+                                                        Pipeline
+                                                      </button>
+                                                    )}
+                                                  </td>
+                                                </tr>
+                                              ))}
+                                            </tbody>
+                                          </table>
+                                        </div>
+                                      )}
+                                      {sub && sub.search && (sub.search.results || []).length === 0 && (
+                                        <div className="px-2 py-1.5 bg-gray-50 text-xs text-gray-400 italic">Aucun resultat pour cette entreprise</div>
                                       )}
                                     </div>
-                                  </button>
-                                ))}
+                                  );
+                                })}
                               </div>
-                              <p className="text-[10px] text-gray-400 mt-1">Cliquez sur une entreprise pour lancer une recherche dessus</p>
                             </div>
                           )}
                         </div>
