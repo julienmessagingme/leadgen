@@ -1,4 +1,4 @@
-import { useState, useCallback, Fragment } from "react";
+import { useState, Fragment } from "react";
 import DOMPurify from "dompurify";
 import { useDraggable } from "@dnd-kit/core";
 import { api } from "../../api/client";
@@ -37,7 +37,6 @@ function priseBadge(score) {
 }
 
 export default function ColdSearchResults({ search, onUpdate, bucketedIndexes, onSearchCompany }) {
-  const [selected, setSelected] = useState(new Set());
   const [expandedIdx, setExpandedIdx] = useState(null);
   const [actionPending, setActionPending] = useState({}); // { idx: "pipeline"|"email"|"enriching" }
   const [subSearches, setSubSearches] = useState({}); // { [parentIdx]: { [companyName]: { loading, search, error } } }
@@ -102,30 +101,6 @@ export default function ColdSearchResults({ search, onUpdate, bucketedIndexes, o
     setActionPending((prev) => { const n = { ...prev }; delete n[idx]; return n; });
   };
 
-  const handleToggleSelect = useCallback((idx) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(idx)) next.delete(idx);
-      else next.add(idx);
-      return next;
-    });
-  }, []);
-
-  const handleToggleAll = useCallback(() => {
-    setSelected((prev) =>
-      prev.size === results.length ? new Set() : new Set(results.map((_, i) => i))
-    );
-  }, [results]);
-
-  const handleEnrichSelected = async () => {
-    const indexes = [...selected].filter((i) => !results[i]?.enriched);
-    if (indexes.length === 0) return;
-    try {
-      const resp = await enrichMutation.mutateAsync(indexes);
-      if (onUpdate && resp.results) onUpdate({ ...search, results: resp.results });
-    } catch (_err) {}
-  };
-
   const handleToPipeline = async (idx) => {
     setActionPending((prev) => ({ ...prev, [idx]: "pipeline" }));
     try {
@@ -144,16 +119,6 @@ export default function ColdSearchResults({ search, onUpdate, bucketedIndexes, o
     setActionPending((prev) => { const n = { ...prev }; delete n[idx]; return n; });
   };
 
-  const handleBulkToPipeline = async () => {
-    const indexes = [...selected].filter((i) => results[i]?.enriched && !results[i]?.added_to_pipeline);
-    if (indexes.length === 0) return;
-    try {
-      const resp = await pipelineMutation.mutateAsync(indexes);
-      if (onUpdate && resp.results) onUpdate({ ...search, results: resp.results });
-      setSelected(new Set());
-    } catch (_err) {}
-  };
-
   if (results.length === 0) {
     return (
       <div className="bg-white rounded-lg shadow p-8 text-center text-gray-400">
@@ -161,10 +126,6 @@ export default function ColdSearchResults({ search, onUpdate, bucketedIndexes, o
       </div>
     );
   }
-
-  const selectedCount = selected.size;
-  const selectedUnenriched = [...selected].filter((i) => !results[i]?.enriched).length;
-  const selectedEnrichedNotAdded = [...selected].filter((i) => results[i]?.enriched && !results[i]?.added_to_pipeline).length;
 
   return (
     <div>
@@ -182,14 +143,7 @@ export default function ColdSearchResults({ search, onUpdate, bucketedIndexes, o
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-3 py-3 w-10">
-                <input
-                  type="checkbox"
-                  checked={results.length > 0 && selected.size === results.length}
-                  onChange={handleToggleAll}
-                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                />
-              </th>
+              <th className="px-3 py-3 w-8"></th>
               <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nom</th>
               <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Titre</th>
               <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Entreprise</th>
@@ -208,18 +162,16 @@ export default function ColdSearchResults({ search, onUpdate, bucketedIndexes, o
                   <DraggableRow
                     idx={idx}
                     profile={r}
-                    className={`${r.added_to_pipeline ? "bg-green-50/40" : ""} ${
-                      selected.has(idx) ? "bg-indigo-50/30" : ""
-                    } ${bucketedIndexes && bucketedIndexes.has(idx) ? "bg-teal-50/40" : ""} hover:bg-gray-50`}
+                    className={`${r.added_to_pipeline ? "bg-green-50/40" : ""} ${bucketedIndexes && bucketedIndexes.has(idx) ? "bg-teal-50/40" : ""} hover:bg-gray-50 cursor-pointer`}
                     onClick={() => setExpandedIdx(isExpanded ? null : idx)}
                   >
-                    <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
-                      <input
-                        type="checkbox"
-                        checked={selected.has(idx)}
-                        onChange={() => handleToggleSelect(idx)}
-                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                      />
+                    <td className="px-3 py-3 w-8 text-center">
+                      <svg
+                        className={`w-4 h-4 text-gray-400 transition-transform inline-block ${isExpanded ? "rotate-90" : ""}`}
+                        fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
                     </td>
                     <td className="px-3 py-3">
                       <div className="text-sm font-medium text-gray-900">
@@ -480,43 +432,6 @@ export default function ColdSearchResults({ search, onUpdate, bucketedIndexes, o
         </table>
       </div>
 
-      {/* Bulk action bar */}
-      {selectedCount > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg px-6 py-3 flex items-center justify-between z-50">
-          <span className="text-sm text-gray-700 font-medium">
-            {selectedCount} profil(s) selectionne(s)
-          </span>
-          <div className="flex items-center gap-3">
-            {selectedUnenriched > 0 && (
-              <button
-                onClick={handleEnrichSelected}
-                disabled={enrichMutation.isPending}
-                className="px-4 py-2 text-sm font-medium rounded-md bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 flex items-center gap-2"
-              >
-                {enrichMutation.isPending && (
-                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                )}
-                Enrichir ({selectedUnenriched})
-              </button>
-            )}
-            {selectedEnrichedNotAdded > 0 && (
-              <button
-                onClick={handleBulkToPipeline}
-                disabled={pipelineMutation.isPending}
-                className="px-4 py-2 text-sm font-medium rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
-              >
-                Pipeline ({selectedEnrichedNotAdded})
-              </button>
-            )}
-            <button
-              onClick={() => setSelected(new Set())}
-              className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700"
-            >
-              Deselectionner
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
