@@ -64,11 +64,21 @@ export function useToPipelineMutation(searchId) {
 export function useToEmailMutation(searchId) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (profile_indexes) =>
-      api.post(`/cold-outbound/searches/${searchId}/to-email`, { profile_indexes }),
+    mutationFn: ({ profile_indexes, scenario_index }) =>
+      api.post(`/cold-outbound/searches/${searchId}/to-email`, { profile_indexes, scenario_index }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["cold-search", searchId] });
     },
+  });
+}
+
+// ── Load cold email scenarios ──
+
+export function useColdScenarios() {
+  return useQuery({
+    queryKey: ["cold-scenarios"],
+    queryFn: () => api.get("/cold-outbound/scenarios"),
+    staleTime: 60000,
   });
 }
 

@@ -2,6 +2,30 @@ import { useState } from "react";
 import DOMPurify from "dompurify";
 import { useDraggable } from "@dnd-kit/core";
 import { api } from "../../api/client";
+import { useColdScenarios } from "../../hooks/useColdOutbound";
+
+function EmailDropdownSub({ onSelect, disabled }) {
+  var [open, setOpen] = useState(false);
+  var { data } = useColdScenarios();
+  var scenarios = data?.scenarios || [];
+  return (
+    <div className="relative inline-block">
+      <button onClick={function (e) { e.stopPropagation(); setOpen(!open); }} disabled={disabled} className="px-2 py-0.5 text-[10px] font-medium rounded bg-purple-50 text-purple-600 hover:bg-purple-100 disabled:opacity-50">
+        Email ▾
+      </button>
+      {open && (
+        <div className="absolute z-50 right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1" onClick={function (e) { e.stopPropagation(); }}>
+          {scenarios.map(function (sc, i) {
+            return <button key={i} onClick={function () { setOpen(false); onSelect(i); }} className="w-full text-left px-3 py-1.5 text-[10px] hover:bg-purple-50"><span className="font-medium text-gray-900">{sc.name}</span></button>;
+          })}
+          <div className="border-t border-gray-100 mt-0.5 pt-0.5">
+            <button onClick={function () { setOpen(false); onSelect(null); }} className="w-full text-left px-3 py-1.5 text-[10px] text-gray-500 hover:bg-gray-50">Sans scenario</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 var MAX_DEPTH = 3;
 
@@ -72,10 +96,10 @@ export default function SubSearchResults({ searchData, depth, jobTitle }) {
     setActionPending(function (prev) { var n = { ...prev }; delete n[idx]; return n; });
   };
 
-  var handleEmail = async function (idx) {
+  var handleEmail = async function (idx, scenarioIndex) {
     setActionPending(function (prev) { return { ...prev, [idx]: "email" }; });
     try {
-      var resp = await api.post("/cold-outbound/searches/" + searchId + "/to-email", { profile_indexes: [idx] });
+      var resp = await api.post("/cold-outbound/searches/" + searchId + "/to-email", { profile_indexes: [idx], scenario_index: scenarioIndex });
       if (resp.results) updateResults(resp.results);
     } catch (_e) {}
     setActionPending(function (prev) { var n = { ...prev }; delete n[idx]; return n; });
@@ -163,9 +187,11 @@ export default function SubSearchResults({ searchData, depth, jobTitle }) {
                     <button onClick={function () { handlePipeline(sri); }} disabled={!!pending} className="px-2 py-0.5 text-[10px] font-medium rounded bg-indigo-50 text-indigo-600 hover:bg-indigo-100 disabled:opacity-50">
                       {pending === "pipeline" ? "..." : "Pipeline"}
                     </button>
-                    <button onClick={function () { handleEmail(sri); }} disabled={!!pending} className="px-2 py-0.5 text-[10px] font-medium rounded bg-purple-50 text-purple-600 hover:bg-purple-100 disabled:opacity-50">
-                      {pending === "email" ? "..." : "Email"}
-                    </button>
+                    {pending === "email" ? (
+                      <span className="px-2 py-0.5 text-[10px] text-purple-500">...</span>
+                    ) : (
+                      <EmailDropdownSub disabled={!!pending} onSelect={function (scIdx) { handleEmail(sri, scIdx); }} />
+                    )}
                   </>
                 )}
                 {sr.enriched && depth < MAX_DEPTH && (

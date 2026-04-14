@@ -2,8 +2,54 @@ import { useState, Fragment } from "react";
 import DOMPurify from "dompurify";
 import { useDraggable } from "@dnd-kit/core";
 import { api } from "../../api/client";
-import { useEnrichMutation, useToPipelineMutation, useToEmailMutation, useSimilarCompaniesMutation } from "../../hooks/useColdOutbound";
+import { useEnrichMutation, useToPipelineMutation, useToEmailMutation, useSimilarCompaniesMutation, useColdScenarios } from "../../hooks/useColdOutbound";
 import SubSearchResults from "./SubSearchResults";
+
+function EmailDropdown({ onSelect, disabled }) {
+  var [open, setOpen] = useState(false);
+  var { data } = useColdScenarios();
+  var scenarios = data?.scenarios || [];
+
+  return (
+    <div className="relative inline-block">
+      <button
+        onClick={function (e) { e.stopPropagation(); setOpen(!open); }}
+        disabled={disabled}
+        className="px-2 py-1 text-xs font-medium rounded bg-purple-50 text-purple-600 hover:bg-purple-100 disabled:opacity-50"
+      >
+        Email ▾
+      </button>
+      {open && (
+        <div className="absolute z-50 right-0 top-full mt-1 w-56 bg-white rounded-lg shadow-xl border border-gray-200 py-1" onClick={function (e) { e.stopPropagation(); }}>
+          {scenarios.length > 0 ? (
+            scenarios.map(function (sc, i) {
+              return (
+                <button
+                  key={i}
+                  onClick={function () { setOpen(false); onSelect(i); }}
+                  className="w-full text-left px-3 py-2 text-xs hover:bg-purple-50 transition-colors"
+                >
+                  <div className="font-medium text-gray-900">{sc.name}</div>
+                  {sc.target_profile && <div className="text-gray-400 text-[10px]">{sc.target_profile}</div>}
+                </button>
+              );
+            })
+          ) : (
+            <div className="px-3 py-2 text-xs text-gray-400 italic">Aucun scenario. Creez-en dans Parametres.</div>
+          )}
+          <div className="border-t border-gray-100 mt-1 pt-1">
+            <button
+              onClick={function () { setOpen(false); onSelect(null); }}
+              className="w-full text-left px-3 py-2 text-xs text-gray-500 hover:bg-gray-50"
+            >
+              Sans scenario (generique)
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function DraggableRow({ idx, profile, children, className, onClick }) {
   var { attributes, listeners, setNodeRef, isDragging } = useDraggable({
@@ -111,10 +157,10 @@ export default function ColdSearchResults({ search, onUpdate, bucketedIndexes, o
     setActionPending((prev) => { const n = { ...prev }; delete n[idx]; return n; });
   };
 
-  const handleToEmail = async (idx) => {
+  const handleToEmail = async (idx, scenarioIndex) => {
     setActionPending((prev) => ({ ...prev, [idx]: "email" }));
     try {
-      const resp = await emailMutation.mutateAsync([idx]);
+      const resp = await emailMutation.mutateAsync({ profile_indexes: [idx], scenario_index: scenarioIndex });
       if (onUpdate && resp.results) onUpdate({ ...search, results: resp.results });
     } catch (_err) {}
     setActionPending((prev) => { const n = { ...prev }; delete n[idx]; return n; });
@@ -264,13 +310,14 @@ export default function ColdSearchResults({ search, onUpdate, bucketedIndexes, o
                             >
                               {pending === "pipeline" ? "..." : "Pipeline"}
                             </button>
-                            <button
-                              onClick={() => handleToEmail(idx)}
-                              disabled={!!pending}
-                              className="px-2 py-1 text-xs font-medium rounded bg-purple-50 text-purple-600 hover:bg-purple-100 disabled:opacity-50"
-                            >
-                              {pending === "email" ? "..." : "Email"}
-                            </button>
+                            {pending === "email" ? (
+                              <span className="px-2 py-1 text-xs text-purple-500">...</span>
+                            ) : (
+                              <EmailDropdown
+                                disabled={!!pending}
+                                onSelect={function (scenarioIdx) { handleToEmail(idx, scenarioIdx); }}
+                              />
+                            )}
                           </>
                         )}
                         {r.enriched && (

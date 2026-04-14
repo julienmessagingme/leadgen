@@ -578,9 +578,16 @@ router.post("/searches/:id/to-pipeline", async (req, res) => {
 
 router.post("/searches/:id/to-email", async (req, res) => {
   try {
-    var { profile_indexes } = req.body;
+    var { profile_indexes, scenario_index } = req.body;
     if (!Array.isArray(profile_indexes) || profile_indexes.length === 0) {
       return res.status(400).json({ error: "profile_indexes required" });
+    }
+
+    // Load specific scenario if provided
+    var forcedScenario = null;
+    if (scenario_index !== undefined && scenario_index !== null) {
+      var allScenarios = await loadColdScenarios();
+      if (allScenarios[scenario_index]) forcedScenario = allScenarios[scenario_index];
     }
 
     var { data: search, error: fetchErr } = await supabase
@@ -616,7 +623,7 @@ router.post("/searches/:id/to-email", async (req, res) => {
         var email = enrichResult.email;
 
         // Step 2: Generate email draft with Sonnet
-        var draft = await generateColdEmailDraft(profile, email);
+        var draft = await generateColdEmailDraft(profile, email, forcedScenario);
 
         // Step 3: Insert lead with email_pending status
         var leadRow = {
@@ -691,6 +698,19 @@ router.post("/searches/:id/to-email", async (req, res) => {
 });
 
 // ────────────────────────────────────────────────────────────
+// GET /scenarios -- List cold email scenarios for dropdown
+// ────────────────────────────────────────────────────────────
+
+router.get("/scenarios", async (req, res) => {
+  try {
+    var scenarios = await loadColdScenarios();
+    res.json({ scenarios: scenarios });
+  } catch (err) {
+    res.json({ scenarios: [] });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
 // Helper: Generate cold email draft via Sonnet
 // ────────────────────────────────────────────────────────────
 
@@ -717,14 +737,17 @@ function matchScenario(scenarios, profile) {
   return best;
 }
 
-async function generateColdEmailDraft(profile, email) {
+async function generateColdEmailDraft(profile, email, forcedScenario) {
   try {
     var client = getAnthropicClient();
     var calendlyUrl = process.env.CALENDLY_URL || "https://calendly.com/julien-messagingme/30min";
 
-    // Load cold scenarios and find best match
-    var scenarios = await loadColdScenarios();
-    var scenario = matchScenario(scenarios, profile);
+    // Use forced scenario if provided, otherwise auto-match
+    var scenario = forcedScenario || null;
+    if (!scenario) {
+      var scenarios = await loadColdScenarios();
+      scenario = matchScenario(scenarios, profile);
+    }
 
     var contextLines = [
       "Prospect: " + (profile.first_name || "") + " " + (profile.last_name || ""),
