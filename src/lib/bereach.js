@@ -308,14 +308,32 @@ async function searchPeople(params) {
   }
 
   // Resolve industry → numeric ID (LinkedIn only accepts English industry names)
-  // Fallback: inject into keywords if resolution fails (common for French terms)
+  // If French term fails, translate to English and retry
   if (params.industry) {
     var industryId = await resolveLinkedInParam(params.industry, "INDUSTRY");
+    if (!industryId) {
+      // Try translating to English
+      try {
+        var { getAnthropicClient } = require("./anthropic");
+        var transResp = await getAnthropicClient().messages.create({
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 50,
+          messages: [{ role: "user", content: "Translate this French industry/sector to English for LinkedIn search (just the English term, nothing else): " + params.industry }],
+        });
+        var englishTerm = transResp.content[0].text.trim().replace(/['"]/g, "");
+        if (englishTerm && englishTerm !== params.industry) {
+          industryId = await resolveLinkedInParam(englishTerm, "INDUSTRY");
+          if (industryId) {
+            resolutionWarnings.push("Secteur \"" + params.industry + "\" traduit en \"" + englishTerm + "\"");
+          }
+        }
+      } catch (_transErr) {}
+    }
     if (industryId) {
       searchBody.industry = [industryId];
     } else {
       searchBody.keywords = (searchBody.keywords || "") + " " + params.industry;
-      resolutionWarnings.push("Secteur \"" + params.industry + "\" injecte dans les mots-cles (LinkedIn n accepte que l anglais pour les industries)");
+      resolutionWarnings.push("Secteur \"" + params.industry + "\" injecte dans les mots-cles");
     }
   }
 
