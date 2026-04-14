@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo, useEffect, useCallback } from "react";
-import { DndContext, DragOverlay, PointerSensor, KeyboardSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { DndContext, DragOverlay, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
 import NavBar from "../components/shared/NavBar";
 import ColdSearchForm from "../components/cold/ColdSearchForm";
 import ColdSearchResults from "../components/cold/ColdSearchResults";
@@ -159,6 +159,7 @@ export default function ColdOutbound() {
         {displaySearch && (
           <DndContext
             sensors={sensors}
+            collisionDetection={closestCenter}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
             onDragCancel={handleDragCancel}
@@ -178,7 +179,7 @@ export default function ColdOutbound() {
               </div>
 
               {/* Bucket columns */}
-              <div className="w-[540px] flex-shrink-0">
+              <div className="w-[580px] flex-shrink-0">
                 <div className="sticky top-4">
                   <ColdBuckets
                     buckets={buckets}

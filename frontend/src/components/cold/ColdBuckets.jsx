@@ -31,8 +31,8 @@ function BucketColumn({ bucket, onRename, onRemove }) {
   return (
     <div
       ref={setNodeRef}
-      className={`flex flex-col w-44 rounded-lg border-2 transition-colors ${
-        isOver ? "border-indigo-400 bg-indigo-50/50" : "border-gray-200 bg-gray-50"
+      className={`flex flex-col w-48 rounded-lg border-2 transition-all duration-150 ${
+        isOver ? "border-indigo-400 bg-indigo-50/50 scale-[1.02] shadow-lg" : "border-gray-200 bg-gray-50"
       }`}
     >
       {/* Header */}
@@ -59,7 +59,7 @@ function BucketColumn({ bucket, onRename, onRemove }) {
       </div>
 
       {/* Cards area */}
-      <div className="flex-1 overflow-y-auto p-1.5 space-y-1.5 min-h-[120px] max-h-[calc(100vh-22rem)]">
+      <div className="flex-1 overflow-y-auto p-1.5 space-y-1.5 min-h-[200px] max-h-[calc(100vh-22rem)]">
         {items.length === 0 ? (
           <div className="h-full flex items-center justify-center border-2 border-dashed border-gray-300 rounded-md p-3">
             <span className="text-xs text-gray-400 text-center">Glisser des profils ici</span>
