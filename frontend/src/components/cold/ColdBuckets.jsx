@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useDroppable } from "@dnd-kit/core";
-import { useEnrichMutation, useToPipelineMutation, useToEmailMutation } from "../../hooks/useColdOutbound";
+import { api } from "../../api/client";
+import { useColdScenarios } from "../../hooks/useColdOutbound";
 
 function BucketColumn({ bucket, onRename, onRemove }) {
   var [isEditing, setIsEditing] = useState(false);
@@ -111,47 +112,57 @@ function BucketColumn({ bucket, onRename, onRemove }) {
   );
 }
 
-function BucketActions({ items, searchGroups, unenriched, enrichedNotAdded }) {
-  // For mutations, we need to call per-search group since each mutation is scoped to a searchId
-  // Use the first search group for simplicity (most common case: all items from same search)
+function BucketActions({ searchGroups, unenriched, enrichedNotAdded }) {
+  var [pending, setPending] = useState(null); // "enrich" | "pipeline" | "email"
+  var [emailOpen, setEmailOpen] = useState(false);
+  var { data: scenarioData } = useColdScenarios();
+  var scenarios = scenarioData?.scenarios || [];
   var searchIds = Object.keys(searchGroups);
-  var primarySearchId = searchIds[0] || null;
 
-  var enrichMutation = useEnrichMutation(primarySearchId);
-  var pipelineMutation = useToPipelineMutation(primarySearchId);
-  var emailMutation = useToEmailMutation(primarySearchId);
+  // Close dropdown on outside click
+  useEffect(function () {
+    if (!emailOpen) return;
+    var handler = function () { setEmailOpen(false); };
+    document.addEventListener("click", handler);
+    return function () { document.removeEventListener("click", handler); };
+  }, [emailOpen]);
 
-  var handleEnrich = async function () {
+  var callPerSearch = async function (endpoint, bodyFn) {
     for (var sid of searchIds) {
-      var indexes = searchGroups[sid]
-        .filter(function (p) { return !p.enriched; })
-        .map(function (p) { return p._sourceIndex; });
-      if (indexes.length > 0) {
-        try { await enrichMutation.mutateAsync(indexes); } catch (_e) {}
+      var items = searchGroups[sid];
+      var body = bodyFn(items);
+      if (body) {
+        try { await api.post("/cold-outbound/searches/" + sid + "/" + endpoint, body); } catch (_e) {}
       }
     }
+  };
+
+  var handleEnrich = async function () {
+    setPending("enrich");
+    await callPerSearch("enrich", function (items) {
+      var indexes = items.filter(function (p) { return !p.enriched; }).map(function (p) { return p._sourceIndex; });
+      return indexes.length > 0 ? { profile_indexes: indexes } : null;
+    });
+    setPending(null);
   };
 
   var handlePipeline = async function () {
-    for (var sid of searchIds) {
-      var indexes = searchGroups[sid]
-        .filter(function (p) { return p.enriched && !p.added_to_pipeline; })
-        .map(function (p) { return p._sourceIndex; });
-      if (indexes.length > 0) {
-        try { await pipelineMutation.mutateAsync(indexes); } catch (_e) {}
-      }
-    }
+    setPending("pipeline");
+    await callPerSearch("to-pipeline", function (items) {
+      var indexes = items.filter(function (p) { return !p.added_to_pipeline; }).map(function (p) { return p._sourceIndex; });
+      return indexes.length > 0 ? { profile_indexes: indexes } : null;
+    });
+    setPending(null);
   };
 
-  var handleEmail = async function () {
-    for (var sid of searchIds) {
-      var indexes = searchGroups[sid]
-        .filter(function (p) { return p.enriched && !p.added_to_pipeline; })
-        .map(function (p) { return p._sourceIndex; });
-      if (indexes.length > 0) {
-        try { await emailMutation.mutateAsync(indexes); } catch (_e) {}
-      }
-    }
+  var handleEmail = async function (scenarioIndex) {
+    setEmailOpen(false);
+    setPending("email");
+    await callPerSearch("to-email", function (items) {
+      var indexes = items.filter(function (p) { return !p.added_to_pipeline; }).map(function (p) { return p._sourceIndex; });
+      return indexes.length > 0 ? { profile_indexes: indexes, scenario_index: scenarioIndex } : null;
+    });
+    setPending(null);
   };
 
   return (
@@ -159,30 +170,44 @@ function BucketActions({ items, searchGroups, unenriched, enrichedNotAdded }) {
       {unenriched.length > 0 && (
         <button
           onClick={handleEnrich}
-          disabled={enrichMutation.isPending}
+          disabled={!!pending}
           className="w-full px-2 py-1 text-[10px] font-medium rounded bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50"
         >
-          {enrichMutation.isPending ? "..." : "Enrichir (" + unenriched.length + ")"}
+          {pending === "enrich" ? "..." : "Enrichir (" + unenriched.length + ")"}
         </button>
       )}
-      {enrichedNotAdded.length > 0 && (
-        <>
-          <button
-            onClick={handlePipeline}
-            disabled={pipelineMutation.isPending}
-            className="w-full px-2 py-1 text-[10px] font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
-          >
-            {pipelineMutation.isPending ? "..." : "Pipeline (" + enrichedNotAdded.length + ")"}
-          </button>
-          <button
-            onClick={handleEmail}
-            disabled={emailMutation.isPending}
-            className="w-full px-2 py-1 text-[10px] font-medium rounded bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50"
-          >
-            {emailMutation.isPending ? "..." : "Email (" + enrichedNotAdded.length + ")"}
-          </button>
-        </>
-      )}
+      <button
+        onClick={handlePipeline}
+        disabled={!!pending || enrichedNotAdded.length === 0}
+        className="w-full px-2 py-1 text-[10px] font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+      >
+        {pending === "pipeline" ? "..." : "Pipeline (" + enrichedNotAdded.length + ")"}
+      </button>
+      <div className="relative">
+        <button
+          onClick={function (e) { e.stopPropagation(); setEmailOpen(!emailOpen); }}
+          disabled={!!pending || enrichedNotAdded.length === 0}
+          className="w-full px-2 py-1 text-[10px] font-medium rounded bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50"
+        >
+          {pending === "email" ? "..." : "Email (" + enrichedNotAdded.length + ") ▾"}
+        </button>
+        {emailOpen && (
+          <div className="absolute z-50 left-0 bottom-full mb-1 w-full bg-white rounded-lg shadow-xl border border-gray-200 py-1" onClick={function (e) { e.stopPropagation(); }}>
+            {scenarios.length > 0 ? scenarios.map(function (sc, i) {
+              return (
+                <button key={i} onClick={function () { handleEmail(i); }} className="w-full text-left px-2 py-1.5 text-[10px] hover:bg-purple-50">
+                  <span className="font-medium text-gray-900">{sc.name}</span>
+                </button>
+              );
+            }) : (
+              <div className="px-2 py-1.5 text-[10px] text-gray-400 italic">Aucun scenario</div>
+            )}
+            <div className="border-t border-gray-100 mt-0.5 pt-0.5">
+              <button onClick={function () { handleEmail(null); }} className="w-full text-left px-2 py-1.5 text-[10px] text-gray-500 hover:bg-gray-50">Sans scenario</button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

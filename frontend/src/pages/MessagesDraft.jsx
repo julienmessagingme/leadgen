@@ -5,6 +5,7 @@ import EngagementBadges from "../components/shared/EngagementBadges";
 import { useLeads } from "../hooks/useLeads";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
+import DOMPurify from "dompurify";
 
 function useApproveMessage() {
   const qc = useQueryClient();
@@ -710,7 +711,7 @@ export default function MessagesDraft() {
                     ) : (
                       <div
                         className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-800 bg-white prose prose-sm max-w-none"
-                        dangerouslySetInnerHTML={{ __html: body }}
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(body) }}
                       />
                     )}
                   </div>
@@ -868,7 +869,7 @@ export default function MessagesDraft() {
                     ) : (
                       <div
                         className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-800 bg-white prose prose-sm max-w-none"
-                        dangerouslySetInnerHTML={{ __html: body }}
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(body) }}
                       />
                     )}
                   </div>

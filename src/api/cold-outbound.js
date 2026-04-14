@@ -919,10 +919,15 @@ router.post("/searches/:id/similar-companies", async (req, res) => {
       },
     };
 
-    // Save updated results
+    // Re-fetch to avoid race condition, merge our changes
+    var { data: freshSim } = await supabase
+      .from("cold_searches").select("results").eq("id", req.params.id).single();
+    var freshSimResults = (freshSim && freshSim.results) || results;
+    freshSimResults[profile_index] = results[profile_index];
+
     await supabase
       .from("cold_searches")
-      .update({ results: results })
+      .update({ results: freshSimResults })
       .eq("id", req.params.id);
 
     res.json({
@@ -935,7 +940,7 @@ router.post("/searches/:id/similar-companies", async (req, res) => {
         url: companyUrl,
       },
       similar_companies: similarCompanies,
-      results: results,
+      results: freshSimResults,
     });
   } catch (err) {
     console.error("Cold outbound POST /searches/:id/similar-companies error:", err.message);

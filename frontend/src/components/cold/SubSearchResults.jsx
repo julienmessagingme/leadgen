@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import DOMPurify from "dompurify";
 import { useDraggable } from "@dnd-kit/core";
 import { api } from "../../api/client";
@@ -8,6 +8,12 @@ function EmailDropdownSub({ onSelect, disabled }) {
   var [open, setOpen] = useState(false);
   var { data } = useColdScenarios();
   var scenarios = data?.scenarios || [];
+  useEffect(function () {
+    if (!open) return;
+    var handler = function () { setOpen(false); };
+    document.addEventListener("click", handler);
+    return function () { document.removeEventListener("click", handler); };
+  }, [open]);
   return (
     <div className="relative inline-block">
       <button onClick={function (e) { e.stopPropagation(); setOpen(!open); }} disabled={disabled} className="px-2 py-0.5 text-[10px] font-medium rounded bg-purple-50 text-purple-600 hover:bg-purple-100 disabled:opacity-50">

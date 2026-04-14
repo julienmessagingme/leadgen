@@ -29,16 +29,16 @@ export default function ColdOutbound() {
   var [activeDrag, setActiveDrag] = useState(null);
   var formRef = useRef(null);
 
-  // Persist state to sessionStorage
-  var setActiveSearch = function (val) {
-    setActiveSearchRaw(val);
-    try { sessionStorage.setItem("cold_activeSearch", JSON.stringify(typeof val === "function" ? val(activeSearch) : val)); } catch (_e) {}
-  };
-  var setViewSearchId = function (val) {
-    setViewSearchIdRaw(val);
-    try { sessionStorage.setItem("cold_viewSearchId", JSON.stringify(val)); } catch (_e) {}
-  };
-  // Persist buckets on every change
+  // Persist all state to sessionStorage via useEffect
+  var setActiveSearch = function (val) { setActiveSearchRaw(val); };
+  var setViewSearchId = function (val) { setViewSearchIdRaw(val); };
+
+  useEffect(function () {
+    try { sessionStorage.setItem("cold_activeSearch", JSON.stringify(activeSearch)); } catch (_e) {}
+  }, [activeSearch]);
+  useEffect(function () {
+    try { sessionStorage.setItem("cold_viewSearchId", JSON.stringify(viewSearchId)); } catch (_e) {}
+  }, [viewSearchId]);
   useEffect(function () {
     try { sessionStorage.setItem("cold_buckets", JSON.stringify(buckets)); } catch (_e) {}
   }, [buckets]);

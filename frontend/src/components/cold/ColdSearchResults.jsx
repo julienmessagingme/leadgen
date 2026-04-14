@@ -1,4 +1,4 @@
-import { useState, Fragment } from "react";
+import { useState, useEffect, Fragment } from "react";
 import DOMPurify from "dompurify";
 import { useDraggable } from "@dnd-kit/core";
 import { api } from "../../api/client";
@@ -9,6 +9,13 @@ function EmailDropdown({ onSelect, disabled }) {
   var [open, setOpen] = useState(false);
   var { data } = useColdScenarios();
   var scenarios = data?.scenarios || [];
+
+  useEffect(function () {
+    if (!open) return;
+    var handler = function () { setOpen(false); };
+    document.addEventListener("click", handler);
+    return function () { document.removeEventListener("click", handler); };
+  }, [open]);
 
   return (
     <div className="relative inline-block">
