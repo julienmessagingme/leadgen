@@ -166,6 +166,18 @@ async function visitCompany(companyUrl) {
 }
 
 /**
+ * Search LinkedIn companies by keywords.
+ * @param {string} keywords - Company name or keywords
+ * @param {number} [count] - Max results (default 10)
+ * @returns {Promise<object>} { items: [{ name, profileUrl, summary, ... }] }
+ */
+async function searchCompanies(keywords, count) {
+  var body = { keywords: keywords };
+  if (count) body.count = count;
+  return bereach("/search/linkedin/companies", body);
+}
+
+/**
  * Check current BeReach API usage limits.
  */
 async function checkLimits() {
@@ -342,5 +354,6 @@ module.exports = {
   getConnections,
   withdrawInvitation,
   searchPeople,
+  searchCompanies,
   resolveLinkedInParam,
 };

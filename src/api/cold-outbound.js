@@ -2,7 +2,7 @@ const crypto = require("crypto");
 const { Router } = require("express");
 const authMiddleware = require("./middleware");
 const { supabase } = require("../lib/supabase");
-const { searchPeople, visitProfile, visitCompany, sleep, checkLimits } = require("../lib/bereach");
+const { searchPeople, searchCompanies, visitProfile, visitCompany, sleep, checkLimits } = require("../lib/bereach");
 const { canonicalizeLinkedInUrl } = require("../lib/url-utils");
 const { existsInHubspot } = require("../lib/hubspot");
 const { scorePrise } = require("../lib/cold-outbound-scoring");
@@ -676,49 +676,37 @@ router.post("/searches/:id/similar-companies", async (req, res) => {
 
     var profile = results[profile_index];
 
-    // Need enrichment data to get company URL
+    // Find company URL from multiple sources
     var companyUrl = null;
+
+    // 1. From enrichment data
     if (profile.enrichment_data && profile.enrichment_data.company_url) {
       companyUrl = profile.enrichment_data.company_url;
     }
 
-    // If no company URL from enrichment, try to build one from company name
+    // 2. Search companies by name to get the profileUrl
     if (!companyUrl && profile.company) {
-      // Try resolving the company to get its URL
-      var { resolveLinkedInParam } = require("../lib/bereach");
-      var companyId = await resolveLinkedInParam(profile.company, "COMPANY");
-      if (companyId) {
-        // We have the ID but need the URL — visitCompany needs a URL, not an ID
-        // Try common pattern: linkedin.com/company/<universalName>
-        // For now, search with the company name directly
-      }
+      try {
+        var companySearchResult = await searchCompanies(profile.company, 1);
+        var companyItems = companySearchResult.items || [];
+        if (companyItems.length > 0) {
+          companyUrl = companyItems[0].profileUrl || null;
+        }
+      } catch (_e) {}
     }
 
-    // If still no URL, try visitProfile to get company info
+    // 3. Last resort: re-visit the profile to extract positions[0].companyUrl
     if (!companyUrl && profile.linkedin_url) {
       try {
         var profileData = await visitProfile(profile.linkedin_url);
-        // Extract company URL from positions
         if (Array.isArray(profileData.positions) && profileData.positions.length > 0) {
-          companyUrl = profileData.positions[0].companyUrl || profileData.positions[0].company_url || null;
+          companyUrl = profileData.positions[0].companyUrl || null;
         }
-        // Also update enrichment data with company URL for future use
-        if (companyUrl) {
-          results[profile_index] = {
-            ...profile,
-            enrichment_data: {
-              ...(profile.enrichment_data || {}),
-              company_url: companyUrl,
-            },
-          };
-        }
-      } catch (_visitErr) {
-        // Ignore — will try other methods
-      }
+      } catch (_visitErr) {}
     }
 
     if (!companyUrl) {
-      return res.status(422).json({ error: "Impossible de trouver l'URL de l'entreprise. Enrichissez d'abord le profil." });
+      return res.status(422).json({ error: "Impossible de trouver l'URL de l'entreprise pour " + (profile.company || "ce profil") });
     }
 
     // Visit the company page to get similar companies (1 credit)
