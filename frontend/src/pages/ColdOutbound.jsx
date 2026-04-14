@@ -56,7 +56,7 @@ export default function ColdOutbound() {
   };
 
   var handleRelaunch = function (filters) {
-    setPrefillFilters({ ...filters });
+    setPrefillFilters({ ...filters, _ts: Date.now() });
     formRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 

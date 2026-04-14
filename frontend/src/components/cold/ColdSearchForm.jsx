@@ -21,15 +21,35 @@ export default function ColdSearchForm({ prefill, onSearchComplete }) {
 
   const searchMutation = useColdSearchMutation();
 
-  // Pre-fill from Relancer
+  // Pre-fill from Relancer — auto-submit if _ts is present (means "Relancer" was clicked)
   useEffect(() => {
     if (prefill) {
-      setCompany(prefill.company || "");
-      setJobTitle(prefill.job_title || "");
-      setSector(prefill.sector || "");
-      setCompanySize(prefill.company_size || "");
-      setGeography(prefill.geography || "");
-      setMaxLeads(prefill.max_leads || 25);
+      var co = prefill.company || "";
+      var jt = prefill.job_title || "";
+      var se = prefill.sector || "";
+      var cs = prefill.company_size || "";
+      var ge = prefill.geography || "";
+      var ml = prefill.max_leads || 25;
+      setCompany(co);
+      setJobTitle(jt);
+      setSector(se);
+      setCompanySize(cs);
+      setGeography(ge);
+      setMaxLeads(ml);
+
+      // Auto-launch if triggered by Relancer button
+      if (prefill._ts && jt) {
+        searchMutation.mutateAsync({
+          company: co.trim() || undefined,
+          job_title: jt.trim(),
+          sector: se.trim() || undefined,
+          company_size: cs || undefined,
+          geography: ge.trim() || undefined,
+          max_leads: parseInt(ml, 10),
+        }).then(function (result) {
+          if (onSearchComplete) onSearchComplete(result);
+        }).catch(function () {});
+      }
     }
   }, [prefill]);
 
