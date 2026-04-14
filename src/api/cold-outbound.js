@@ -694,10 +694,37 @@ router.post("/searches/:id/to-email", async (req, res) => {
 // Helper: Generate cold email draft via Sonnet
 // ────────────────────────────────────────────────────────────
 
+async function loadColdScenarios() {
+  try {
+    var { data } = await supabase.from("config").select("value").eq("key", "cold_scenarios").single();
+    if (data && data.value) return JSON.parse(data.value);
+  } catch (_e) {}
+  return [];
+}
+
+function matchScenario(scenarios, profile) {
+  if (!scenarios || scenarios.length === 0) return null;
+  var profileText = ((profile.headline || "") + " " + (profile.company || "") + " " + (profile.enrichment_data?.company_description || "")).toLowerCase();
+  var best = null;
+  var bestScore = 0;
+  scenarios.forEach(function (sc) {
+    if (!sc.matching_keywords) return;
+    var keywords = sc.matching_keywords.toLowerCase().split(",").map(function (k) { return k.trim(); }).filter(Boolean);
+    var score = 0;
+    keywords.forEach(function (kw) { if (profileText.includes(kw)) score++; });
+    if (score > bestScore) { bestScore = score; best = sc; }
+  });
+  return best;
+}
+
 async function generateColdEmailDraft(profile, email) {
   try {
     var client = getAnthropicClient();
     var calendlyUrl = process.env.CALENDLY_URL || "https://calendly.com/julien-messagingme/30min";
+
+    // Load cold scenarios and find best match
+    var scenarios = await loadColdScenarios();
+    var scenario = matchScenario(scenarios, profile);
 
     var contextLines = [
       "Prospect: " + (profile.first_name || "") + " " + (profile.last_name || ""),
@@ -719,10 +746,24 @@ async function generateColdEmailDraft(profile, email) {
       }
     }
 
+    // Build scenario instructions if matched
+    var scenarioInstructions = "";
+    if (scenario) {
+      scenarioInstructions = "\n\nSCENARIO A SUIVRE (instructions macro):" +
+        "\nProfil cible: " + (scenario.target_profile || "") +
+        "\nPain point a adresser: " + (scenario.pain_point || "") +
+        "\nProposition de valeur: " + (scenario.value_prop || "") +
+        "\nPreuve sociale: " + (scenario.social_proof || "") +
+        "\nUtilise ces macro-instructions pour structurer le mail. Adapte avec le nom, l'entreprise et le contexte enrichi du prospect. Ne copie pas mot pour mot — reformule naturellement.";
+    }
+
     var systemPrompt = "Tu es Julien Dumas, expert en strategie conversationnelle et messaging (WhatsApp, RCS, SMS). Tu diriges MessagingMe (messagingme.fr)." +
       " Tu ecris un PREMIER email de prospection a froid a un prospect que tu ne connais pas." +
       " TON : Direct, naturel, pair a pair. Pas corporate, pas commercial. Vouvoiement." +
-      " STRUCTURE : Objet court et intrigant (pas vendeur). Corps : 3-5 phrases. Pose une question directe sur un enjeu concret lie a leur poste/secteur." +
+      " STRUCTURE : Objet court et intrigant (pas vendeur). Corps : 3-5 phrases." +
+      (scenario
+        ? " Suis le SCENARIO fourni pour structurer le mail (pain point → valeur → preuve sociale → question)."
+        : " Pose une question directe sur un enjeu concret lie a leur poste/secteur.") +
       " ZERO FLATTERIE : JAMAIS de 'm a marque', 'votre vision', 'votre approche', 'impressionnant', 'passionnant', 'inspirant', 'j ai beaucoup aime', 'avec interet'. Tu ne commentes pas, tu ne complimentes pas. Tu enchaines direct sur le sujet avec une question." +
       " INTERDICTIONS : 'je me permets', 'n hesitez pas', 'serait-il possible', 'MessagingMe', 'je tombe sur votre profil', 'j ai vu que', 'Chez MessagingMe'." +
       " JAMAIS de signature dans le body (elle est ajoutee automatiquement)." +
@@ -732,7 +773,7 @@ async function generateColdEmailDraft(profile, email) {
       model: "claude-sonnet-4-20250514",
       max_tokens: 1024,
       system: systemPrompt,
-      messages: [{ role: "user", content: contextLines.join("\n") }],
+      messages: [{ role: "user", content: contextLines.join("\n") + scenarioInstructions }],
     });
 
     var raw = resp.content[0].text.trim();

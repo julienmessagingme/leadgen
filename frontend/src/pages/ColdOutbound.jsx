@@ -13,13 +13,35 @@ var DEFAULT_BUCKETS = [
   { id: "bucket-3", name: "Bucket 3", items: [] },
 ];
 
+function loadSessionState(key, fallback) {
+  try {
+    var stored = sessionStorage.getItem(key);
+    if (stored) return JSON.parse(stored);
+  } catch (_e) {}
+  return fallback;
+}
+
 export default function ColdOutbound() {
-  var [activeSearch, setActiveSearch] = useState(null);
+  var [activeSearch, setActiveSearchRaw] = useState(function () { return loadSessionState("cold_activeSearch", null); });
   var [prefillFilters, setPrefillFilters] = useState(null);
-  var [viewSearchId, setViewSearchId] = useState(null);
-  var [buckets, setBuckets] = useState(DEFAULT_BUCKETS.map(function (b) { return { ...b, items: [] }; }));
+  var [viewSearchId, setViewSearchIdRaw] = useState(function () { return loadSessionState("cold_viewSearchId", null); });
+  var [buckets, setBuckets] = useState(function () { return loadSessionState("cold_buckets", DEFAULT_BUCKETS.map(function (b) { return { ...b, items: [] }; })); });
   var [activeDrag, setActiveDrag] = useState(null);
   var formRef = useRef(null);
+
+  // Persist state to sessionStorage
+  var setActiveSearch = function (val) {
+    setActiveSearchRaw(val);
+    try { sessionStorage.setItem("cold_activeSearch", JSON.stringify(typeof val === "function" ? val(activeSearch) : val)); } catch (_e) {}
+  };
+  var setViewSearchId = function (val) {
+    setViewSearchIdRaw(val);
+    try { sessionStorage.setItem("cold_viewSearchId", JSON.stringify(val)); } catch (_e) {}
+  };
+  // Persist buckets on every change
+  useEffect(function () {
+    try { sessionStorage.setItem("cold_buckets", JSON.stringify(buckets)); } catch (_e) {}
+  }, [buckets]);
 
   // Load a past search by ID
   var { data: loadedSearch } = useColdSearch(viewSearchId);

@@ -1,139 +1,165 @@
 import { useState, useEffect } from "react";
 import { useConfig, useUpdateConfig } from "../../hooks/useSettings";
 
-const EMPTY_TEMPLATE = { name: "", prompt: "", value_proposition: "" };
+var EMPTY_SCENARIO = {
+  name: "",
+  target_profile: "",
+  pain_point: "",
+  value_prop: "",
+  social_proof: "",
+  matching_keywords: "",
+};
 
 export default function ColdTemplatesTab() {
-  const { data, isLoading } = useConfig();
-  const updateConfig = useUpdateConfig();
+  var { data, isLoading } = useConfig();
+  var updateConfig = useUpdateConfig();
 
-  const [templates, setTemplates] = useState([]);
-  const [saved, setSaved] = useState(false);
+  var [scenarios, setScenarios] = useState([]);
+  var [saved, setSaved] = useState(false);
 
-  const configs = data?.settings ?? [];
+  var configs = data?.settings ?? [];
 
-  useEffect(() => {
+  useEffect(function () {
     if (configs.length > 0) {
-      const found = configs.find((c) => c.key === "cold_templates");
+      var found = configs.find(function (c) { return c.key === "cold_scenarios"; });
       if (found?.value) {
         try {
-          const parsed = JSON.parse(found.value);
+          var parsed = JSON.parse(found.value);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            setTemplates(parsed);
+            setScenarios(parsed);
             return;
           }
-        } catch {
-          // ignore parse error
-        }
+        } catch (_e) {}
       }
-      // Default: empty array (no templates configured yet)
-      setTemplates([]);
+      setScenarios([]);
     }
   }, [configs]);
 
-  const addTemplate = () => {
-    setTemplates([...templates, { ...EMPTY_TEMPLATE }]);
+  var addScenario = function () {
+    setScenarios([...scenarios, { ...EMPTY_SCENARIO }]);
   };
 
-  const removeTemplate = (index) => {
-    setTemplates(templates.filter((_, i) => i !== index));
+  var removeScenario = function (index) {
+    setScenarios(scenarios.filter(function (_, i) { return i !== index; }));
   };
 
-  const updateField = (index, field, value) => {
-    const updated = templates.map((t, i) =>
-      i === index ? { ...t, [field]: value } : t
-    );
-    setTemplates(updated);
+  var updateField = function (index, field, value) {
+    setScenarios(scenarios.map(function (s, i) {
+      return i === index ? { ...s, [field]: value } : s;
+    }));
   };
 
-  const handleSave = async () => {
+  var handleSave = async function () {
     try {
       await updateConfig.mutateAsync({
-        key: "cold_templates",
-        value: JSON.stringify(templates),
+        key: "cold_scenarios",
+        value: JSON.stringify(scenarios),
       });
       setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    } catch {
-      // handled by React Query
-    }
+      setTimeout(function () { setSaved(false); }, 2000);
+    } catch (_e) {}
   };
 
   if (isLoading) {
-    return (
-      <div className="space-y-4">
-        {[1, 2].map((i) => (
-          <div key={i} className="h-48 bg-gray-200 rounded animate-pulse" />
-        ))}
-      </div>
-    );
+    return <div className="h-48 bg-gray-200 rounded animate-pulse" />;
   }
 
   return (
     <div>
       <h2 className="text-lg font-semibold text-gray-800 mb-2">
-        Templates Cold Outbound
+        Scenarios Cold Email
       </h2>
       <p className="text-sm text-gray-500 mb-4">
-        Configurez les templates utilises par l'IA pour generer les messages
-        destines aux leads cold. Chaque template contient des instructions et une
-        proposition de valeur.
+        Chaque scenario definit un angle d'approche pour un type de prospect. Sonnet utilise le scenario qui matche le mieux (par mots-cles) pour structurer le mail cold.
       </p>
 
       <div className="space-y-4">
-        {templates.map((tpl, idx) => (
-          <div key={idx} className="bg-white rounded-lg shadow p-4">
-            <div className="flex items-center justify-between mb-3">
-              <input
-                type="text"
-                value={tpl.name}
-                onChange={(e) => updateField(idx, "name", e.target.value)}
-                placeholder="Nom du template (ex: SaaS, Retail, Finance...)"
-                className="text-sm font-semibold text-gray-700 border-gray-300 rounded px-2 py-1 flex-1 mr-3"
-              />
-              <button
-                onClick={() => removeTemplate(idx)}
-                className="text-sm text-red-500 hover:text-red-700 font-medium"
-              >
-                Supprimer
-              </button>
+        {scenarios.map(function (sc, idx) {
+          return (
+            <div key={idx} className="bg-white rounded-lg shadow p-4">
+              <div className="flex items-center justify-between mb-3">
+                <input
+                  type="text"
+                  value={sc.name}
+                  onChange={function (e) { updateField(idx, "name", e.target.value); }}
+                  placeholder="Nom du scenario (ex: Courtier assurance, Retail luxe...)"
+                  className="text-sm font-semibold text-gray-700 border-gray-300 rounded px-2 py-1 flex-1 mr-3"
+                />
+                <button
+                  onClick={function () { removeScenario(idx); }}
+                  className="text-sm text-red-500 hover:text-red-700 font-medium"
+                >
+                  Supprimer
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Profil cible</label>
+                  <input
+                    type="text"
+                    value={sc.target_profile}
+                    onChange={function (e) { updateField(idx, "target_profile", e.target.value); }}
+                    placeholder="ex: Directeur d'agence de courtage en assurance"
+                    className="w-full rounded border-gray-300 text-sm px-2 py-1.5"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Mots-cles de matching (separes par virgule)</label>
+                  <input
+                    type="text"
+                    value={sc.matching_keywords}
+                    onChange={function (e) { updateField(idx, "matching_keywords", e.target.value); }}
+                    placeholder="ex: courtier, assurance, broker, insurance, prevoyance"
+                    className="w-full rounded border-gray-300 text-sm px-2 py-1.5"
+                  />
+                </div>
+              </div>
+
+              <div className="mb-3">
+                <label className="block text-xs font-medium text-gray-500 mb-1">Pain point a adresser</label>
+                <textarea
+                  value={sc.pain_point}
+                  onChange={function (e) { updateField(idx, "pain_point", e.target.value); }}
+                  className="w-full rounded border-gray-300 text-sm resize-y"
+                  style={{ minHeight: "60px" }}
+                  placeholder="ex: Les courtiers perdent des leads par manque de reactivite. Le prospect qui demande un devis attend une reponse rapide, sinon il va voir ailleurs."
+                />
+              </div>
+
+              <div className="mb-3">
+                <label className="block text-xs font-medium text-gray-500 mb-1">Proposition de valeur</label>
+                <textarea
+                  value={sc.value_prop}
+                  onChange={function (e) { updateField(idx, "value_prop", e.target.value); }}
+                  className="w-full rounded border-gray-300 text-sm resize-y"
+                  style={{ minHeight: "60px" }}
+                  placeholder="ex: Le conversationnel WhatsApp permet de repondre en moins de 5 min, qualifier le besoin et pousser un devis — tout ca automatise."
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Preuve sociale</label>
+                <textarea
+                  value={sc.social_proof}
+                  onChange={function (e) { updateField(idx, "social_proof", e.target.value); }}
+                  className="w-full rounded border-gray-300 text-sm resize-y"
+                  style={{ minHeight: "40px" }}
+                  placeholder="ex: On travaille deja avec plusieurs courtiers sur ce type de dispositif."
+                />
+              </div>
             </div>
-
-            <label className="block text-xs font-medium text-gray-500 mb-1">
-              Instructions / Prompt
-            </label>
-            <textarea
-              value={tpl.prompt}
-              onChange={(e) => updateField(idx, "prompt", e.target.value)}
-              className="w-full rounded border-gray-300 text-sm resize-y mb-3"
-              style={{ minHeight: "100px" }}
-              placeholder="Instructions pour l'IA (ton, regles, format)..."
-            />
-
-            <label className="block text-xs font-medium text-gray-500 mb-1">
-              Proposition de valeur
-            </label>
-            <textarea
-              value={tpl.value_proposition}
-              onChange={(e) =>
-                updateField(idx, "value_proposition", e.target.value)
-              }
-              className="w-full rounded border-gray-300 text-sm resize-y"
-              style={{ minHeight: "60px" }}
-              placeholder="Proposition de valeur a mettre en avant pour ce type de prospect..."
-            />
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="mt-4 flex items-center gap-3">
         <button
-          onClick={addTemplate}
+          onClick={addScenario}
           className="px-4 py-2 text-sm font-medium text-blue-600 border border-blue-600 rounded-md hover:bg-blue-50"
         >
-          + Ajouter un template
+          + Ajouter un scenario
         </button>
-
         <button
           onClick={handleSave}
           disabled={updateConfig.isPending}
@@ -141,12 +167,7 @@ export default function ColdTemplatesTab() {
         >
           Enregistrer
         </button>
-
-        {saved && (
-          <span className="text-sm text-green-600 font-medium">
-            Enregistre !
-          </span>
-        )}
+        {saved && <span className="text-sm text-green-600 font-medium">Enregistre !</span>}
       </div>
     </div>
   );
