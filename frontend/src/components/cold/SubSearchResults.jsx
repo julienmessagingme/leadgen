@@ -72,6 +72,15 @@ export default function SubSearchResults({ searchData, depth, jobTitle }) {
     setActionPending(function (prev) { var n = { ...prev }; delete n[idx]; return n; });
   };
 
+  var handleEmail = async function (idx) {
+    setActionPending(function (prev) { return { ...prev, [idx]: "email" }; });
+    try {
+      var resp = await api.post("/cold-outbound/searches/" + searchId + "/to-email", { profile_indexes: [idx] });
+      if (resp.results) updateResults(resp.results);
+    } catch (_e) {}
+    setActionPending(function (prev) { var n = { ...prev }; delete n[idx]; return n; });
+  };
+
   var handleSimilar = async function (idx) {
     setActionPending(function (prev) { return { ...prev, [idx]: "similar" }; });
     try {
@@ -150,9 +159,14 @@ export default function SubSearchResults({ searchData, depth, jobTitle }) {
                   </button>
                 )}
                 {!sr.added_to_pipeline && (
-                  <button onClick={function () { handlePipeline(sri); }} disabled={!!pending} className="px-2 py-0.5 text-[10px] font-medium rounded bg-indigo-50 text-indigo-600 hover:bg-indigo-100 disabled:opacity-50">
-                    {pending === "pipeline" ? "..." : "Pipeline"}
-                  </button>
+                  <>
+                    <button onClick={function () { handlePipeline(sri); }} disabled={!!pending} className="px-2 py-0.5 text-[10px] font-medium rounded bg-indigo-50 text-indigo-600 hover:bg-indigo-100 disabled:opacity-50">
+                      {pending === "pipeline" ? "..." : "Pipeline"}
+                    </button>
+                    <button onClick={function () { handleEmail(sri); }} disabled={!!pending} className="px-2 py-0.5 text-[10px] font-medium rounded bg-purple-50 text-purple-600 hover:bg-purple-100 disabled:opacity-50">
+                      {pending === "email" ? "..." : "Email"}
+                    </button>
+                  </>
                 )}
                 {sr.enriched && depth < MAX_DEPTH && (
                   <button
