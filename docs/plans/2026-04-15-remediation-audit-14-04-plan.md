@@ -628,4 +628,48 @@ Bonus : 2 autres bruits observes dans les logs (non-bloquants, hors scope Task 0
 
 ## Verification report (post-deploy)
 
-(A remplir apres Task 7)
+**Deploy time:** 2026-04-15 ~12:44 UTC (14:44 Europe/Paris). Deploy initial commit d'ensemble `8aca3c9`, puis suivi d'un hotfix `54a47e9` (voir ci-dessous).
+
+**Hotfix post-deploy — concurrency 2 → 1:**
+Premier smoke test HubSpot avec p-limit(2) : 15 appels paralleles → 14 OK + 1x 429 SECONDLY. HubSpot a une policy ~10 req/s, avec 2 paralleles + SDK calls <200ms on etait pile a la limite. Passage a `pLimit(1)` (commit `54a47e9`). Ce commit est direct sur master (pas de nouvelle branche claude/*). Retest apres redeploy : 15 appels en 3.2s, **zero 429**.
+
+**PM2 state:**
+- Restart count apres deploy : 0 → 1 (le 1 est le restart automatique du git push hook)
+- Uptime stable : 103s+ sans restart additionnel
+- Memoire : 77 MB (OK)
+- **Trust proxy fix valide** : zero nouvelle ValidationError dans stderr depuis deploy. Les ValidationError visibles dans les logs archives sont datees 2026-04-14 15:09/15:10 UTC (pre-deploy).
+
+**Smoke tests:**
+
+| Test | Attendu | Resultat |
+|------|---------|----------|
+| PM2 boot clean | `Environment validated` + `Scheduler started: 9 tasks` + `HTTP server listening` | ✅ OK |
+| BeReach GET /me/limits (fix T3) | JSON avec credits, pas 405 | ✅ OK (5924 credits, toutes limits renvoyees) |
+| HubSpot 15 appels paralleles (fix T2) | 0 erreur 429 | ✅ OK apres `pLimit(1)` — 15 calls en 3.2s, zero 429 |
+| HubSpot detection de leads reels | found:true sur contacts HubSpot connus | ✅ OK — 3/3 "Julien" leads trouves avec owner Marion Munier ; 1 faux lead (Zzzzzz) correctement not_found |
+| Frontend editeur email build | dist/assets/index-*.js genere | ✅ OK (index-45FAuM4b.js 920 kB) |
+
+**Bug signaux HubSpot = 0 — cause confirmee:**
+Le fix T2 (throttle HubSpot) resout bien le bug observé (0 signaux HubSpot depuis 6 jours). Preuve : `existsInHubspot()` retourne maintenant found:true pour les 3 leads "Julien" qu'on sait etre dans le CRM. Avant le fix, tous ces calls echouaient silencieusement en 429 → fail-open → found:false → tous les leads passaient en status "new" au lieu de "hubspot_existing".
+
+**Attendu demain 07h30 (Task A pipeline):**
+- Plus de warnings "Failed to check BeReach limits: BeReach /me/limits failed (405)" dans logs
+- Plus de 429 HubSpot dans stderr
+- Au moins quelques leads avec status = "hubspot_existing" si le top 30 enrichi inclut des contacts deja en CRM
+
+**Commits shipped (13 au total sur master):**
+```
+54a47e9 fix(hubspot): lower p-limit concurrency 2→1 after 429 observed in prod
+8aca3c9 fix(htmlText): move regexes inside line map to avoid lastIndex bleed
+942b5cd feat(emails-draft): plain-text editor as default
+a1192e4 fix(pm2): trust proxy + error handlers + ecosystem
+e3b6672 fix(enrichment): decode URL-encoded accents in company slugs
+6989684 fix(enrichment): skip visitProfile for LinkedIn /company/ URLs
+811b82c fix(bereach): use GET for /me/limits endpoint
+1f0f94d fix(hubspot): throttle parallel API calls with p-limit
+7304274 chore: add p-limit@3 for HubSpot throttling
+513f3d6 docs(plan): update T6 with trust proxy fix from T0 diagnostic
+7095d5d docs(plan): T0 diagnostic findings for PM2 crash loop
+59868c8 Add implementation plan for remediation (audit 14/04)
+c5da46c Add design doc for remediation plan (audit 14/04)
+```
