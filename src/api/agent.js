@@ -9,10 +9,18 @@
  */
 
 const { Router } = require("express");
+const express = require("express");
 const { supabase } = require("../lib/supabase");
 const { canonicalizeLinkedInUrl } = require("../lib/url-utils");
 
 const router = Router();
+
+// Agent payloads can easily exceed the global 50kb JSON limit — enriched leads
+// carry icp_fit_reasoning (2000 chars) + angle_of_approach (2000 chars) +
+// enrichment (up to ~10kb JSON per lead). Allow up to 500kb here specifically
+// so a 10-50 lead run goes through cleanly. JWT dashboard routes keep the
+// global 50kb cap.
+router.use(express.json({ limit: "500kb" }));
 
 const MAX_LEADS_PER_RUN = 50; // hard cap — Troudebal targets 10, this is guard-rail
 const MAX_PAYLOAD_LEADS = 200; // even if malformed request arrives, refuse pathological payloads
@@ -130,7 +138,26 @@ router.post("/cold-runs", agentAuth, async (req, res) => {
     }
     const acceptedLeads = leads.slice(0, MAX_LEADS_PER_RUN);
 
-    // 1. Insert run header
+    // 1. Refuse duplicate same-day runs for the same agent. Agents WILL retry on
+    // network timeout; without this guard we would end up with orphan runs
+    // (leads_count=0) and a second run holding the retried leads. DB has a
+    // UNIQUE (run_date, agent_name) constraint as a last line of defense.
+    const { data: existingRun } = await supabase
+      .from("cold_outreach_runs")
+      .select("id, leads_count, created_at")
+      .eq("run_date", runDate)
+      .eq("agent_name", agentName)
+      .maybeSingle();
+    if (existingRun) {
+      return res.status(409).json({
+        error: "A run already exists for this date + agent",
+        run_id: existingRun.id,
+        leads_count: existingRun.leads_count,
+        created_at: existingRun.created_at,
+      });
+    }
+
+    // 2. Insert run header
     const { data: runRow, error: runErr } = await supabase
       .from("cold_outreach_runs")
       .insert({
@@ -144,11 +171,16 @@ router.post("/cold-runs", agentAuth, async (req, res) => {
       .single();
 
     if (runErr) {
+      // Unique-constraint race (another concurrent POST won the insert) → surface
+      // the same 409 contract instead of a generic 500.
+      if (runErr.code === "23505") {
+        return res.status(409).json({ error: "A run already exists for this date + agent (race)" });
+      }
       console.error("[agent/cold-runs] run insert error:", runErr.message);
       return res.status(500).json({ error: "Failed to create run" });
     }
 
-    // 2. Canonicalise + dedup + insert leads
+    // 3. Canonicalise + dedup + insert leads
     // Two-pass approach:
     //   (a) canonicalise + in-payload dedup (pure JS, O(N))
     //   (b) ONE batch SELECT on Supabase to filter out already-known URLs (O(1) query vs N)
@@ -244,7 +276,7 @@ router.post("/cold-runs", agentAuth, async (req, res) => {
       inserted = toInsert.length;
     }
 
-    // 3. Update run header with final counts
+    // 4. Update run header with final counts
     await supabase
       .from("cold_outreach_runs")
       .update({ leads_count: inserted })

@@ -32,9 +32,12 @@ export function useGenerateColdEmail() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (leadId) => api.post(`/cold-outreach/leads/${leadId}/generate-email`),
-    onSuccess: (_data, leadId) => {
-      // Refresh any currently-loaded run so the UI reflects the new status.
+    onSuccess: (_data, _leadId) => {
+      // Refresh any currently-loaded run so the lead card updates.
       qc.invalidateQueries({ queryKey: ["cold-run"] });
+      // Refresh the runs list so per-run counters/summary stay accurate.
+      qc.invalidateQueries({ queryKey: ["cold-runs"] });
+      // Warm-lead views use ["leads"] — stale after status change to email_pending.
       qc.invalidateQueries({ queryKey: ["leads"] });
     },
   });

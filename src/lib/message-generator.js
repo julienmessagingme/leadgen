@@ -549,6 +549,10 @@ async function generateInMail(lead) {
  */
 function isColdLead(lead) {
   if (!lead) return false;
+  // "cold_outbound" is the enum value actually persisted by both the agent-driven
+  // cold_outreach_ai flow (src/api/agent.js) and the manual Cold Outbound feature.
+  // "cold" is a legacy value kept for safety in case older rows exist.
+  if (lead.signal_category === "cold_outbound") return true;
   if (lead.signal_category === "cold") return true;
   if (!lead.signal_type && !lead.signal_category) return true;
   return false;
@@ -614,7 +618,7 @@ async function generateColdEmail(lead) {
       instructions + langInstruction + "\n\n" +
       buildLeadContext(lead) + coldContext + "\n" +
       "Email destinataire: " + sanitizeForPrompt(lead.email) + "\n\n" +
-      'Reponds en JSON: {"subject": "...", "body": "<html>...</html>"}', 1024);
+      'Reponds en JSON: {"subject": "...", "body": "<html>...</html>"}', 2048);
 
     if (!result || !result.subject || !result.body) return null;
 
