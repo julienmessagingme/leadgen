@@ -181,7 +181,7 @@ async function searchCompanies(keywords, count) {
  * Check current BeReach API usage limits.
  */
 async function checkLimits() {
-  return bereach("/me/limits");
+  return bereachGet("/me/limits");
 }
 
 
