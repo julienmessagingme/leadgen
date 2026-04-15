@@ -31,7 +31,12 @@ async function enrichLead(signal, runId) {
   // 1. Profile enrichment via BeReach (ENR-01) with 48h cache (ENR-03)
   // ---------------------------------------------------------------
   try {
-    if (isCacheFresh(signal.profile_last_fetched_at, CACHE_HOURS)) {
+    if (signal.linkedin_url && signal.linkedin_url.includes('/company/')) {
+      await log(runId, "enrichment", "warn",
+        "Skipping visitProfile for company URL (wrong endpoint): " + signal.linkedin_url,
+        { linkedin_url: signal.linkedin_url });
+      // Skip profile enrichment entirely; company enrichment below may still run
+    } else if (isCacheFresh(signal.profile_last_fetched_at, CACHE_HOURS)) {
       await log(runId, "enrichment", "info",
         "Profile cache fresh (< 48h) -- skipping BeReach call",
         { linkedin_url: signal.linkedin_url });
