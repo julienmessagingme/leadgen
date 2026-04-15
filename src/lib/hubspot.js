@@ -5,6 +5,12 @@
  */
 
 const hubspot = require("@hubspot/api-client");
+const pLimit = require("p-limit");
+
+// Module-level concurrency limiter for all HubSpot SDK calls.
+// HubSpot has a per-second rate limit that 15+ parallel calls easily exceed,
+// causing 429s and silent fail-open (leads existing in CRM pass as "new").
+const hubspotLimit = pLimit(2);
 
 // Lazy-init client to avoid crash if HUBSPOT_TOKEN is not set at import time
 let _client = null;
@@ -37,7 +43,7 @@ async function getOwnerName(ownerId) {
     const client = getClient();
     if (!client) return null;
 
-    const owner = await client.crm.owners.ownersApi.getById(ownerId);
+    const owner = await hubspotLimit(() => client.crm.owners.ownersApi.getById(ownerId));
     var name = ((owner.firstName || "") + " " + (owner.lastName || "")).trim() || owner.email || null;
     if (name) _ownerCache[ownerId] = name;
     return name;
@@ -73,11 +79,11 @@ async function existsInHubspot(firstName, lastName, companyName) {
       filters.push({ propertyName: "company", operator: "EQ", value: companyName });
     }
 
-    const response = await client.crm.contacts.searchApi.doSearch({
+    const response = await hubspotLimit(() => client.crm.contacts.searchApi.doSearch({
       filterGroups: [{ filters }],
       properties: ["firstname", "lastname", "company", "hs_marketable_status", "hubspot_owner_id"],
       limit: 1,
-    });
+    }));
 
     if (response.total > 0) {
       var props = response.results[0].properties || {};
@@ -115,7 +121,7 @@ async function existsInHubspotByEmail(email) {
     const client = getClient();
     if (!client) return { found: false, contactId: null };
 
-    const response = await client.crm.contacts.searchApi.doSearch({
+    const response = await hubspotLimit(() => client.crm.contacts.searchApi.doSearch({
       filterGroups: [{
         filters: [
           { propertyName: "email", operator: "EQ", value: email },
@@ -123,7 +129,7 @@ async function existsInHubspotByEmail(email) {
       }],
       properties: ["email", "firstname", "lastname"],
       limit: 1,
-    });
+    }));
 
     if (response.total > 0) {
       return { found: true, contactId: response.results[0].id };
@@ -161,11 +167,11 @@ async function findEmailInHubspot(firstName, lastName, companyName) {
       filters.push({ propertyName: "company", operator: "EQ", value: companyName });
     }
 
-    const response = await client.crm.contacts.searchApi.doSearch({
+    const response = await hubspotLimit(() => client.crm.contacts.searchApi.doSearch({
       filterGroups: [{ filters }],
       properties: ["email", "firstname", "lastname", "company"],
       limit: 1,
-    });
+    }));
 
     if (response.total > 0 && response.results[0].properties.email) {
       return response.results[0].properties.email;
@@ -191,7 +197,7 @@ async function getLastEmail(contactId) {
     const client = getClient();
     if (!client) return null;
 
-    var response = await client.crm.objects.emails.searchApi.doSearch({
+    var response = await hubspotLimit(() => client.crm.objects.emails.searchApi.doSearch({
       filterGroups: [{
         filters: [{
           propertyName: "associations.contact",
@@ -206,7 +212,7 @@ async function getLastEmail(contactId) {
       ],
       sorts: [{ propertyName: "hs_timestamp", direction: "DESCENDING" }],
       limit: 1,
-    });
+    }));
 
     if (!response.results || response.results.length === 0) return null;
 
