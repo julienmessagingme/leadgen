@@ -1,5 +1,20 @@
 require("dotenv").config();
 
+// ----------------------------------------------------------------------------
+// Safety net: log unhandled errors before PM2 restart.
+// Root cause of previous crash loop (2469 restarts) was ERR_ERL_UNEXPECTED_X_FORWARDED_FOR
+// inside express-rate-limit; these handlers ensure any future unhandled rejection
+// or uncaught exception is at least logged before the process dies.
+// ----------------------------------------------------------------------------
+process.on('unhandledRejection', (reason) => {
+  console.error('[FATAL] Unhandled promise rejection:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[FATAL] Uncaught exception:', err && err.stack ? err.stack : err);
+  process.exit(1); // PM2 will restart us
+});
+
 const REQUIRED_VARS = [
   "SUPABASE_URL",
   "SUPABASE_SERVICE_ROLE_KEY",
@@ -51,6 +66,10 @@ const helmet = require("helmet");
 const cors = require("cors");
 const path = require("path");
 const app = express();
+
+// Trust first proxy (Nginx/NPM) — avoids express-rate-limit ValidationError
+// (ERR_ERL_UNEXPECTED_X_FORWARDED_FOR) which caused a PM2 crash loop (2469 restarts).
+app.set('trust proxy', 1);
 
 // Security middleware -- applied before all routes
 app.use(helmet());
