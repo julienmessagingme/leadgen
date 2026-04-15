@@ -351,13 +351,26 @@ Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>"
 
 ---
 
-## Task 6: Fix P0 — Safety net (handlers + ecosystem.config.js)
+## Task 6: Fix P0 — trust proxy + safety net (handlers + ecosystem.config.js)
 
 **Files:**
-- Modify: `src/index.js` (ajouter handlers tout en haut apres dotenv)
+- Modify: `src/index.js` (ajouter handlers + `app.set('trust proxy', 1)`)
 - Create: `ecosystem.config.js` a la racine de leadgen/
 
-**Step 1: Ajouter les handlers dans src/index.js**
+**Root cause confirme par T0 :** `express-rate-limit` throw `ValidationError: ERR_ERL_UNEXPECTED_X_FORWARDED_FOR` car `trust proxy` n'est pas configure. Chaque requete HTTP via Nginx/NPM (qui ajoute X-Forwarded-For) declenche unhandled rejection → process exit → PM2 restart → boucle infinie (2469 restarts observes). Fix minimal = 1 ligne. Handlers + ecosystem restent necessaires comme defense en profondeur.
+
+**Step 1a: Ajouter `app.set('trust proxy', 1)` dans src/index.js**
+
+Juste apres la creation de l'app Express (`const app = express()`), avant tout middleware (helmet, rate-limit, cors, etc.), ajouter :
+```js
+// Trust first proxy (Nginx/NPM) — avoids express-rate-limit X-Forwarded-For error
+// which was causing unhandled promise rejections and PM2 crash loop (2469 restarts).
+app.set('trust proxy', 1);
+```
+
+**A verifier a l'implementation** : trouver la ligne exacte ou `app = express()` est cree (probablement apres ligne 50), placer le `trust proxy` immediatement apres.
+
+**Step 1b: Ajouter les handlers dans src/index.js**
 
 Apres la ligne `require("dotenv").config();` (ligne 1), ajouter :
 ```js
@@ -403,14 +416,19 @@ Expected: `OK` (config valide).
 
 ```bash
 cd /c/Users/julie && git add leadgen/src/index.js leadgen/ecosystem.config.js
-git commit -m "fix(pm2): add error handlers + ecosystem config to break crash loops
+git commit -m "fix(pm2): trust proxy + error handlers + ecosystem to break crash loop
 
-Root cause TBD from Task 0 diagnostic. This adds a safety net regardless:
-- unhandledRejection / uncaughtException handlers log before crash
-- max_memory_restart 500M prevents OOM-driven loops
-- max_restarts 10 + min_uptime 60s stops infinite restart loops
+Root cause (per T0 diagnostic): express-rate-limit throws
+ValidationError ERR_ERL_UNEXPECTED_X_FORWARDED_FOR because Express
+'trust proxy' was not set. Every HTTP request from Nginx/NPM (with
+X-Forwarded-For) triggered an unhandled promise rejection → process
+exit → PM2 restart → infinite loop (2469 restarts observed).
 
-Was seeing 2438 restarts in 20h uptime.
+Fixes applied:
+- app.set('trust proxy', 1) — stops the ValidationError at source
+- unhandledRejection / uncaughtException handlers — log before crash
+- ecosystem.config.js: max_memory_restart 500M, max_restarts 10,
+  min_uptime 60s — prevents future runaway loops
 
 Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>"
 ```
