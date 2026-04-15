@@ -67,26 +67,34 @@ registerTask("whatsapp-poll",     "*/15 9-18 * * 1-6", whatsappPoll);     // eve
 // Stale lead cleanup -- disqualify low-score leads stuck in "new" for 30+ days
 registerTask("lead-cleanup", "30 2 * * *", async (runId) => {
   var cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-  var { count, error } = await supabase
+  // Step 1: fetch matching leads to preserve their existing metadata
+  var { data: staleLeads, error: selErr } = await supabase
     .from("leads")
-    .update({ status: "disqualified", metadata: supabase.raw("metadata || '{\"disqualified_reason\": \"stale_low_score\"}'::jsonb") })
+    .select("id, metadata")
     .lt("created_at", cutoff)
     .lt("icp_score", 50)
-    .in("status", ["new", "scored", "enriched"])
-    .select("id", { count: "exact", head: true });
-  if (error) {
-    // Fallback without raw metadata merge
-    var { count: c2, error: e2 } = await supabase
-      .from("leads")
-      .update({ status: "disqualified" })
-      .lt("created_at", cutoff)
-      .lt("icp_score", 50)
-      .in("status", ["new", "scored", "enriched"]);
-    if (e2) throw e2;
-    console.log("Lead cleanup completed: disqualified " + (c2 || 0) + " stale leads (score < 50, 30+ days)");
+    .in("status", ["new", "scored", "enriched"]);
+  if (selErr) throw selErr;
+  if (!staleLeads || staleLeads.length === 0) {
+    console.log("Lead cleanup completed: no stale leads to disqualify");
     return;
   }
-  console.log("Lead cleanup completed: disqualified " + (count || 0) + " stale leads (score < 50, 30+ days)");
+  // Step 2: update each with merged metadata (disqualified_reason preserved alongside existing fields)
+  var disqualified = 0;
+  for (var i = 0; i < staleLeads.length; i++) {
+    var lead = staleLeads[i];
+    var mergedMeta = Object.assign({}, lead.metadata || {}, { disqualified_reason: "stale_low_score" });
+    var { error: upErr } = await supabase
+      .from("leads")
+      .update({ status: "disqualified", metadata: mergedMeta })
+      .eq("id", lead.id);
+    if (upErr) {
+      console.error("Lead cleanup: failed to disqualify lead " + lead.id + ": " + upErr.message);
+      continue;
+    }
+    disqualified++;
+  }
+  console.log("Lead cleanup completed: disqualified " + disqualified + "/" + staleLeads.length + " stale leads (score < 50, 30+ days)");
 });
 
 // Log cleanup -- delete logs older than 30 days (daily at 02:00, every day including weekends)

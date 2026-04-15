@@ -200,7 +200,15 @@ async function collectPageSignals(source, signalCategory, runId) {
  * @returns {Promise<Array>} Formatted signals
  */
 async function collectKeywordSignals(source, runId) {
-  var kw = Array.isArray(source.keywords) ? source.keywords.join(" ") : (source.keywords || source.source_label);
+  // If keywords array is empty/missing, fall back to source_label (e.g. 'RCS', 'Bot IA')
+  var kw = (Array.isArray(source.keywords) && source.keywords.length > 0)
+    ? source.keywords.join(" ")
+    : (source.keywords && typeof source.keywords === "string" ? source.keywords : source.source_label);
+  if (!kw || !String(kw).trim()) {
+    await log(runId, "signal-collector", "warn",
+      "[keyword] source '" + (source.source_label || source.id) + "' has no keywords and no label — skipping");
+    return [];
+  }
   var result = await searchPostsByKeywords(kw);
   await rateLimitDelay(1000, 3000);
 
@@ -237,7 +245,14 @@ async function collectKeywordSignals(source, runId) {
 async function collectJobSignals(source, runId) {
   var signals = [];
 
-  var kw = Array.isArray(source.keywords) ? source.keywords.join(" ") : (source.keywords || source.source_label);
+  var kw = (Array.isArray(source.keywords) && source.keywords.length > 0)
+    ? source.keywords.join(" ")
+    : (source.keywords && typeof source.keywords === "string" ? source.keywords : source.source_label);
+  if (!kw || !String(kw).trim()) {
+    await log(runId, "signal-collector", "warn",
+      "[job_keyword] source '" + (source.source_label || source.id) + "' has no keywords and no label — skipping");
+    return [];
+  }
   var result = await searchJobs(kw);
   await rateLimitDelay(1000, 3000);
 
