@@ -106,6 +106,9 @@ app.use("/api/cold-outbound", require("./api/cold-outbound"));
 // Agent API routes (protected -- static bearer token OPENCLAW_AGENT_TOKEN, read-only)
 app.use("/api/agent", require("./api/agent"));
 
+// Cold Outreach API routes (protected -- authMiddleware applied inside router)
+app.use("/api/cold-outreach", require("./api/cold-outreach"));
+
 // Serve React build
 app.use(express.static(path.join(__dirname, "..", "dist")));
 

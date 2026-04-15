@@ -7,6 +7,7 @@ import Pipeline from "./pages/Pipeline";
 import Sequences from "./pages/Sequences";
 import Settings from "./pages/Settings";
 import ColdOutbound from "./pages/ColdOutbound";
+import ColdOutreach from "./pages/ColdOutreach";
 import HubspotSignals from "./pages/HubspotSignals";
 import MessagesDraft from "./pages/MessagesDraft";
 import Invitations from "./pages/Invitations";
@@ -114,6 +115,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <ColdOutbound />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/cold-outreach"
+        element={
+          <ProtectedRoute>
+            <ColdOutreach />
           </ProtectedRoute>
         }
       />

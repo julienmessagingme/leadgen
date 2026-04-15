@@ -554,12 +554,110 @@ function isColdLead(lead) {
   return false;
 }
 
+/**
+ * Generate a COLD email for a lead proposed by the autonomous cold-outreach
+ * agent (e.g. Troudebal on OpenClaw). No warm signal — true first contact.
+ *
+ * Draws context from the agent-produced metadata fields:
+ *   metadata.icp_fit_reasoning     — 2 lines explaining why this lead fits ICP
+ *   metadata.angle_of_approach     — 2 lines of suggested angle
+ *   metadata.enrichment            — free-form bag of enrichment findings
+ *
+ * Output: { subject, body } with HTML body + Julien's signature + Calendly CTA
+ * (same post-processing as generateEmail so the tone/signature stays consistent
+ * across all outbound emails).
+ *
+ * @param {object} lead - Lead row from Supabase (with metadata populated by the agent)
+ * @returns {Promise<{subject: string, body: string}|null>}
+ */
+async function generateColdEmail(lead) {
+  try {
+    var calendlyUrl = process.env.CALENDLY_URL || "https://calendly.com/julien-messagingme/30min";
+    var lang = detectLanguage(lead);
+    var md = (lead && lead.metadata) || {};
+    var angle = sanitizeForPrompt(md.angle_of_approach, 500);
+    var icpReason = sanitizeForPrompt(md.icp_fit_reasoning, 400);
+
+    // Flatten enrichment into a compact block (cap to avoid prompt bloat).
+    var enrichText = "";
+    if (md.enrichment && typeof md.enrichment === "object") {
+      try {
+        enrichText = JSON.stringify(md.enrichment).slice(0, 1500);
+      } catch (_e) {
+        enrichText = "";
+      }
+    }
+
+    var instructions =
+      "Redige un email COLD OUTREACH. Premier contact, le prospect ne nous connait pas.\n\n" +
+      "REGLES :\n" +
+      "1. 1er contact total : pas de 'j ai vu que vous avez...', pas de flicage, pas de reference a une activite LinkedIn observee. On ecrit parce que le SUJET nous interesse.\n" +
+      "2. POSITIONNEMENT : MessagingMe = strategie conversationnelle WhatsApp & chatbots pour grandes entreprises. Clients de reference utilisables : Gan Prevoyance, Keolis, Odalys, DPD, Neoma, EDHEC.\n" +
+      "3. UTILISER L ANGLE SUGGERE par le scout (champ 'Angle'). C est la these d approche validee, reste aligne dessus.\n" +
+      "4. UTILISER LE CONTEXTE d enrichissement pour personnaliser (actualite entreprise, poste recent, sujet sur lequel le prospect s exprime). Mais JAMAIS inventer de fait non present dans le contexte.\n" +
+      "5. FORMAT : objet court et specifique au lead (pas 'Prise de contact', pas 'Decouverte MessagingMe'). Corps : 4-6 phrases, HTML simple. Terminer par une question ouverte qui invite a repondre.\n" +
+      "6. PAS DE CTA : ne propose PAS de RDV, PAS de lien Calendly. Lien ajoute automatiquement en signature.\n" +
+      "7. SIGNATURE : NE PAS mettre de signature, NE PAS mettre 'Cordialement', 'Bonne journee', 'MessagingMe'. Tout est ajoute automatiquement.\n" +
+      "8. EN FRANCAIS par defaut, EN ANGLAIS si zone GCC / international.\n" +
+      "9. ANTI-HALLUCINATION : ne cite aucun nom, chiffre, client, fait qui n est pas dans le contexte ou dans la liste de clients de reference. Si tu n es pas sur, parle du sujet en termes generaux.";
+
+    var langInstruction = lang === "en"
+      ? "\n\nIMPORTANT: This prospect is NOT French-speaking. Write the ENTIRE email (subject + body) IN ENGLISH. Professional but warm tone."
+      : "";
+
+    var coldContext =
+      "\n\nAngle d'attaque suggere par le scout :\n" + (angle || "(aucun)") +
+      "\n\nICP fit (raison de cibler) :\n" + (icpReason || "(aucun)") +
+      (enrichText ? "\n\nContexte d'enrichissement (JSON brut) :\n" + enrichText : "");
+
+    var result = await callClaude(SYSTEM,
+      instructions + langInstruction + "\n\n" +
+      buildLeadContext(lead) + coldContext + "\n" +
+      "Email destinataire: " + sanitizeForPrompt(lead.email) + "\n\n" +
+      'Reponds en JSON: {"subject": "...", "body": "<html>...</html>"}', 1024);
+
+    if (!result || !result.subject || !result.body) return null;
+
+    // Reuse the exact post-processing chain from generateEmail for consistency:
+    // strip any Sonnet-invented signature/CTA, then append Julien's canonical signature.
+    result.body = result.body
+      .replace(/<br\s*\/?>\s*(Cordialement|Best regards|Kind regards|Regards|Bien cordialement|A bientot|A tres vite|Bonne journee|Bonne soiree)[,.]?\s*(<br\s*\/?>.*?)?\s*Julien[^<]*/gi, "")
+      .replace(/<p>\s*(Cordialement|Best regards|Kind regards|Regards|Bien cordialement|Bonne journee)[,.]?\s*<\/p>(\s*<p>[^<]*<\/p>)*/gi, "")
+      .replace(/Julien\s+(Poupard|Dumas|MessagingMe)[^<]*/gi, "")
+      .replace(/--\s*<br\s*\/?>\s*Julien[^<]*/gi, "")
+      .replace(/<a[^>]*calendly[^>]*>[^<]*<\/a>/gi, "")
+      .replace(/<p[^>]*>\s*<a[^>]*calendly[^>]*>[^<]*<\/a>\s*<\/p>/gi, "")
+      .replace(/[Rr]eserv(er|ez)\s+un\s+creneau[^<]*/gi, "")
+      .replace(/[Pp]rogramm(er|ez)\s+un\s+echange[^<]*/gi, "")
+      .replace(/<p>\s*(Bonne journee|Bonne soiree|MessagingMe)\s*,?\s*<\/p>/gi, "")
+      .replace(/<br\s*\/?>\s*(Bonne journee|Bonne soiree|MessagingMe)\s*,?\s*(<br\s*\/?>)?/gi, "")
+      .replace(/<p>\s*<\/p>/g, "")
+      .replace(/(<br\s*\/?>){3,}/g, "<br><br>");
+
+    var ctaLabel = lang === "en" ? "Schedule a call" : "Programmer un echange";
+    var signature = '<br><br>Julien Dumas<br>CEO MessagingMe<br><a href="https://www.messagingme.fr">www.messagingme.fr</a>' +
+      '<br><br><a href="' + calendlyUrl + '" style="display:inline-block;padding:10px 20px;background-color:#4F46E5;color:#ffffff;text-decoration:none;border-radius:6px;font-size:14px;font-weight:600;">' + ctaLabel + '</a>';
+    result.body = result.body.replace(/(<br\s*\/?>){1,3}\s*Julien Dumas\s*<br\s*\/?>.*?messagingme\.fr<\/a>/gi, "");
+    if (result.body.match(/<\/(body|html)>/i)) {
+      result.body = result.body.replace(/<\/(body|html)>/i, signature + "</$1>");
+    } else {
+      result.body = result.body + signature;
+    }
+
+    return { subject: result.subject, body: result.body };
+  } catch (err) {
+    console.warn("generateColdEmail failed:", err.message);
+    return null;
+  }
+}
+
 module.exports = {
   loadTemplates,
   generateInvitationNote,
   generateFollowUpMessage,
   generateEmail,
   generateFollowupEmail,
+  generateColdEmail,
   generateWhatsAppBody,
   generateInMail,
   isColdLead,

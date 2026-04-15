@@ -8,6 +8,7 @@ const navItems = [
   { to: "/messages-draft", label: "✉ À valider" },
   { to: "/hubspot-signals", label: "Signaux HubSpot" },
   { to: "/cold-outbound", label: "Cold Outbound" },
+  { to: "/cold-outreach", label: "🎯 Troudebal" },
   { to: "/email-tracking", label: "Tracking Emails" },
   { to: "/settings", label: "Parametres" },
 ];

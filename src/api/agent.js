@@ -10,8 +10,12 @@
 
 const { Router } = require("express");
 const { supabase } = require("../lib/supabase");
+const { canonicalizeLinkedInUrl } = require("../lib/url-utils");
 
 const router = Router();
+
+const MAX_LEADS_PER_RUN = 50; // hard cap — Troudebal targets 10, this is guard-rail
+const MAX_PAYLOAD_LEADS = 200; // even if malformed request arrives, refuse pathological payloads
 
 function agentAuth(req, res, next) {
   const expected = process.env.OPENCLAW_AGENT_TOKEN;
@@ -72,6 +76,191 @@ router.get("/known-leads", agentAuth, async (_req, res) => {
   } catch (err) {
     console.error("[agent/known-leads] error:", err.message);
     res.status(500).json({ error: "Failed to fetch known leads" });
+  }
+});
+
+/**
+ * POST /api/agent/cold-runs
+ *
+ * Endpoint consumed by the autonomous cold-outreach agent (Troudebal on OpenClaw).
+ * At the end of a daily session, the agent posts the leads it has found +
+ * enriched, and we:
+ *   1. insert a header row in `cold_outreach_runs` for the run,
+ *   2. for each lead: canonicalise the LinkedIn URL, skip duplicates against
+ *      the live `leads` table (defense in depth — the agent should already have
+ *      deduped client-side via known_leads.json, but network races happen), and
+ *      insert accepted leads into `leads` linked back to the run via
+ *      metadata.cold_run_id.
+ *
+ * Payload:
+ *   {
+ *     run_date: "YYYY-MM-DD",
+ *     credits_used: number,
+ *     agent_name?: string,          // defaults to "troudebal"
+ *     run_notes?: string,           // free-form, stored in run metadata
+ *     leads: [{
+ *       full_name, title, company, company_size?, company_sector?,
+ *       company_location?, linkedin_url, email?,
+ *       icp_fit_reasoning, angle_of_approach, enrichment?: object
+ *     }]
+ *   }
+ *
+ * Response: { run_id, inserted: N, duplicates: N, canonical_skipped: N }
+ *
+ * Read-write but write scope is tightly constrained to this feature.
+ */
+router.post("/cold-runs", agentAuth, async (req, res) => {
+  try {
+    const body = req.body || {};
+    const runDate = typeof body.run_date === "string" ? body.run_date : null;
+    const creditsUsed = Number.isFinite(body.credits_used) ? body.credits_used : 0;
+    const agentName = typeof body.agent_name === "string" && body.agent_name.trim()
+      ? body.agent_name.trim().slice(0, 50)
+      : "troudebal";
+    const leads = Array.isArray(body.leads) ? body.leads : null;
+
+    if (!runDate || !/^\d{4}-\d{2}-\d{2}$/.test(runDate)) {
+      return res.status(400).json({ error: "run_date must be YYYY-MM-DD" });
+    }
+    if (!leads) {
+      return res.status(400).json({ error: "leads must be an array" });
+    }
+    if (leads.length > MAX_PAYLOAD_LEADS) {
+      return res.status(413).json({ error: `Too many leads (max ${MAX_PAYLOAD_LEADS})` });
+    }
+    const acceptedLeads = leads.slice(0, MAX_LEADS_PER_RUN);
+
+    // 1. Insert run header
+    const { data: runRow, error: runErr } = await supabase
+      .from("cold_outreach_runs")
+      .insert({
+        run_date: runDate,
+        agent_name: agentName,
+        credits_used: creditsUsed,
+        leads_count: 0, // updated after inserts
+        metadata: { run_notes: typeof body.run_notes === "string" ? body.run_notes.slice(0, 2000) : null },
+      })
+      .select()
+      .single();
+
+    if (runErr) {
+      console.error("[agent/cold-runs] run insert error:", runErr.message);
+      return res.status(500).json({ error: "Failed to create run" });
+    }
+
+    // 2. Canonicalise + dedup + insert leads
+    // Two-pass approach:
+    //   (a) canonicalise + in-payload dedup (pure JS, O(N))
+    //   (b) ONE batch SELECT on Supabase to filter out already-known URLs (O(1) query vs N)
+    // This scales: 50 leads = 1 Supabase round-trip, not 50.
+    let canonicalSkipped = 0;
+    let duplicates = 0;
+    const seenCanonical = new Set();
+    const candidates = []; // { raw, canonical }
+
+    for (const raw of acceptedLeads) {
+      if (!raw || typeof raw !== "object") continue;
+      const canonical = canonicalizeLinkedInUrl(raw.linkedin_url);
+      if (!canonical) {
+        canonicalSkipped++;
+        continue;
+      }
+      if (seenCanonical.has(canonical)) {
+        duplicates++;
+        continue;
+      }
+      seenCanonical.add(canonical);
+      candidates.push({ raw, canonical });
+    }
+
+    // Batch Supabase dedup (single query)
+    let existingSet = new Set();
+    if (candidates.length > 0) {
+      const canonicalList = candidates.map((c) => c.canonical);
+      const { data: existing, error: dupErr } = await supabase
+        .from("leads")
+        .select("linkedin_url_canonical")
+        .in("linkedin_url_canonical", canonicalList);
+      if (dupErr) {
+        // Dedup is safety-critical — if we can't check, abort and clean up the run
+        console.error("[agent/cold-runs] batch dup check failed:", dupErr.message);
+        await supabase.from("cold_outreach_runs").delete().eq("id", runRow.id);
+        return res.status(500).json({ error: "Dedup check failed, run rolled back" });
+      }
+      existingSet = new Set((existing || []).map((r) => r.linkedin_url_canonical));
+    }
+
+    const toInsert = [];
+    for (const { raw, canonical } of candidates) {
+      if (existingSet.has(canonical)) {
+        duplicates++;
+        continue;
+      }
+
+      // Split full_name into first/last (best effort)
+      const fullName = String(raw.full_name || "").trim();
+      const parts = fullName.split(/\s+/);
+      const firstName = parts[0] || null;
+      const lastName = parts.length > 1 ? parts.slice(1).join(" ") : null;
+
+      toInsert.push({
+        linkedin_url: String(raw.linkedin_url).slice(0, 500),
+        linkedin_url_canonical: canonical,
+        full_name: fullName || null,
+        first_name: firstName,
+        last_name: lastName,
+        headline: raw.title ? String(raw.title).slice(0, 300) : null,
+        email: raw.email ? String(raw.email).toLowerCase().slice(0, 200) : null,
+        company_name: raw.company ? String(raw.company).slice(0, 200) : null,
+        company_size: raw.company_size ? String(raw.company_size).slice(0, 50) : null,
+        company_sector: raw.company_sector ? String(raw.company_sector).slice(0, 100) : null,
+        company_location: raw.company_location ? String(raw.company_location).slice(0, 200) : null,
+        status: "scored",
+        signal_type: "cold_search",
+        signal_category: "cold_outbound",
+        signal_source: "cold_outreach_ai",
+        signal_date: new Date().toISOString(),
+        metadata: {
+          cold_run_id: runRow.id,
+          cold_outbound: true,
+          agent_name: agentName,
+          icp_fit_reasoning: raw.icp_fit_reasoning ? String(raw.icp_fit_reasoning).slice(0, 2000) : null,
+          angle_of_approach: raw.angle_of_approach ? String(raw.angle_of_approach).slice(0, 2000) : null,
+          enrichment: raw.enrichment && typeof raw.enrichment === "object" ? raw.enrichment : null,
+        },
+      });
+    }
+
+    let inserted = 0;
+    if (toInsert.length > 0) {
+      const { error: insErr } = await supabase.from("leads").insert(toInsert);
+      if (insErr) {
+        // Rollback the run header to avoid leaving an orphan with leads_count=0.
+        // The client can retry the whole operation cleanly.
+        console.error("[agent/cold-runs] leads insert error, rolling back run:", insErr.message);
+        await supabase.from("cold_outreach_runs").delete().eq("id", runRow.id);
+        return res.status(500).json({ error: "Failed to insert leads, run rolled back" });
+      }
+      inserted = toInsert.length;
+    }
+
+    // 3. Update run header with final counts
+    await supabase
+      .from("cold_outreach_runs")
+      .update({ leads_count: inserted })
+      .eq("id", runRow.id);
+
+    res.json({
+      run_id: runRow.id,
+      run_date: runDate,
+      agent_name: agentName,
+      inserted,
+      duplicates,
+      canonical_skipped: canonicalSkipped,
+    });
+  } catch (err) {
+    console.error("[agent/cold-runs] error:", err.message);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
