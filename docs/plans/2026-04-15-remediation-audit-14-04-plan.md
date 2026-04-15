@@ -565,7 +565,48 @@ ssh ... pm2 reload leadgen
 
 ## Diagnostic P0 — findings
 
-(A remplir apres Task 0)
+**Diagnostic run:** 2026-04-15 ~08:30 UTC (from local)
+
+**PM2 state:**
+- Restart count: **2469** (toujours en hausse)
+- Uptime process courant: 16h (depuis 2026-04-14T14:32:29Z)
+- Status: online, memoire 123 MB, CPU 0.5%, heap 25/37 MiB — pas de fuite, pas de pression memoire
+- Last stored exit_code: 0 (PM2 ne capture pas le code reel sur unhandledRejection)
+
+**Root cause — unhandled promise rejection dans express-rate-limit:**
+
+```
+ValidationError: The 'X-Forwarded-For' header is set but the Express 'trust proxy' setting is false (default).
+    at Object.xForwardedForHeader (/home/openclaw/leadgen/node_modules/express-rate-limit/dist/index.cjs:371:13)
+    at wrappedValidations.<computed> [as xForwardedForHeader] (.../index.cjs:685:22)
+    at Object.keyGenerator (.../index.cjs:788:20)
+    at /home/openclaw/leadgen/node_modules/express-rate-limit/dist/index.cjs:849:32
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async /home/openclaw/leadgen/node_modules/express-rate-limit/dist/index.cjs:830:5
+  code: 'ERR_ERL_UNEXPECTED_X_FORWARDED_FOR'
+```
+
+Cette `ValidationError` est lancee **a l'interieur d'un `async` du middleware**, donc elle devient une **unhandled promise rejection**. Node 20 tue le process (`--unhandled-rejections=throw` est le defaut depuis Node 15). PM2 le relance. Des qu'une nouvelle requete HTTP (frontend, health check, autre) arrive avec `X-Forwarded-For` (ajoute par Nginx/NPM en amont), rebelote → boucle de restart.
+
+Le stdout montre `HTTP server listening on 172.17.0.1:3006` repete des dizaines de fois (un par restart). Pas de stack autre que cette ValidationError dans stderr.
+
+**OOM check:** aucun evenement dans `dmesg` (sortie vide sur grep killed/oom).
+
+**Memory/disk:** OK — 3.7G/23G RAM utilisee (pas de swap), disque 38% (72G/193G). Rien de bloquant.
+
+**Root cause hypothesis:** **unhandled promise rejection** sur `ERR_ERL_UNEXPECTED_X_FORWARDED_FOR` de `express-rate-limit`. Fix minimal : `app.set('trust proxy', 1)` (ou `true`) dans `src/index.js` avant le middleware rate-limit. Ceci dit a Express que l'IP client reelle est dans `X-Forwarded-For` (mise par Nginx/NPM), et express-rate-limit arrete de hurler.
+
+**Recommendation:** Le safety net de Task 6 (handlers `unhandledRejection` + `max_restarts`/`min_uptime`) est **necessaire mais pas suffisant**. Il faut en plus **ajouter `app.set('trust proxy', 1)`** dans `src/index.js` pour eliminer la source du crash. Sans ca, Task 6 empecherait la boucle infinie apres 10 restarts mais laisserait le process **mort** (pas ce qu'on veut).
+
+**Action proposee pour Task 6 (a mettre a jour en consequence):**
+1. Ajouter `app.set('trust proxy', 1);` juste apres la creation de l'app Express, avant tout middleware.
+2. Garder les handlers `unhandledRejection` / `uncaughtException` comme filet de securite pour les futurs bugs.
+3. Garder `ecosystem.config.js` avec `max_restarts: 10`, `min_uptime: '60s'`, `max_memory_restart: '500M'`.
+
+Bonus : 2 autres bruits observes dans les logs (non-bloquants, hors scope Task 0) :
+- `Log write failed: invalid input syntax for type uuid: "manual-connect"` — string literale passee comme runId a la fonction log Supabase.
+- `generateFollowUpMessage failed: 400 ... no low surrogate in string` — unicode mal assaini dans un prompt Claude (a deja ete corrige ailleurs avec le "Unicode sanitize global"? Peut-etre un autre code path).
+- `[alerting] Alert sent for lead-cleanup (task crashed: supabase.raw is not a function)` — le lead-cleanup cron a crashe au moins une fois (pas une cause du crash loop principal).
 
 ## Verification report (post-deploy)
 
