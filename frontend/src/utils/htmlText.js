@@ -89,18 +89,19 @@ export function textToHtml(text) {
 
   // Match http(s) URLs. Trailing punctuation (.,;:!?)]) is excluded from the
   // match so "see https://foo.com." keeps its period outside the anchor.
-  const URL_RE = /(https?:\/\/[^\s<]+[^\s<.,;:!?)\]}])/g;
-
-  // Support both "foo (https://foo.com)" and bare URLs written by the user.
-  // When the input matches "TEXT (URL)" we emit <a href="URL">TEXT</a> so
-  // a roundtrip through htmlToText → edit → textToHtml stays stable.
-  const TEXT_URL_RE = /([^\s()]+(?:[^\s()]*[^\s()])?)\s*\((https?:\/\/[^\s)]+)\)/g;
+  // Note: regex literals are recreated per line below to avoid any shared
+  // lastIndex state between iterations.
 
   const paragraphs = trimmed.split(/\n\s*\n/);
 
   const html = paragraphs
     .map((para) => {
       const lines = para.split("\n").map((line) => {
+        // Per-line regexes (fresh lastIndex) to stay safe under refactors.
+        const URL_RE = /(https?:\/\/[^\s<]+[^\s<.,;:!?)\]}])/g;
+        // Support both "foo (https://foo.com)" (roundtrip from htmlToText)
+        // and bare URLs typed by the user.
+        const TEXT_URL_RE = /([^\s()]+(?:[^\s()]*[^\s()])?)\s*\((https?:\/\/[^\s)]+)\)/g;
         let out = "";
         let cursor = 0;
         // Walk through "TEXT (URL)" matches first so they become a single <a>.
