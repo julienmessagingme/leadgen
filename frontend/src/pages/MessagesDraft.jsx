@@ -6,6 +6,7 @@ import { useLeads } from "../hooks/useLeads";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import DOMPurify from "dompurify";
+import { htmlToText, textToHtml } from "../utils/htmlText";
 
 function useApproveMessage() {
   const qc = useQueryClient();
@@ -695,7 +696,7 @@ export default function MessagesDraft() {
                         onClick={() => setEditingHtml((prev) => ({ ...prev, [lead.id]: !prev[lead.id] }))}
                         className="text-xs text-gray-400 hover:text-gray-600"
                       >
-                        {editingHtml[lead.id] ? "Apercu" : "Modifier le code"}
+                        {editingHtml[lead.id] ? "Retour texte" : "HTML brut"}
                       </button>
                     </div>
                     {editingHtml[lead.id] ? (
@@ -709,9 +710,18 @@ export default function MessagesDraft() {
                         }))}
                       />
                     ) : (
-                      <div
-                        className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-800 bg-white prose prose-sm max-w-none"
-                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(body) }}
+                      <textarea
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 resize-none focus:outline-none focus:ring-2 focus:ring-orange-300"
+                        rows={10}
+                        value={htmlToText(body)}
+                        onChange={(e) => setEditedEmails((prev) => ({
+                          ...prev,
+                          [lead.id]: {
+                            ...(prev[lead.id] || {}),
+                            body: textToHtml(e.target.value),
+                            subject: prev[lead.id]?.subject ?? subject,
+                          },
+                        }))}
                       />
                     )}
                   </div>
@@ -853,7 +863,7 @@ export default function MessagesDraft() {
                         onClick={() => setEditingHtml((prev) => ({ ...prev, [lead.id]: !prev[lead.id] }))}
                         className="text-xs text-gray-400 hover:text-gray-600"
                       >
-                        {editingHtml[lead.id] ? "Apercu" : "Modifier le code"}
+                        {editingHtml[lead.id] ? "Retour texte" : "HTML brut"}
                       </button>
                     </div>
                     {editingHtml[lead.id] ? (
@@ -867,9 +877,18 @@ export default function MessagesDraft() {
                         }))}
                       />
                     ) : (
-                      <div
-                        className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-800 bg-white prose prose-sm max-w-none"
-                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(body) }}
+                      <textarea
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 resize-none focus:outline-none focus:ring-2 focus:ring-pink-300"
+                        rows={10}
+                        value={htmlToText(body)}
+                        onChange={(e) => setEditedFollowups((prev) => ({
+                          ...prev,
+                          [lead.id]: {
+                            ...(prev[lead.id] || {}),
+                            body: textToHtml(e.target.value),
+                            subject: prev[lead.id]?.subject ?? subject,
+                          },
+                        }))}
                       />
                     )}
                   </div>
