@@ -100,7 +100,15 @@ async function enrichLead(signal, runId) {
   // ---------------------------------------------------------------
   try {
     if (enriched.company_linkedin_url) {
-      const company = await visitCompany(enriched.company_linkedin_url);
+      // Decode %C3%A9 etc. — BeReach rejects percent-encoded accents in slug
+      // (observed 404s on URLs like /company/lor%C3%A9al/, /company/ys%C3%A9/)
+      var companyUrl = enriched.company_linkedin_url;
+      try {
+        companyUrl = decodeURIComponent(companyUrl);
+      } catch (e) {
+        // Malformed URL — keep original, let BeReach reject it
+      }
+      const company = await visitCompany(companyUrl);
       if (company) {
         enriched.company_name = company.name || enriched.company_name;
         enriched.company_size = company.employeeCount || company.size || enriched.company_size;
