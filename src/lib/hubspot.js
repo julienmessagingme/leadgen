@@ -8,9 +8,11 @@ const hubspot = require("@hubspot/api-client");
 const pLimit = require("p-limit");
 
 // Module-level concurrency limiter for all HubSpot SDK calls.
-// HubSpot has a per-second rate limit that 15+ parallel calls easily exceed,
-// causing 429s and silent fail-open (leads existing in CRM pass as "new").
-const hubspotLimit = pLimit(2);
+// HubSpot has a SECONDLY policy ~10 req/s; with concurrency=2 + sub-200ms
+// calls we still saw sporadic bursts over the limit. Serialize to 1 to be
+// safe — a Task A batch of 30 leads takes ~6s total, acceptable for a daily
+// run. The throttle prevents silent fail-open (leads in CRM passed as "new").
+const hubspotLimit = pLimit(1);
 
 // Lazy-init client to avoid crash if HUBSPOT_TOKEN is not set at import time
 let _client = null;
