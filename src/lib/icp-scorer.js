@@ -518,10 +518,52 @@ async function scoreLeadsBatch(leads, rules, runId) {
     var rawText = await generateText(prompt, Math.max(512, 300 * leads.length));
     rawText = rawText.trim().replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
     results = JSON.parse(rawText).results;
-  } catch (err) {
-    // Batch call failed — throw so task-a-signals.js increments rawErrors correctly
-    await log(runId, "icp-scorer", "error", "Batch scoring failed: " + err.message);
-    throw err;
+    if (!Array.isArray(results)) throw new Error("batch response missing 'results' array");
+  } catch (batchErr) {
+    // Batch call failed (Gemini 5xx, overloaded, JSON parse error, rate limit…).
+    // Before: we threw and the pipeline lost these N leads silently (icp_score
+    // stayed NULL) — this is the historical source of ~15-19% unscored/day.
+    // Now: fall back to per-lead scoring via Gemini so at most 1 lead is lost
+    // instead of all 5 in the batch. Log the reason so Julien can spot patterns.
+    await log(runId, "icp-scorer", "warn",
+      "Batch scoring failed (" + batchErr.message + "), falling back to per-lead Gemini for " + leads.length + " leads");
+
+    results = [];
+    for (var si = 0; si < leads.length; si++) {
+      var lead = leads[si];
+      try {
+        var oneBlock = "Prospect 1:\n" +
+          "- Nom: " + (sanitizeForPrompt(lead.full_name) || ((lead.first_name || "") + " " + (lead.last_name || "")).trim() || "inconnu") + "\n" +
+          "- Titre: " + (sanitizeForPrompt(lead.headline) || "inconnu") + "\n" +
+          "- Entreprise: " + (sanitizeForPrompt(lead.company_name) || "inconnue") + "\n" +
+          "- Secteur: " + (sanitizeForPrompt(lead.company_sector) || "inconnu") + "\n" +
+          "- Localisation: " + (sanitizeForPrompt(lead.location || lead.company_location) || "inconnue") + "\n" +
+          "- Taille: " + (sanitizeForPrompt(lead.company_size) || "inconnue") + "\n" +
+          "- Signal: " + (lead.signal_type || "?") + " sur " + (lead.signal_source || "?");
+        var onePrompt = header +
+          "\nEvalue 1 prospect. Donne icp_score (0-100), tier (hot/warm/cold), reasoning (1 phrase).\n\n" +
+          oneBlock +
+          "\n\nReponds UNIQUEMENT en JSON valide, au format exact :\n{\"results\":[{\"index\":1,\"icp_score\":0,\"tier\":\"cold\",\"reasoning\":\"...\"}]}";
+        onePrompt = onePrompt.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/g, "").replace(/(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "");
+        var rawOne = await generateText(onePrompt, 512);
+        rawOne = rawOne.trim().replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
+        var parsedOne = JSON.parse(rawOne);
+        var oneResult = (parsedOne.results && parsedOne.results[0]) || parsedOne;
+        results.push({
+          index: si + 1,
+          icp_score: Math.max(0, Math.min(100, oneResult.icp_score || 0)),
+          tier: oneResult.tier || "cold",
+          reasoning: oneResult.reasoning || "",
+        });
+      } catch (singleErr) {
+        // Even the fallback failed for this lead. Record it with _failed=true
+        // so the final map can mark scoring_failed and keep icp_score NULL
+        // (surface to Julien via the unscored metric instead of hiding a 0).
+        await log(runId, "icp-scorer", "error",
+          "Single-lead fallback failed for '" + (lead.full_name || lead.id) + "': " + singleErr.message);
+        results.push({ index: si + 1, icp_score: null, tier: null, reasoning: "scoring_failed: " + singleErr.message, _failed: true });
+      }
+    }
   }
 
   // Apply deterministic adjustments and return scored leads
@@ -531,6 +573,20 @@ async function scoreLeadsBatch(leads, rules, runId) {
 
     if (meta.skip) {
       return Object.assign({}, lead, { icp_score: 0, tier: "cold", scoring_metadata: { reasoning: "signal trop ancien", skipped: true } });
+    }
+
+    // If this specific lead's fallback Gemini call failed too, leave
+    // icp_score=NULL so Julien's "unscored" metric surfaces it (rather than
+    // pretending it's a cold 0). Bonuses don't apply to an unknown score.
+    if (r._failed) {
+      return Object.assign({}, lead, {
+        icp_score: null,
+        tier: null,
+        scoring_metadata: {
+          reasoning: r.reasoning || "scoring_failed",
+          scoring_failed: true,
+        },
+      });
     }
 
     var haikuScore = Math.max(0, Math.min(100, r.icp_score || 0));
