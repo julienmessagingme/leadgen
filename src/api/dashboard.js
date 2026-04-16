@@ -206,7 +206,7 @@ router.get("/email-tracking", async (req, res) => {
     // Get all leads that had an email sent
     var { data: leads, error: leadsErr } = await supabase
       .from("leads")
-      .select("id, full_name, company_name, email, status, icp_score, tier, email_sent_at, email_followup_sent_at, linkedin_url, signal_source, signal_type, signal_category, metadata")
+      .select("id, full_name, company_name, email, phone, status, icp_score, tier, email_sent_at, email_followup_sent_at, whatsapp_sent_at, linkedin_url, signal_source, signal_type, signal_category, metadata")
       .not("email_sent_at", "is", null)
       .order("email_sent_at", { ascending: false })
       .limit(200);
@@ -253,23 +253,30 @@ router.get("/email-tracking", async (req, res) => {
       var evts = eventsByLeadType[lead.id + "|" + emailType] || [];
       var opens = evts.filter(function (e) { return e.event_type === "open"; });
       var clicks = evts.filter(function (e) { return e.event_type === "click"; });
+      const md = lead.metadata || {};
       return {
         row_key: lead.id + "-" + emailType,
         lead_id: lead.id,
-        email_type: emailType, // "email_1" | "email_followup"
+        email_type: emailType, // "email_1" | "email_followup" | "whatsapp"
         origin: classifyOrigin(lead), // "pipeline" | "cold" | "troudebal"
         full_name: lead.full_name,
         company_name: lead.company_name,
         email: lead.email,
+        phone: lead.phone || null,
         status: lead.status,
         icp_score: lead.icp_score,
         tier: lead.tier,
         linkedin_url: lead.linkedin_url,
-        cold_outbound: !!(lead.metadata && lead.metadata.cold_outbound),
+        cold_outbound: !!(md.cold_outbound),
         sent_at: sentAt,
-        email_followup_sent_at: lead.email_followup_sent_at, // repeated on each row for convenience
+        email_followup_sent_at: lead.email_followup_sent_at,
         has_followup_sent: !!lead.email_followup_sent_at,
         has_followup_pending: lead.status === "email_followup_pending",
+        has_whatsapp_sent: !!lead.whatsapp_sent_at,
+        whatsapp_sent_at: lead.whatsapp_sent_at,
+        whatsapp_status: md.whatsapp_status || null,           // sent|delivered|read|failed
+        whatsapp_error_code: md.whatsapp_error_code || null,
+        whatsapp_error_message: md.whatsapp_error_message || null,
         opens: opens.length,
         first_open: opens.length > 0 ? opens[0].created_at : null,
         last_open: opens.length > 0 ? opens[opens.length - 1].created_at : null,
@@ -278,14 +285,17 @@ router.get("/email-tracking", async (req, res) => {
       };
     }
 
-    // Flatten: 1 row per sent email (initial + optional follow-up), grouped by
-    // lead. The frontend uses lead_id + email_type to render the follow-up row
-    // right under its initial.
+    // Flatten: 1 row per "thing sent" (initial email + optional follow-up +
+    // optional WhatsApp), grouped by lead. The frontend uses lead_id +
+    // email_type to render the extra rows right under the initial one.
     var rows = [];
     leads.forEach(function (l) {
       rows.push(buildRow(l, "email_1", l.email_sent_at));
       if (l.email_followup_sent_at) {
         rows.push(buildRow(l, "email_followup", l.email_followup_sent_at));
+      }
+      if (l.whatsapp_sent_at) {
+        rows.push(buildRow(l, "whatsapp", l.whatsapp_sent_at));
       }
     });
 

@@ -242,12 +242,15 @@ function Stat({ label, value, color }) {
 
 function EmailRow({ row, expanded, onToggle }) {
   var isFollowup = row.email_type === "email_followup";
+  var isWhatsapp = row.email_type === "whatsapp";
+  var isEmailLike = !isWhatsapp; // Accordion + tracking counters only apply to email rows
   var hasOpened = row.opens > 0;
   var hasClicked = row.clicks > 0;
   var noResponse = hasOpened && !["replied", "meeting_booked"].includes(row.status);
 
   var rowBg = "";
-  if (isFollowup) rowBg = "bg-indigo-50/40";
+  if (isWhatsapp) rowBg = "bg-purple-50/40";
+  else if (isFollowup) rowBg = "bg-indigo-50/40";
   else if (noResponse) rowBg = "bg-amber-50/50";
   else if (hasOpened) rowBg = "bg-green-50/30";
 
@@ -256,19 +259,26 @@ function EmailRow({ row, expanded, onToggle }) {
     <tr className={rowBg}>
       <td className="px-4 py-3">
         <div className="flex items-start gap-1.5">
-          <button
-            onClick={onToggle}
-            className="text-gray-400 hover:text-gray-700 mt-0.5 shrink-0"
-            title={expanded ? "Masquer le contenu" : "Voir le contenu du mail"}
-          >
-            <span className="inline-block w-3 transition-transform" style={{ transform: expanded ? "rotate(90deg)" : "rotate(0deg)" }}>▸</span>
-          </button>
+          {isEmailLike ? (
+            <button
+              onClick={onToggle}
+              className="text-gray-400 hover:text-gray-700 mt-0.5 shrink-0"
+              title={expanded ? "Masquer le contenu" : "Voir le contenu du mail"}
+            >
+              <span className="inline-block w-3 transition-transform" style={{ transform: expanded ? "rotate(90deg)" : "rotate(0deg)" }}>▸</span>
+            </button>
+          ) : (
+            <span className="inline-block w-3 shrink-0" />
+          )}
           <div>
-            <div className={`text-sm ${isFollowup ? "text-gray-500" : "font-medium text-gray-900"}`}>
+            <div className={`text-sm ${isFollowup || isWhatsapp ? "text-gray-500" : "font-medium text-gray-900"}`}>
               {isFollowup && <span className="text-indigo-500 mr-1">↳</span>}
-              {isFollowup ? "Relance J+14" : row.full_name}
+              {isWhatsapp && <span className="text-purple-500 mr-1">↳</span>}
+              {isFollowup ? "Relance J+14"
+               : isWhatsapp ? ("WhatsApp" + (row.phone ? " · " + row.phone : ""))
+               : row.full_name}
             </div>
-            {!isFollowup && row.linkedin_url && (
+            {!isFollowup && !isWhatsapp && row.linkedin_url && (
               <a href={row.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline">LinkedIn</a>
             )}
           </div>
@@ -366,25 +376,111 @@ function EmailContentRow({ row }) {
 }
 
 /**
- * WhatsApp trigger button — stub for now.
- *
- * Flow not wired yet because Julien is still finalising the Meta-approved
- * template (one unique template for everyone, no per-lead Sonnet generation).
- * Renders a disabled button with a tooltip so the UI layout is final and
- * we won't shift things around when the backend lands.
+ * WhatsApp trigger. Click → POST /leads/:id/send-whatsapp. If the backend
+ * returns 404 phone_required (FullEnrich didn't find the number and nothing
+ * stored on the lead), we open a modal so Julien can type it in. Otherwise
+ * the flow fires, a purple "WhatsApp envoyé" sub-row appears under the
+ * lead, and the webhook is responsible for updating delivery status.
  */
 function WhatsappAction({ row }) {
-  const tooltip = "WhatsApp bientôt disponible — template Meta en cours de préparation";
-  // Terminal leads get a dash, same pattern as FollowupAction
+  const qc = useQueryClient();
+  const [modalOpen, setModalOpen] = useState(false);
+  const [manualPhone, setManualPhone] = useState("");
+  const [feedback, setFeedback] = useState(null);
+
+  const sendWhatsapp = useMutation({
+    mutationFn: (body) => api.post(`/leads/${row.lead_id}/send-whatsapp`, body || {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["email-tracking"] });
+    },
+  });
+
+  if (row.has_whatsapp_sent) {
+    return <span className="text-[10px] text-gray-500">WhatsApp parti</span>;
+  }
   if (["replied", "meeting_booked", "disqualified"].includes(row.status)) return null;
+
+  const fire = async (body) => {
+    setFeedback(null);
+    try {
+      const res = await sendWhatsapp.mutateAsync(body);
+      setFeedback({ ok: true, msg: "WhatsApp envoyé à " + res.phone_used });
+      setModalOpen(false);
+      setManualPhone("");
+    } catch (err) {
+      if (err.status === 404) {
+        // Backend told us FullEnrich couldn't find the number — open modal
+        setModalOpen(true);
+        setFeedback(null);
+      } else {
+        setFeedback({ ok: false, msg: err.message || "Erreur" });
+      }
+    }
+  };
+
+  const onClick = () => fire();
+  const onSubmitManual = (e) => {
+    e.preventDefault();
+    if (!manualPhone.trim()) return;
+    fire({ manual_phone: manualPhone.trim() });
+  };
+
   return (
-    <button
-      disabled
-      title={tooltip}
-      className="px-2.5 py-1 text-xs rounded-md bg-gray-100 text-gray-500 cursor-not-allowed border border-gray-200"
-    >
-      💬 WhatsApp <span className="text-[9px] text-gray-400">(bientôt)</span>
-    </button>
+    <div className="flex flex-col items-end gap-0.5">
+      <button
+        onClick={onClick}
+        disabled={sendWhatsapp.isPending}
+        className="px-2.5 py-1 text-xs rounded-md bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50"
+        title="Envoyer le template WhatsApp (FullEnrich si pas de numéro)"
+      >
+        {sendWhatsapp.isPending ? "…" : "💬 WhatsApp"}
+      </button>
+      {feedback && (
+        <span className={`text-[10px] ${feedback.ok ? "text-green-700" : "text-red-600"}`} title={feedback.msg}>
+          {feedback.ok ? "✓ envoyé" : feedback.msg.slice(0, 30)}
+        </span>
+      )}
+
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setModalOpen(false)}>
+          <div className="bg-white rounded-lg shadow-xl p-5 w-[420px] max-w-[92vw]" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-sm font-semibold text-gray-800 mb-1">Numéro non trouvé par FullEnrich</h3>
+            <p className="text-xs text-gray-500 mb-3">
+              Saisis le numéro de <b>{row.full_name}</b> (WhatsApp attendu, format international avec +33 / +971 …) pour envoyer le template.
+            </p>
+            <form onSubmit={onSubmitManual}>
+              <input
+                autoFocus
+                type="tel"
+                value={manualPhone}
+                onChange={(e) => setManualPhone(e.target.value)}
+                placeholder="+33612345678"
+                className="w-full px-3 py-2 text-sm rounded-md border border-gray-300 focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+              />
+              <div className="flex justify-end gap-2 mt-4">
+                <button
+                  type="button"
+                  onClick={() => { setModalOpen(false); setManualPhone(""); setFeedback(null); }}
+                  className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={sendWhatsapp.isPending || !manualPhone.trim()}
+                  className="px-3 py-1.5 text-sm rounded-md bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50"
+                >
+                  {sendWhatsapp.isPending ? "Envoi…" : "Envoyer WhatsApp"}
+                </button>
+              </div>
+              {feedback && !feedback.ok && (
+                <div className="text-xs text-red-600 mt-2">{feedback.msg}</div>
+              )}
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -407,6 +503,23 @@ function TypeBadge({ origin, isFollowup }) {
 }
 
 function StatusBadge({ row, isFollowup, hasOpened, hasClicked, noResponse }) {
+  if (row.email_type === "whatsapp") {
+    const map = {
+      failed:    { label: "Non parvenu" + (row.whatsapp_error_code ? " · " + row.whatsapp_error_code : ""), cls: "bg-red-100 text-red-800" },
+      read:      { label: "Lu",        cls: "bg-green-100 text-green-800" },
+      delivered: { label: "Délivré",   cls: "bg-blue-100 text-blue-800" },
+      sent:      { label: "Envoyé",    cls: "bg-purple-100 text-purple-800" },
+    };
+    const entry = map[row.whatsapp_status] || { label: "Envoyé", cls: "bg-purple-100 text-purple-800" };
+    return (
+      <span
+        className={`inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded uppercase ${entry.cls}`}
+        title={row.whatsapp_error_message || undefined}
+      >
+        {entry.label}
+      </span>
+    );
+  }
   if (isFollowup) {
     return <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded bg-indigo-100 text-indigo-700 uppercase">Relance envoyée</span>;
   }

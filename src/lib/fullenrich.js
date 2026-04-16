@@ -180,4 +180,80 @@ function sleep(ms) {
   return new Promise(function(resolve) { setTimeout(resolve, ms); });
 }
 
-module.exports = { enrichContactInfo };
+/**
+ * Enrich a lead's phone number via FullEnrich.
+ * Called on-demand when Julien clicks the WhatsApp button on a lead without
+ * a phone. Distinct from enrichContactInfo because phones cost 10 credits
+ * each (vs 1 for emails) — we only want to burn that when we're about to
+ * actually reach out by WhatsApp.
+ *
+ * @param {string} linkedinUrl - LinkedIn profile URL
+ * @param {string|null} runId  - UUID for logging (null acceptable for manual runs)
+ * @returns {Promise<{phone: string|null, status: string, credits: number}|null>}
+ */
+async function enrichPhone(linkedinUrl, runId) {
+  var apiKey = process.env.FULLENRICH_API_KEY;
+  if (!apiKey) {
+    await log(runId, "fullenrich", "warn", "FULLENRICH_API_KEY not set — skipping enrichPhone",
+      { linkedin_url: linkedinUrl });
+    return null;
+  }
+  if (!linkedinUrl) return null;
+
+  try {
+    // Submit: single contact, phones-only
+    var submitRes = await fetch(FULLENRICH_BASE + "/contact/enrich/bulk", {
+      method: "POST",
+      headers: { "Authorization": "Bearer " + apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "leadgen-phone-" + Date.now(),
+        datas: [{ linkedin_url: linkedinUrl, enrich_fields: ["contact.phones"] }],
+      }),
+    });
+    if (!submitRes.ok) {
+      await log(runId, "fullenrich", "warn",
+        "FullEnrich phone submit failed (" + submitRes.status + "): " + (await submitRes.text()).slice(0, 200),
+        { linkedin_url: linkedinUrl });
+      return null;
+    }
+    var submitData = await submitRes.json();
+    var enrichmentId = submitData.enrichment_id;
+    if (!enrichmentId) return null;
+
+    for (var attempt = 1; attempt <= MAX_POLL_ATTEMPTS; attempt++) {
+      await sleep(POLL_INTERVAL_MS);
+      var pollRes = await fetch(FULLENRICH_BASE + "/contact/enrich/bulk/" + enrichmentId, {
+        method: "GET",
+        headers: { "Authorization": "Bearer " + apiKey },
+      });
+      if (!pollRes.ok) continue;
+      var pollData = await pollRes.json();
+      if (pollData.status === "FINISHED") {
+        var datas = pollData.datas;
+        if (!datas || !datas.length || !datas[0].contact) return null;
+        var c = datas[0].contact;
+        var phone = c.most_probable_phone || (Array.isArray(c.phones) && c.phones[0]) || null;
+        var credits = pollData.cost ? pollData.cost.credits : 0;
+        var status = (c.most_probable_phone_status || "unknown").toLowerCase();
+        await log(runId, "fullenrich", "info",
+          "FullEnrich phone result: " + (phone ? phone + " (" + status + ")" : "none") + " — " + credits + " credits",
+          { linkedin_url: linkedinUrl, phone: phone, status: status, credits: credits });
+        return { phone: phone, status: status, credits: credits };
+      }
+      if (pollData.status === "IN_PROGRESS" || pollData.status === "PENDING") continue;
+      return null;
+    }
+    // Timeout
+    await log(runId, "fullenrich", "warn",
+      "FullEnrich phone enrichment timed out",
+      { linkedin_url: linkedinUrl, enrichment_id: enrichmentId });
+    return null;
+  } catch (err) {
+    await log(runId, "fullenrich", "warn",
+      "FullEnrich phone enrichment threw: " + err.message,
+      { linkedin_url: linkedinUrl });
+    return null;
+  }
+}
+
+module.exports = { enrichContactInfo, enrichPhone };

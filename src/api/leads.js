@@ -899,6 +899,154 @@ router.get("/:id/hubspot-email", async (req, res) => {
 });
 
 /**
+ * POST /:id/send-whatsapp — trigger the WhatsApp sub-flow for this lead.
+ *
+ * Flow:
+ *   1. Resolve phone: body.manual_phone (if Julien typed it in the fallback
+ *      modal) → existing lead.phone → FullEnrich phones lookup (10 credits).
+ *   2. If still no phone → 404 { error: "phone_required" }. Frontend opens
+ *      the manual-phone modal.
+ *   3. findOrCreateSubscriber on uChat → get user_id.
+ *   4. sendSubFlowByUserId(user_id, WHATSAPP_DEFAULT_SUB_FLOW). That
+ *      subflow contains the Meta-approved carousel template + the tracking
+ *      tag Julien configured in uChat.
+ *   5. Mark lead: whatsapp_sent_at = now, metadata.whatsapp_* populated.
+ *
+ * The dashboard then displays a "↳ WhatsApp envoyé" sub-row under the lead
+ * in /email-tracking, and updates live when the webhook POSTs delivery
+ * status updates.
+ *
+ * Body: { manual_phone?: string }
+ * Response:
+ *   200 { ok, phone_used, user_id, created_subscriber, sub_flow_ns, enriched_phone }
+ *   404 { error: "phone_required", reason: "enrich_empty" | "no_linkedin_url" }
+ *   409 { error: "whatsapp_already_sent" } — whatsapp_sent_at already set
+ *   502 { error: "uchat_failed", detail }
+ */
+router.post("/:id/send-whatsapp", async (req, res) => {
+  try {
+    const { enrichPhone } = require("../lib/fullenrich");
+    const { findOrCreateSubscriber, sendSubFlowByUserId } = require("../lib/messagingme");
+
+    const subFlowNs = process.env.WHATSAPP_DEFAULT_SUB_FLOW;
+    if (!subFlowNs) {
+      return res.status(503).json({ error: "whatsapp_not_configured", detail: "WHATSAPP_DEFAULT_SUB_FLOW env var missing" });
+    }
+
+    const { data: lead, error: fetchErr } = await supabase
+      .from("leads")
+      .select("*")
+      .eq("id", req.params.id)
+      .single();
+    if (fetchErr || !lead) return res.status(404).json({ error: "Lead not found" });
+
+    // Guard: don't re-trigger if already sent (frontend shows "envoyé" button
+    // hidden anyway, but a race or stale UI could retry).
+    if (lead.whatsapp_sent_at) {
+      return res.status(409).json({ error: "whatsapp_already_sent", sent_at: lead.whatsapp_sent_at });
+    }
+
+    // Normalize phone helper
+    function normalize(p) {
+      if (!p) return null;
+      const s = String(p).replace(/[\s\-().]/g, "");
+      if (!s) return null;
+      // Accept both leading + and raw digits; uChat stores with +
+      return s.startsWith("+") ? s : ("+" + s.replace(/^0+/, ""));
+    }
+
+    // 1. Resolve phone — priority: manual > stored > FullEnrich
+    const manualPhone = req.body && req.body.manual_phone ? normalize(req.body.manual_phone) : null;
+    let phone = manualPhone || normalize(lead.phone);
+    let enrichedPhone = null;
+
+    if (!phone) {
+      if (!lead.linkedin_url) {
+        return res.status(404).json({ error: "phone_required", reason: "no_linkedin_url" });
+      }
+      const enriched = await enrichPhone(lead.linkedin_url, null);
+      if (enriched && enriched.phone) {
+        phone = normalize(enriched.phone);
+        enrichedPhone = true;
+      }
+    }
+
+    if (!phone) {
+      return res.status(404).json({ error: "phone_required", reason: "enrich_empty" });
+    }
+
+    // 2. Upsert uChat subscriber
+    let subscriber, created;
+    try {
+      const result = await findOrCreateSubscriber(phone, {
+        first_name: lead.first_name || null,
+        last_name: lead.last_name || null,
+        email: lead.email || null,
+      });
+      subscriber = result.subscriber;
+      created = result.created;
+    } catch (uchatErr) {
+      console.error("[send-whatsapp] uChat subscriber failed:", uchatErr.message);
+      return res.status(502).json({ error: "uchat_failed", step: "subscriber", detail: uchatErr.message });
+    }
+
+    const userId = subscriber.user_id;
+    const userNs = subscriber.user_ns;
+
+    // 3. Trigger the sub-flow (carousel template + tracking tag)
+    let flowResponse;
+    try {
+      flowResponse = await sendSubFlowByUserId(userId, subFlowNs);
+    } catch (flowErr) {
+      console.error("[send-whatsapp] sub-flow send failed:", flowErr.message);
+      return res.status(502).json({ error: "uchat_failed", step: "sub_flow", detail: flowErr.message });
+    }
+
+    // 4. Persist on lead
+    const updatedMetadata = Object.assign({}, lead.metadata || {}, {
+      whatsapp_user_id: userId,
+      whatsapp_user_ns: userNs,
+      whatsapp_sub_flow_ns: subFlowNs,
+      whatsapp_status: "sent",
+      whatsapp_send_source: manualPhone ? "manual" : (enrichedPhone ? "fullenrich" : "stored"),
+      whatsapp_uchat_response: flowResponse,
+    });
+    const patch = {
+      whatsapp_sent_at: new Date().toISOString(),
+      metadata: updatedMetadata,
+    };
+    if (phone !== lead.phone) patch.phone = phone;
+
+    const { error: updErr } = await supabase
+      .from("leads")
+      .update(patch)
+      .eq("id", lead.id);
+    if (updErr) {
+      console.error("[send-whatsapp] DB update failed (WhatsApp already sent at uChat!):", updErr.message);
+      return res.status(200).json({
+        ok: true,
+        warning: "WhatsApp sent via uChat but DB update failed: " + updErr.message,
+        phone_used: phone,
+        user_id: userId,
+        sub_flow_ns: subFlowNs,
+      });
+    }
+
+    res.json({
+      ok: true,
+      phone_used: phone,
+      user_id: userId,
+      created_subscriber: created,
+      sub_flow_ns: subFlowNs,
+      enriched_phone: enrichedPhone === true,
+    });
+  } catch (err) {
+    console.error("POST /leads/:id/send-whatsapp error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
  * GET /:id/first-email — fetch the subject + archived HTML body of the first
  * email that was actually sent to this lead. Used by the /email-followups
  * accordion to let Julien reread the initial mail before picking a case study

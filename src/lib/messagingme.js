@@ -110,9 +110,86 @@ async function sendWhatsAppByUserId(userId, templateNamespace, templateName, lan
   });
 }
 
+/**
+ * Find an existing uChat subscriber by phone number.
+ * Returns null if no match. GET /subscribers?phone=E164 is whitespace-
+ * sensitive (uChat stores E.164 without spaces) — normalise before calling.
+ *
+ * @param {string} phone - E.164 phone number (e.g. "+33612345678")
+ * @returns {Promise<object|null>} Full subscriber object or null
+ */
+async function findSubscriberByPhone(phone) {
+  var apiKey = process.env.MESSAGINGME_API_KEY;
+  var workspaceId = process.env.MESSAGINGME_WORKSPACE_ID;
+  if (!apiKey || !workspaceId) throw new Error("MessagingMe credentials not configured");
+  var url = MESSAGINGME_BASE + "/subscribers?phone=" + encodeURIComponent(phone);
+  var res = await fetch(url, {
+    method: "GET",
+    headers: { "Authorization": "Bearer " + apiKey, "X-Workspace-Id": workspaceId },
+  });
+  if (!res.ok) {
+    throw new Error("findSubscriberByPhone failed (" + res.status + "): " + (await res.text()));
+  }
+  var data = await res.json();
+  return (data.data && data.data.length > 0) ? data.data[0] : null;
+}
+
+/**
+ * Create a new uChat subscriber with the given phone number.
+ * Only `phone` is required — uChat infers the channel (whatsapp_cloud for
+ * E.164 numbers). Extra fields like first_name, last_name, etc. can be
+ * passed via `opts` and will land in subscriber custom fields.
+ *
+ * @param {string} phone - E.164 phone number
+ * @param {object} opts - Optional fields { first_name, last_name, email, ... }
+ * @returns {Promise<object>} Created subscriber
+ */
+async function createSubscriber(phone, opts) {
+  var body = Object.assign({ phone: phone }, opts || {});
+  var data = await messagingme("/subscriber/create", body);
+  return data.data;
+}
+
+/**
+ * Find the subscriber by phone or create one if missing.
+ * Idempotent-ish: two concurrent calls could both see "not found" and both
+ * try to create — uChat tolerates duplicate-phone creates (returns 201 each
+ * time with a new user_ns). Minor edge case, not worth locking for here.
+ *
+ * @param {string} phone
+ * @param {object} [opts] - Fields to set if we end up creating
+ * @returns {Promise<{subscriber: object, created: boolean}>}
+ */
+async function findOrCreateSubscriber(phone, opts) {
+  var existing = await findSubscriberByPhone(phone);
+  if (existing) return { subscriber: existing, created: false };
+  var created = await createSubscriber(phone, opts);
+  return { subscriber: created, created: true };
+}
+
+/**
+ * Send a sub-flow to a subscriber by user_id. The sub-flow typically wraps
+ * a Meta-approved template carousel plus any tagging/tracking logic Julien
+ * configured in uChat — we just trigger it, uChat handles the rest.
+ *
+ * @param {string} userId   - Subscriber user_id (E.164 without the +)
+ * @param {string} subFlowNs - e.g. "f174727s3798065"
+ * @returns {Promise<object>} uChat response
+ */
+async function sendSubFlowByUserId(userId, subFlowNs) {
+  return messagingme("/subscriber/send-sub-flow-by-user-id", {
+    user_id: userId,
+    sub_flow_ns: subFlowNs,
+  });
+}
+
 module.exports = {
   createWhatsAppTemplate,
   listTemplates,
   syncTemplates,
   sendWhatsAppByUserId,
+  findSubscriberByPhone,
+  createSubscriber,
+  findOrCreateSubscriber,
+  sendSubFlowByUserId,
 };
