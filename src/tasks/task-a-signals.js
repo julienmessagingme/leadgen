@@ -211,7 +211,9 @@ module.exports = async function taskASignals(runId) {
     // ---------------------------------------------------------------
     // Reserve 30 credits for enriching top 30 leads (visitCompany only = 1 credit each)
     var ENRICHMENT_RESERVE = 30;
-    var TOTAL_BUDGET = 300;
+    // Full daily BeReach plan (900/day). No P1/P2/P3 rotation anymore —
+    // every active watchlist source must be scraped every day Mon-Sat.
+    var TOTAL_BUDGET = 900;
 
     // Check how many credits Task C used today (follow-ups = 2 credits each)
     // Note: getSentInvitations() is still called in Task C (1 credit) even when BeReach returns 0
