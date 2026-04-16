@@ -933,6 +933,35 @@ router.get("/:id/first-email", async (req, res) => {
 });
 
 /**
+ * GET /:id/followup-email — same contract as /first-email but for the J+14
+ * follow-up mail (metadata.followup_subject / followup_body). Used by the
+ * accordion in /email-tracking to let Julien reread what actually went out.
+ */
+router.get("/:id/followup-email", async (req, res) => {
+  try {
+    const { data: lead, error } = await supabase
+      .from("leads")
+      .select("id, metadata, email_followup_sent_at")
+      .eq("id", req.params.id)
+      .single();
+    if (error || !lead) return res.status(404).json({ error: "Lead not found" });
+    if (!lead.email_followup_sent_at) return res.status(404).json({ error: "No follow-up email on this lead" });
+
+    const md = lead.metadata || {};
+    res.json({
+      subject: md.followup_subject || null,
+      body: md.followup_body || null,
+      sent_at: lead.email_followup_sent_at,
+      message_id: md.followup_message_id || null,
+      body_archived: Boolean(md.followup_body),
+    });
+  } catch (err) {
+    console.error("GET /leads/:id/followup-email error:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
  * POST /:id/generate-followup-now -- Generate a follow-up email draft on demand.
  *
  * Use case: Julien sees in /email-tracking that a prospect opened the first

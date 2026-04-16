@@ -38,6 +38,18 @@ function useCaseStudies() {
   });
 }
 
+function useSentEmailBody(leadId, emailType, enabled) {
+  // email_type is either "email_1" (→ /first-email) or "email_followup"
+  // (→ /followup-email). Keyed by both so each row caches independently.
+  const path = emailType === "email_followup" ? "followup-email" : "first-email";
+  return useQuery({
+    queryKey: ["sent-email", leadId, emailType],
+    queryFn: () => api.get(`/leads/${leadId}/${path}`),
+    enabled: Boolean(enabled && leadId),
+    staleTime: 5 * 60_000,
+  });
+}
+
 export default function EmailTracking() {
   var { data, isLoading } = useQuery({
     queryKey: ["email-tracking"],
@@ -49,6 +61,7 @@ export default function EmailTracking() {
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all"); // all | opened | clicked | unread | to_relaunch
+  const [expandedRow, setExpandedRow] = useState(null); // row_key of the expanded email body, or null
 
   // Group initial+follow-up rows by lead so a prospect's thread stays together
   // when we sort/filter/search. The backend already emits them in lead-then-
@@ -200,7 +213,14 @@ export default function EmailTracking() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {rows.map(function (r) {
-                  return <EmailRow key={r.row_key} row={r} />;
+                  return (
+                    <EmailRow
+                      key={r.row_key}
+                      row={r}
+                      expanded={expandedRow === r.row_key}
+                      onToggle={() => setExpandedRow((k) => (k === r.row_key ? null : r.row_key))}
+                    />
+                  );
                 })}
               </tbody>
             </table>
@@ -220,7 +240,7 @@ function Stat({ label, value, color }) {
   );
 }
 
-function EmailRow({ row }) {
+function EmailRow({ row, expanded, onToggle }) {
   var isFollowup = row.email_type === "email_followup";
   var hasOpened = row.opens > 0;
   var hasClicked = row.clicks > 0;
@@ -232,15 +252,27 @@ function EmailRow({ row }) {
   else if (hasOpened) rowBg = "bg-green-50/30";
 
   return (
+    <>
     <tr className={rowBg}>
       <td className="px-4 py-3">
-        <div className={`text-sm ${isFollowup ? "text-gray-500" : "font-medium text-gray-900"}`}>
-          {isFollowup && <span className="text-indigo-500 mr-1">↳</span>}
-          {isFollowup ? "Relance J+14" : row.full_name}
+        <div className="flex items-start gap-1.5">
+          <button
+            onClick={onToggle}
+            className="text-gray-400 hover:text-gray-700 mt-0.5 shrink-0"
+            title={expanded ? "Masquer le contenu" : "Voir le contenu du mail"}
+          >
+            <span className="inline-block w-3 transition-transform" style={{ transform: expanded ? "rotate(90deg)" : "rotate(0deg)" }}>▸</span>
+          </button>
+          <div>
+            <div className={`text-sm ${isFollowup ? "text-gray-500" : "font-medium text-gray-900"}`}>
+              {isFollowup && <span className="text-indigo-500 mr-1">↳</span>}
+              {isFollowup ? "Relance J+14" : row.full_name}
+            </div>
+            {!isFollowup && row.linkedin_url && (
+              <a href={row.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline">LinkedIn</a>
+            )}
+          </div>
         </div>
-        {!isFollowup && row.linkedin_url && (
-          <a href={row.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline">LinkedIn</a>
-        )}
       </td>
       <td className="px-4 py-3 text-xs whitespace-nowrap">
         <TypeBadge origin={row.origin} isFollowup={isFollowup} />
@@ -278,6 +310,56 @@ function EmailRow({ row }) {
             <WhatsappAction row={row} />
           </div>
         )}
+      </td>
+    </tr>
+    {expanded && <EmailContentRow row={row} />}
+    </>
+  );
+}
+
+function EmailContentRow({ row }) {
+  const { data, isLoading, error } = useSentEmailBody(row.lead_id, row.email_type, true);
+
+  return (
+    <tr>
+      <td colSpan={9} className="px-4 pb-3 bg-gray-50 border-t-0">
+        <div className="border border-gray-200 rounded-md bg-white p-3 ml-6 mr-2">
+          {isLoading ? (
+            <div className="text-xs text-gray-400">Chargement du contenu…</div>
+          ) : error ? (
+            <div className="text-xs text-red-600">Erreur : {error.message}</div>
+          ) : !data ? (
+            <div className="text-xs text-gray-500">Aucune donnée.</div>
+          ) : (
+            <>
+              <div className="text-xs text-gray-500 mb-1">
+                Envoyé le{" "}
+                <span className="font-mono">
+                  {new Date(data.sent_at).toLocaleString("fr-FR", {
+                    day: "2-digit", month: "2-digit", year: "numeric",
+                    hour: "2-digit", minute: "2-digit",
+                  })}
+                </span>
+              </div>
+              {data.subject && (
+                <div className="text-sm font-semibold text-gray-800 mb-2">
+                  Objet : {data.subject}
+                </div>
+              )}
+              {data.body_archived && data.body ? (
+                <div
+                  className="text-sm text-gray-700 prose prose-sm max-w-none"
+                  dangerouslySetInnerHTML={{ __html: data.body }}
+                />
+              ) : (
+                <div className="text-xs text-gray-500 italic">
+                  Corps non archivé (mail antérieur à la feature). Retrouve-le dans Gmail Sent avec l'ID{" "}
+                  <span className="font-mono">{data.message_id || "—"}</span>.
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </td>
     </tr>
   );
