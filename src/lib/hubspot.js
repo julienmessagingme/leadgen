@@ -398,7 +398,8 @@ async function createContactInHubspot(input) {
     // Whitelist properties we support. Skip empty/null values so we don't
     // wipe defaults or send "undefined" strings.
     const allowed = ["email", "firstname", "lastname", "phone", "mobilephone",
-      "company", "jobtitle", "website", "lifecyclestage", "hs_lead_status"];
+      "company", "jobtitle", "website", "lifecyclestage", "hs_lead_status",
+      "hubspot_owner_id"];
     const properties = {};
     for (const k of allowed) {
       const v = input[k];
@@ -408,6 +409,12 @@ async function createContactInHubspot(input) {
     }
     // Default lifecycle / lead status so the contact isn't a dangling ghost
     if (!properties.lifecyclestage) properties.lifecyclestage = "lead";
+    // Default owner — contacts created by our automation should be assigned
+    // to Julien by default so they land in his HubSpot views. Overridable
+    // via input.hubspot_owner_id if a caller needs a different owner.
+    if (!properties.hubspot_owner_id && process.env.HUBSPOT_DEFAULT_OWNER_ID) {
+      properties.hubspot_owner_id = process.env.HUBSPOT_DEFAULT_OWNER_ID;
+    }
 
     const resp = await hubspotLimit(() =>
       client.crm.contacts.basicApi.create({ properties })

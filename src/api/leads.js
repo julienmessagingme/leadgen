@@ -954,15 +954,18 @@ router.post("/:id/send-whatsapp", async (req, res) => {
     }
 
     // Normalize phone helper.
-    // Accepts: "+33…", "33…" (raw E.164), "0633921577" (FR national), with
-    // optional whitespace/dashes. Returns canonical "+XXXXXXXX".
+    // Accepts: "+33…", "33…" (raw E.164), "0033…" (international 00 prefix),
+    //          "0633921577" (FR national), with optional whitespace/dashes.
+    // Returns canonical "+XXXXXXXX" for uChat/WhatsApp.
     function normalize(p) {
       if (!p) return null;
       const s = String(p).replace(/[\s\-().]/g, "");
       if (!s) return null;
       if (s.startsWith("+")) return s;
+      // International prefix "00" (e.g. "0033633921577") → +33633921577
+      if (s.startsWith("00") && s.length >= 5) return "+" + s.slice(2);
       // French national mobile (10 digits starting with 0) — the most common
-      // paste case from the manual-entry modal. Map 0X… → +33X….
+      // paste case from HubSpot and the manual-entry modal. Map 0X… → +33X….
       if (/^0\d{9}$/.test(s)) return "+33" + s.slice(1);
       // Otherwise treat as raw international digits and prefix +.
       if (/^\d+$/.test(s)) return "+" + s;
@@ -979,7 +982,7 @@ router.post("/:id/send-whatsapp", async (req, res) => {
     // Try HubSpot before burning FullEnrich credits.
     if (!phone) {
       try {
-        const { findPhoneInHubspot } = require("../lib/hubspot");
+        const { findPhoneInHubspot, setPhoneInHubspot } = require("../lib/hubspot");
         const hsPhone = await findPhoneInHubspot({
           email: lead.email,
           firstName: lead.first_name,
@@ -987,8 +990,22 @@ router.post("/:id/send-whatsapp", async (req, res) => {
           companyName: lead.company_name,
         });
         if (hsPhone && hsPhone.phone) {
-          phone = normalize(hsPhone.phone);
-          phoneSource = "hubspot_" + hsPhone.source; // hubspot_mobile / hubspot_phone / hubspot_calculated
+          const normalized = normalize(hsPhone.phone);
+          phone = normalized;
+          phoneSource = "hubspot_" + hsPhone.source;
+
+          // If the HubSpot stored value is not canonical E.164 (common case:
+          // "06 33 92 15 77"), rewrite it in place so future lookups + Meta
+          // sends don't choke on the format. Same field, overwrite allowed.
+          if (normalized && normalized !== hsPhone.phone) {
+            const targetField = hsPhone.source === "phone" ? "phone" : "mobilephone";
+            setPhoneInHubspot(hsPhone.contactId, normalized, { field: targetField, overwrite: true })
+              .then((ok) => {
+                if (ok) console.log("[send-whatsapp] HubSpot phone reformatted on contact " + hsPhone.contactId + " (" + targetField + "): " + hsPhone.phone + " → " + normalized);
+              })
+              .catch((e) => console.warn("[send-whatsapp] HubSpot reformat failed:", e.message));
+            // Note: fire-and-forget; we don't block the WhatsApp send on this.
+          }
         }
       } catch (hsErr) {
         console.warn("[send-whatsapp] HubSpot phone lookup threw:", hsErr.message);
