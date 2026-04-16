@@ -45,10 +45,68 @@ export default function EmailTracking() {
     refetchInterval: 120000,
   });
 
-  var rows = data?.rows || [];
+  var rawRows = data?.rows || [];
+
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all"); // all | opened | clicked | unread | to_relaunch
+
+  // Group initial+follow-up rows by lead so a prospect's thread stays together
+  // when we sort/filter/search. The backend already emits them in lead-then-
+  // type order but we need to re-sort globally.
+  const groups = [];
+  const byLead = {};
+  for (const r of rawRows) {
+    if (!byLead[r.lead_id]) {
+      byLead[r.lead_id] = { lead_id: r.lead_id, rows: [] };
+      groups.push(byLead[r.lead_id]);
+    }
+    byLead[r.lead_id].rows.push(r);
+  }
+
+  // Sort groups: leads who opened first (desc by last_open on email_1), then
+  // leads who clicked but haven't opened recently, then the rest by sent_at.
+  // "Ceux qui ont ouvert" = les plus chauds = en tête, comme demandé par Julien.
+  function initialOf(g) {
+    return g.rows.find((r) => r.email_type === "email_1") || g.rows[0];
+  }
+  groups.sort((a, b) => {
+    const ia = initialOf(a);
+    const ib = initialOf(b);
+    // Opened beats un-opened
+    if ((ia.opens > 0) !== (ib.opens > 0)) return ia.opens > 0 ? -1 : 1;
+    // Among opened: most recent open first
+    if (ia.opens > 0 && ib.opens > 0) {
+      const la = new Date(ia.last_open || ia.first_open || 0).getTime();
+      const lb = new Date(ib.last_open || ib.first_open || 0).getTime();
+      if (la !== lb) return lb - la;
+    }
+    // Fallback: most recent send first
+    return new Date(ib.sent_at).getTime() - new Date(ia.sent_at).getTime();
+  });
+
+  // Apply text search + status filter at the group level (we show/hide the
+  // whole thread, not individual rows).
+  const q = search.trim().toLowerCase();
+  const filteredGroups = groups.filter((g) => {
+    const init = initialOf(g);
+    if (q) {
+      const hay = [init.full_name, init.company_name, init.email].map((s) => (s || "").toLowerCase()).join(" ");
+      if (!hay.includes(q)) return false;
+    }
+    if (statusFilter === "opened") return init.opens > 0;
+    if (statusFilter === "clicked") return init.clicks > 0;
+    if (statusFilter === "unread") return init.opens === 0;
+    if (statusFilter === "to_relaunch") {
+      return init.opens > 0 && !init.has_followup_sent && !init.has_followup_pending && !["replied", "meeting_booked", "disqualified"].includes(init.status);
+    }
+    return true;
+  });
+
+  // Flatten back to rows keeping each group's internal order.
+  const rows = filteredGroups.flatMap((g) => g.rows);
 
   // Stats: compute from initial emails only (avoid double-counting the lead)
-  var initialRows = rows.filter(function (r) { return r.email_type === "email_1"; });
+  var initialRows = rawRows.filter(function (r) { return r.email_type === "email_1"; });
   var totalSent = initialRows.length;
   var totalOpened = initialRows.filter(function (l) { return l.opens > 0; }).length;
   var totalClicked = initialRows.filter(function (l) { return l.clicks > 0; }).length;
@@ -77,10 +135,53 @@ export default function EmailTracking() {
           <Stat label="Taux clic" value={clickRate + "%"} color="text-blue-600" />
         </div>
 
+        {/* Search + filters */}
+        <div className="flex flex-col sm:flex-row gap-3 mb-4 items-stretch sm:items-center">
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Rechercher nom, entreprise ou email…"
+            className="flex-1 px-3 py-2 text-sm rounded-md border border-gray-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 bg-white"
+          />
+          <div className="flex gap-1 flex-wrap">
+            {[
+              { v: "all",         label: "Tous (" + initialRows.length + ")" },
+              { v: "opened",      label: "Ouverts (" + totalOpened + ")" },
+              { v: "clicked",     label: "Clics (" + totalClicked + ")" },
+              { v: "to_relaunch", label: "À relancer (" + initialRows.filter((r) => r.opens > 0 && !r.has_followup_sent && !r.has_followup_pending && !["replied","meeting_booked","disqualified"].includes(r.status)).length + ")" },
+              { v: "unread",      label: "Non lus (" + (initialRows.length - totalOpened) + ")" },
+            ].map((f) => (
+              <button
+                key={f.v}
+                onClick={() => setStatusFilter(f.v)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors whitespace-nowrap ${
+                  statusFilter === f.v
+                    ? "bg-indigo-600 text-white"
+                    : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50"
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {search || statusFilter !== "all" ? (
+          <div className="mb-3 text-xs text-gray-500">
+            {filteredGroups.length} prospect{filteredGroups.length > 1 ? "s" : ""} affiché{filteredGroups.length > 1 ? "s" : ""} sur {groups.length}
+          </div>
+        ) : null}
+
         {isLoading ? (
           <div className="text-center py-12 text-gray-400">Chargement...</div>
-        ) : rows.length === 0 ? (
+        ) : rawRows.length === 0 ? (
           <div className="text-center py-12 text-gray-400">Aucun email envoyé pour le moment.</div>
+        ) : rows.length === 0 ? (
+          <div className="text-center py-12 text-gray-400">
+            Aucun résultat pour ces critères.
+            <button onClick={() => { setSearch(""); setStatusFilter("all"); }} className="ml-2 text-indigo-600 hover:underline">Réinitialiser</button>
+          </div>
         ) : (
           <div className="bg-white rounded-lg shadow overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -171,9 +272,37 @@ function EmailRow({ row }) {
         <StatusBadge row={row} isFollowup={isFollowup} hasOpened={hasOpened} hasClicked={hasClicked} noResponse={noResponse} />
       </td>
       <td className="px-4 py-3 text-right">
-        {!isFollowup && <FollowupAction row={row} />}
+        {!isFollowup && (
+          <div className="flex flex-col items-end gap-1.5">
+            <FollowupAction row={row} />
+            <WhatsappAction row={row} />
+          </div>
+        )}
       </td>
     </tr>
+  );
+}
+
+/**
+ * WhatsApp trigger button — stub for now.
+ *
+ * Flow not wired yet because Julien is still finalising the Meta-approved
+ * template (one unique template for everyone, no per-lead Sonnet generation).
+ * Renders a disabled button with a tooltip so the UI layout is final and
+ * we won't shift things around when the backend lands.
+ */
+function WhatsappAction({ row }) {
+  const tooltip = "WhatsApp bientôt disponible — template Meta en cours de préparation";
+  // Terminal leads get a dash, same pattern as FollowupAction
+  if (["replied", "meeting_booked", "disqualified"].includes(row.status)) return null;
+  return (
+    <button
+      disabled
+      title={tooltip}
+      className="px-2.5 py-1 text-xs rounded-md bg-gray-100 text-gray-500 cursor-not-allowed border border-gray-200"
+    >
+      💬 WhatsApp <span className="text-[9px] text-gray-400">(bientôt)</span>
+    </button>
   );
 }
 
