@@ -969,10 +969,32 @@ router.post("/:id/send-whatsapp", async (req, res) => {
       return s;
     }
 
-    // 1. Resolve phone — priority: manual > stored > FullEnrich
+    // 1. Resolve phone — priority ladder, cheap sources first:
+    //    manual > lead.phone > HubSpot > FullEnrich (10 credits)
+    // The normalize() call uniforms the format regardless of source.
     const manualPhone = req.body && req.body.manual_phone ? normalize(req.body.manual_phone) : null;
     let phone = manualPhone || normalize(lead.phone);
-    let enrichedPhone = null;
+    let phoneSource = manualPhone ? "manual" : (phone ? "stored" : null);
+
+    // Try HubSpot before burning FullEnrich credits.
+    if (!phone) {
+      try {
+        const { findPhoneInHubspot } = require("../lib/hubspot");
+        const hsPhone = await findPhoneInHubspot({
+          email: lead.email,
+          firstName: lead.first_name,
+          lastName: lead.last_name,
+          companyName: lead.company_name,
+        });
+        if (hsPhone && hsPhone.phone) {
+          phone = normalize(hsPhone.phone);
+          phoneSource = "hubspot_" + hsPhone.source; // hubspot_mobile / hubspot_phone / hubspot_calculated
+        }
+      } catch (hsErr) {
+        console.warn("[send-whatsapp] HubSpot phone lookup threw:", hsErr.message);
+        // fail-open: just continue to FullEnrich
+      }
+    }
 
     if (!phone) {
       if (!lead.linkedin_url) {
@@ -981,8 +1003,7 @@ router.post("/:id/send-whatsapp", async (req, res) => {
 
       // Daily cap on FullEnrich phone enrichments — each costs 10 credits and
       // Julien agreed to a 50-credits/day ceiling (~5 clicks). Count recent
-      // enrichments by looking at metadata.whatsapp_send_source='fullenrich'
-      // OR phones fetched via this endpoint in the last 24h.
+      // FullEnrich-sourced sends in the last 24h.
       const FULLENRICH_PHONE_DAILY_CAP = 5;
       const cutoff = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
       const { count: enrichedToday } = await supabase
@@ -1000,7 +1021,7 @@ router.post("/:id/send-whatsapp", async (req, res) => {
       const enriched = await enrichPhone(lead.linkedin_url, null);
       if (enriched && enriched.phone) {
         phone = normalize(enriched.phone);
-        enrichedPhone = true;
+        phoneSource = "fullenrich";
       }
     }
 
@@ -1072,7 +1093,7 @@ router.post("/:id/send-whatsapp", async (req, res) => {
       whatsapp_user_ns: userNs,
       whatsapp_sub_flow_ns: subFlowNs,
       whatsapp_status: "sent",
-      whatsapp_send_source: manualPhone ? "manual" : (enrichedPhone ? "fullenrich" : "stored"),
+      whatsapp_send_source: phoneSource, // manual | stored | hubspot_mobile | hubspot_phone | hubspot_calculated | fullenrich
       whatsapp_uchat_response: flowResponse,
     });
     const patch = { metadata: updatedMetadata };
@@ -1101,10 +1122,10 @@ router.post("/:id/send-whatsapp", async (req, res) => {
     res.json({
       ok: true,
       phone_used: phone,
+      phone_source: phoneSource,
       user_id: userId,
       created_subscriber: created,
       sub_flow_ns: subFlowNs,
-      enriched_phone: enrichedPhone === true,
     });
   } catch (err) {
     console.error("POST /leads/:id/send-whatsapp error:", err.message);

@@ -233,4 +233,67 @@ async function getLastEmail(contactId) {
   }
 }
 
-module.exports = { existsInHubspot, existsInHubspotByEmail, findEmailInHubspot, getLastEmail };
+/**
+ * Find a contact's phone number in HubSpot. Tries by email first (most
+ * reliable), falls back to firstname+lastname (+ optional company) if we
+ * don't have an email. Used before hitting FullEnrich (10 credits) to see
+ * if we already have the phone in CRM for free.
+ *
+ * Returns { phone, source } where source is "mobile" | "phone" | null, or
+ * null if nothing found. Prefers mobilephone over plain phone (more likely
+ * to have WhatsApp).
+ *
+ * @param {object} args - { email?, firstName?, lastName?, companyName? }
+ * @returns {Promise<{phone: string, source: string, contactId: string}|null>}
+ */
+async function findPhoneInHubspot(args) {
+  const { email, firstName, lastName, companyName } = args || {};
+  try {
+    const client = getClient();
+    if (!client) return null;
+
+    const props = ["phone", "mobilephone", "hs_calculated_phone_number", "email", "firstname", "lastname"];
+    let response;
+
+    if (email) {
+      response = await hubspotLimit(() => client.crm.contacts.searchApi.doSearch({
+        filterGroups: [{ filters: [{ propertyName: "email", operator: "EQ", value: email }] }],
+        properties: props,
+        limit: 1,
+      }));
+    } else if (firstName && lastName) {
+      const filters = [
+        { propertyName: "firstname", operator: "EQ", value: firstName },
+        { propertyName: "lastname", operator: "EQ", value: lastName },
+      ];
+      if (companyName) filters.push({ propertyName: "company", operator: "EQ", value: companyName });
+      response = await hubspotLimit(() => client.crm.contacts.searchApi.doSearch({
+        filterGroups: [{ filters }],
+        properties: props,
+        limit: 1,
+      }));
+    } else {
+      return null;
+    }
+
+    if (!response || response.total === 0) return null;
+    const contact = response.results[0];
+    const p = contact.properties || {};
+    // Prefer mobilephone (more likely WhatsApp-enabled) over plain phone.
+    if (p.mobilephone && String(p.mobilephone).trim()) {
+      return { phone: String(p.mobilephone).trim(), source: "mobile", contactId: contact.id };
+    }
+    if (p.phone && String(p.phone).trim()) {
+      return { phone: String(p.phone).trim(), source: "phone", contactId: contact.id };
+    }
+    if (p.hs_calculated_phone_number && String(p.hs_calculated_phone_number).trim()) {
+      return { phone: String(p.hs_calculated_phone_number).trim(), source: "calculated", contactId: contact.id };
+    }
+    return null;
+  } catch (err) {
+    console.warn("findPhoneInHubspot failed:", err.message);
+    return null;
+  }
+}
+
+module.exports = { existsInHubspot, existsInHubspotByEmail, findEmailInHubspot, findPhoneInHubspot, getLastEmail };
