@@ -954,6 +954,7 @@ router.post("/:id/generate-followup-now", async (req, res) => {
   try {
     const { generateFollowupEmail, loadTemplates } = require("../lib/message-generator");
     const { loadCaseStudies, pickCaseStudyForLead } = require("../tasks/task-f-email-followup");
+    const { refreshLeadForFollowup } = require("../lib/lead-refresh");
 
     const { data: lead, error: fetchErr } = await supabase
       .from("leads")
@@ -974,6 +975,32 @@ router.post("/:id/generate-followup-now", async (req, res) => {
     }
     if (!lead.email && !(lead.metadata && lead.metadata.draft_email_to)) {
       return res.status(400).json({ error: "Lead has no email address" });
+    }
+
+    // Refresh the LinkedIn data right before asking Sonnet — gives the LLM the
+    // freshest view of the prospect (new posts since first contact) and the
+    // company (latest description, specialities, size). Up to 2 BeReach credits.
+    // Degrades gracefully: if BeReach is down or the URLs are missing, we
+    // generate from stale data and surface the skip reason.
+    let refreshSummary = null;
+    try {
+      const refreshed = await refreshLeadForFollowup(lead);
+      refreshSummary = refreshed.summary;
+      // Persist the freshened metadata on the lead right away. Sonnet then
+      // reads from `lead` directly (we mutate the in-memory copy below).
+      const { data: savedLead, error: saveErr } = await supabase
+        .from("leads")
+        .update(refreshed.patch)
+        .eq("id", lead.id)
+        .select()
+        .single();
+      if (!saveErr && savedLead) {
+        // Replace the in-memory lead so generateFollowupEmail sees fresh data
+        Object.assign(lead, savedLead);
+      }
+    } catch (refreshErr) {
+      console.warn("[generate-followup-now] refresh failed, falling back to stored data:", refreshErr.message);
+      refreshSummary = { profile_refreshed: false, company_refreshed: false, skipped: ["fatal:" + refreshErr.message] };
     }
 
     const [templates, caseStudies] = await Promise.all([loadTemplates(), loadCaseStudies()]);
@@ -1026,7 +1053,12 @@ router.post("/:id/generate-followup-now", async (req, res) => {
       return res.status(500).json({ error: "Failed to persist draft" });
     }
 
-    res.json({ ok: true, subject: emailContent.subject, body: emailContent.body });
+    res.json({
+      ok: true,
+      subject: emailContent.subject,
+      body: emailContent.body,
+      refresh: refreshSummary,
+    });
   } catch (err) {
     console.error("POST /leads/:id/generate-followup-now error:", err.message);
     res.status(500).json({ error: err.message });
