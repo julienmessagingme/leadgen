@@ -296,4 +296,51 @@ async function findPhoneInHubspot(args) {
   }
 }
 
-module.exports = { existsInHubspot, existsInHubspotByEmail, findEmailInHubspot, findPhoneInHubspot, getLastEmail };
+/**
+ * Push a phone number onto an existing HubSpot contact. Used after FullEnrich
+ * found a number (10 credits spent) to avoid re-paying the next time the same
+ * lead surfaces.
+ *
+ * Updates `mobilephone` by default (WhatsApp is typically on mobile) and does
+ * NOT overwrite `phone` if the contact already has one (we assume the CRM's
+ * existing phone is the pro/landline Julien has curated).
+ *
+ * Fails open: returns false on any error, never throws.
+ *
+ * @param {string} contactId - HubSpot contact ID
+ * @param {string} phone     - E.164 phone (e.g. "+33680154151")
+ * @param {object} [opts]    - { field?: "mobilephone"|"phone", overwrite?: bool }
+ * @returns {Promise<boolean>} true if updated, false otherwise
+ */
+async function setPhoneInHubspot(contactId, phone, opts) {
+  const field = (opts && opts.field) || "mobilephone";
+  const overwrite = opts && opts.overwrite === true;
+
+  if (!contactId || !phone) return false;
+  try {
+    const client = getClient();
+    if (!client) return false;
+
+    if (!overwrite) {
+      // Don't clobber an existing value. Read first.
+      const existing = await hubspotLimit(() =>
+        client.crm.contacts.basicApi.getById(contactId, [field])
+      );
+      if (existing && existing.properties && existing.properties[field]) {
+        return false; // already set, skip
+      }
+    }
+
+    await hubspotLimit(() =>
+      client.crm.contacts.basicApi.update(contactId, {
+        properties: { [field]: phone },
+      })
+    );
+    return true;
+  } catch (err) {
+    console.warn("setPhoneInHubspot failed:", err.message);
+    return false;
+  }
+}
+
+module.exports = { existsInHubspot, existsInHubspotByEmail, findEmailInHubspot, findPhoneInHubspot, setPhoneInHubspot, getLastEmail };

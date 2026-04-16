@@ -1022,6 +1022,25 @@ router.post("/:id/send-whatsapp", async (req, res) => {
       if (enriched && enriched.phone) {
         phone = normalize(enriched.phone);
         phoneSource = "fullenrich";
+
+        // Push the costly find back to HubSpot so we don't pay 10 credits again
+        // next time. Only if we have an email to identify the contact, and only
+        // if a HubSpot contact already exists (we don't proactively create CRM
+        // contacts from here — that's Julien's curation workflow).
+        if (lead.email) {
+          try {
+            const { existsInHubspotByEmail, setPhoneInHubspot } = require("../lib/hubspot");
+            const hs = await existsInHubspotByEmail(lead.email);
+            if (hs.found && hs.contactId) {
+              const pushed = await setPhoneInHubspot(hs.contactId, phone);
+              if (pushed) {
+                console.log("[send-whatsapp] pushed phone back to HubSpot lead_id=" + lead.id + " contact_id=" + hs.contactId);
+              }
+            }
+          } catch (hsErr) {
+            console.warn("[send-whatsapp] HubSpot phone write-back failed:", hsErr.message);
+          }
+        }
       }
     }
 
