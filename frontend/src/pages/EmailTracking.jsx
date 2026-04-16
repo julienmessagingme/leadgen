@@ -285,7 +285,7 @@ function EmailRow({ row, expanded, onToggle }) {
         </div>
       </td>
       <td className="px-4 py-3 text-xs whitespace-nowrap">
-        <TypeBadge origin={row.origin} isFollowup={isFollowup} />
+        <TypeBadge origin={row.origin} isFollowup={isFollowup} isWhatsapp={isWhatsapp} />
       </td>
       <td className="px-4 py-3 text-sm text-gray-600">{isFollowup ? "" : (row.company_name || "--")}</td>
       <td className="px-4 py-3 text-xs text-gray-500">{isFollowup ? "" : (row.email || "--")}</td>
@@ -484,17 +484,19 @@ function WhatsappAction({ row }) {
   );
 }
 
-function TypeBadge({ origin, isFollowup }) {
-  // Two axes: origin of the lead (pipeline / cold / troudebal) × email type
-  // (initial / followup). Pipeline leads get distinct colours so the eye
-  // picks them out quickly; follow-up rows are always prefixed with "Relance".
+function TypeBadge({ origin, isFollowup, isWhatsapp }) {
+  // Two axes: origin of the lead (pipeline / cold / troudebal) × row kind
+  // (1er mail / relance / whatsapp). The origin colour is inherited from the
+  // underlying lead so a WhatsApp sent on a cold lead stays amber etc.
   const originConf = {
     pipeline:  { label: "Pipeline",   cls: "bg-emerald-100 text-emerald-800" },
     cold:      { label: "Cold",       cls: "bg-amber-100 text-amber-800" },
     troudebal: { label: "Troudebal",  cls: "bg-indigo-100 text-indigo-800" },
   };
   const conf = originConf[origin] || { label: origin || "?", cls: "bg-gray-100 text-gray-700" };
-  const prefix = isFollowup ? "Relance · " : "1er mail · ";
+  const prefix = isWhatsapp ? "WhatsApp · "
+               : isFollowup ? "Relance · "
+               : "1er mail · ";
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded font-medium uppercase tracking-wide ${conf.cls}`}>
       {prefix}{conf.label}
