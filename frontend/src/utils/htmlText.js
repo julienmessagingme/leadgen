@@ -87,6 +87,21 @@ export function textToHtml(text) {
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#39;");
 
+  // Calendly URLs are the CTA "Programmer un échange" / "Schedule a call" —
+  // render them as the same styled button that message-generator.js produces,
+  // so the plain-text roundtrip doesn't silently downgrade them to a bare link.
+  // Every other URL keeps the subtle orange underlined style.
+  const BUTTON_STYLE =
+    "display:inline-block;padding:10px 20px;background-color:#4F46E5;" +
+    "color:#ffffff;text-decoration:none;border-radius:6px;" +
+    "font-size:14px;font-weight:600;";
+  const LINK_STYLE = "color:#ff6600;text-decoration:underline";
+  const isCta = (url) => /calendly\.com/i.test(url);
+  const anchor = (url, label) => {
+    const style = isCta(url) ? BUTTON_STYLE : LINK_STYLE;
+    return '<a href="' + url + '" style="' + style + '">' + label + "</a>";
+  };
+
   // Match http(s) URLs. Trailing punctuation (.,;:!?)]) is excluded from the
   // match so "see https://foo.com." keeps its period outside the anchor.
   // Note: regex literals are recreated per line below to avoid any shared
@@ -112,25 +127,12 @@ export function textToHtml(text) {
         }
         for (const match of matches) {
           const before = line.slice(cursor, match.start);
-          out += escape(before).replace(
-            URL_RE,
-            (url) =>
-              '<a href="' + url + '" style="color:#ff6600;text-decoration:underline">' + url + "</a>"
-          );
-          out +=
-            '<a href="' +
-            match.url +
-            '" style="color:#ff6600;text-decoration:underline">' +
-            escape(match.label) +
-            "</a>";
+          out += escape(before).replace(URL_RE, (url) => anchor(url, url));
+          out += anchor(match.url, escape(match.label));
           cursor = match.end;
         }
         const tail = line.slice(cursor);
-        out += escape(tail).replace(
-          URL_RE,
-          (url) =>
-            '<a href="' + url + '" style="color:#ff6600;text-decoration:underline">' + url + "</a>"
-        );
+        out += escape(tail).replace(URL_RE, (url) => anchor(url, url));
         return out;
       });
       return "<p>" + lines.join("<br>") + "</p>";
