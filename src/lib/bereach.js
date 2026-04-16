@@ -337,7 +337,56 @@ async function searchPeople(params) {
     }
   }
 
-  if (params.companySize) searchBody.companySize = Array.isArray(params.companySize) ? params.companySize : [params.companySize];
+  // BeReach /search/linkedin/people expects companySize as an array of enum codes
+  // (A-I), not human-readable ranges. Frontend/watchlist historically sent "1-10",
+  // "11-50", … which produced a 422 validation error. Map them here so the fix
+  // covers every caller at the client edge.
+  //
+  // BeReach enum (from 422 error message):
+  //   A=1-10  B=11-50  C=51-200  D=201-500  E=501-1000
+  //   F=1001-5000  G=5001-10000  H=10001+   I=unknown/unspecified
+  if (params.companySize) {
+    var COMPANY_SIZE_CODE_MAP = {
+      "1-10": ["A"],
+      "11-50": ["B"],
+      "51-200": ["C"],
+      "201-500": ["D"],
+      "501-1000": ["E"],
+      "1001-5000": ["F"],
+      "5001-10000": ["G"],
+      "10001+": ["H"],
+      "1000+": ["F", "G", "H"],
+      "10000+": ["H"],
+    };
+    var sizeInput = Array.isArray(params.companySize) ? params.companySize : [params.companySize];
+    var sizeCodes = [];
+    for (var si = 0; si < sizeInput.length; si++) {
+      var raw = String(sizeInput[si] || "").trim();
+      if (!raw) continue;
+      if (COMPANY_SIZE_CODE_MAP[raw]) {
+        for (var sj = 0; sj < COMPANY_SIZE_CODE_MAP[raw].length; sj++) {
+          sizeCodes.push(COMPANY_SIZE_CODE_MAP[raw][sj]);
+        }
+      } else if (/^[A-I]$/.test(raw)) {
+        // Already a valid code — let it through untouched
+        sizeCodes.push(raw);
+      } else {
+        resolutionWarnings.push("Taille entreprise \"" + raw + "\" non reconnue — filtre ignore");
+      }
+    }
+    if (sizeCodes.length > 0) {
+      // Dedup + preserve order
+      var seen = {};
+      var finalCodes = [];
+      for (var sk = 0; sk < sizeCodes.length; sk++) {
+        if (!seen[sizeCodes[sk]]) {
+          seen[sizeCodes[sk]] = true;
+          finalCodes.push(sizeCodes[sk]);
+        }
+      }
+      searchBody.companySize = finalCodes;
+    }
+  }
   if (params.count) searchBody.count = params.count;
 
   var result = await bereach("/search/linkedin/people", searchBody);
