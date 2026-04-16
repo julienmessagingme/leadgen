@@ -1,21 +1,21 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
-import { api } from "../api/client";
-import NavBar from "../components/shared/NavBar";
+import { api } from "../../api/client";
 
 /**
- * /email-followups — "Relances à préparer"
+ * FollowupCasePicker — embedded inside MessagesDraft > "Relances email" tab.
  *
- * Daily queue of leads that could receive a 2nd email. Julien picks the
- * case study manually (instead of Sonnet auto-matching by sector), then
- * clicks "Générer avec ce cas" to drop a draft into /messages-draft
- * Relances mail tab for human approval.
+ * Lists leads eligible for a manual relance (email_sent_at between J-3 and
+ * J-21, no follow-up sent/pending, not in a terminal status). For each lead,
+ * Julien picks the case study to cite (or "Auto" sector-matching, or "None"
+ * for a generic follow-up), then clicks "Générer" which creates the draft
+ * via POST /leads/:id/generate-followup-now. The draft then flows into the
+ * sibling sub-tab "Email à valider" for approval.
  *
- * Window handled server-side: email_sent_at between J-3 and J-21, excluding
- * terminal / already-pending / already-sent statuses.
+ * The whole flow lives in one page — the old standalone /email-followups
+ * route was folded in here to avoid dividing attention across two menus.
  */
-export default function EmailFollowups() {
+export default function FollowupCasePicker() {
   const { data: candData, isLoading: candLoading, error: candError } = useQuery({
     queryKey: ["followup-candidates"],
     queryFn: () => api.get("/dashboard/followup-candidates"),
@@ -39,54 +39,51 @@ export default function EmailFollowups() {
     return true;
   });
 
-  return (
-    <div className="min-h-screen bg-gray-100">
-      <NavBar />
-      <main className="max-w-7xl mx-auto px-4 py-6">
-        <header className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-800">📬 Relances à préparer</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Leads dont le 1<sup>er</sup> email a été envoyé entre il y a 3 et 21 jours.
-            Choisis le cas client à mettre en avant, Sonnet génère le draft et
-            l'envoie dans <Link to="/messages-draft" className="text-indigo-600 underline">Relances mail</Link> pour validation.
-          </p>
-        </header>
+  if (candLoading || caseLoading) {
+    return <div className="text-center py-12 text-gray-400">Chargement…</div>;
+  }
+  if (candError) {
+    return <div className="text-center py-12 text-red-600">Erreur : {candError.message}</div>;
+  }
 
-        <div className="flex items-center gap-2 mb-4">
-          <span className="text-xs text-gray-500">Filtre :</span>
-          {[
-            { v: "all", label: "Tous (" + candidates.length + ")" },
-            { v: "opened", label: "Ouverts (" + candidates.filter((c) => c.opens > 0).length + ")" },
-            { v: "clicked", label: "Clics (" + candidates.filter((c) => c.clicks > 0).length + ")" },
-          ].map((f) => (
-            <button
-              key={f.v}
-              onClick={() => setFilter(f.v)}
-              className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
-                filter === f.v ? "bg-indigo-600 text-white" : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50"
-              }`}
-            >
-              {f.label}
-            </button>
+  return (
+    <div>
+      <p className="text-sm text-gray-500 mb-4">
+        Leads dont le 1<sup>er</sup> email a été envoyé entre il y a 3 et 21 jours.
+        Choisis le cas client à mettre en avant et clique « Générer ». Le draft
+        apparaîtra dans l'onglet <b>Email à valider</b> juste à côté.
+      </p>
+
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-xs text-gray-500">Filtre :</span>
+        {[
+          { v: "all", label: "Tous (" + candidates.length + ")" },
+          { v: "opened", label: "Ouverts (" + candidates.filter((c) => c.opens > 0).length + ")" },
+          { v: "clicked", label: "Clics (" + candidates.filter((c) => c.clicks > 0).length + ")" },
+        ].map((f) => (
+          <button
+            key={f.v}
+            onClick={() => setFilter(f.v)}
+            className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+              filter === f.v ? "bg-indigo-600 text-white" : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50"
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="text-center py-12 text-gray-400">
+          Aucun lead éligible pour l'instant. La fenêtre est J-3 à J-21 après le 1<sup>er</sup> email.
+        </div>
+      ) : (
+        <div className="bg-white rounded-lg shadow divide-y divide-gray-100">
+          {filtered.map((c) => (
+            <CandidateRow key={c.id} candidate={c} cases={activeCases} />
           ))}
         </div>
-
-        {candLoading || caseLoading ? (
-          <div className="text-center py-12 text-gray-400">Chargement…</div>
-        ) : candError ? (
-          <div className="text-center py-12 text-red-600">Erreur : {candError.message}</div>
-        ) : filtered.length === 0 ? (
-          <div className="text-center py-12 text-gray-400">
-            Aucun lead éligible pour l'instant. La fenêtre est J-3 à J-21 après le 1<sup>er</sup> email.
-          </div>
-        ) : (
-          <div className="bg-white rounded-lg shadow divide-y divide-gray-100">
-            {filtered.map((c) => (
-              <CandidateRow key={c.id} candidate={c} cases={activeCases} />
-            ))}
-          </div>
-        )}
-      </main>
+      )}
     </div>
   );
 }
@@ -104,9 +101,8 @@ function CandidateRow({ candidate: c, cases }) {
   const qc = useQueryClient();
   const [expanded, setExpanded] = useState(false);
   const { data: firstEmail, isLoading: firstEmailLoading } = useFirstEmail(c.id, expanded);
+
   const [selectedCaseId, setSelectedCaseId] = useState(() => {
-    // Pre-select the case whose sector best matches the lead, so Julien only
-    // has to confirm in the common case. "none" if no sector match.
     const leadSector = (c.company_sector || "").toLowerCase();
     if (leadSector) {
       for (const cs of cases) {
@@ -208,7 +204,7 @@ function CandidateRow({ candidate: c, cases }) {
       {feedback && (
         <div className={`mt-3 text-sm rounded p-2 ${feedback.ok ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"}`}>
           {feedback.ok ? (
-            <>Draft prêt — <Link to="/messages-draft" className="underline font-medium">voir dans Relances mail →</Link></>
+            <>Draft prêt — il apparaît dans l'onglet <b>Email à valider</b> à côté.</>
           ) : (
             <>Erreur : {feedback.msg}</>
           )}

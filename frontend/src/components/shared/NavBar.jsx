@@ -10,7 +10,6 @@ const navItems = [
   { to: "/cold-outbound", label: "Cold Outbound" },
   { to: "/cold-outreach", label: "🎯 Troudebal" },
   { to: "/email-tracking", label: "Tracking Emails" },
-  { to: "/email-followups", label: "📬 Relances" },
   { to: "/settings", label: "Parametres" },
 ];
 

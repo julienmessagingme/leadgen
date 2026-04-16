@@ -7,6 +7,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import DOMPurify from "dompurify";
 import { htmlToText, textToHtml } from "../utils/htmlText";
+import FollowupCasePicker from "../components/followups/FollowupCasePicker";
 
 function useApproveMessage() {
   const qc = useQueryClient();
@@ -98,6 +99,7 @@ function useRegenerateEmailFollowup() {
 
 export default function MessagesDraft() {
   const [tab, setTab] = useState("linkedin"); // "linkedin" | "email" | "cold_email" | "reinvite" | "followup_email"
+  const [followupSubTab, setFollowupSubTab] = useState("case"); // "case" | "email" — only used when tab=="followup_email"
   const [editedMessages, setEditedMessages] = useState({});
   const [editedEmails, setEditedEmails] = useState({}); // { id: { subject, body } }
   const [editedFollowups, setEditedFollowups] = useState({}); // { id: { subject, body } }
@@ -282,6 +284,10 @@ export default function MessagesDraft() {
     );
   };
 
+  // On the followup_email tab, the "case" sub-tab has its own loading/list
+  // (candidates for relance preparation, handled by FollowupCasePicker below).
+  // The legacy computations below apply to the "email" sub-tab and all the
+  // other top-level tabs.
   const isLoading = tab === "linkedin" ? linkedinLoading
     : tab === "email" ? emailLoading
     : tab === "cold_email" ? emailLoading
@@ -383,17 +389,54 @@ export default function MessagesDraft() {
           </button>
         </div>
 
-        {isLoading && (
+        {/* Sub-tabs under "Relances email" — decouple the case-picking step
+            from the actual email approval step. Each has its own data source
+            and state, so they never interfere. */}
+        {tab === "followup_email" && (
+          <div className="flex gap-1 mb-5 bg-white rounded-lg border border-gray-200 p-1 w-fit">
+            <button
+              onClick={() => setFollowupSubTab("case")}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                followupSubTab === "case" ? "bg-indigo-600 text-white" : "text-gray-600 hover:bg-gray-100"
+              }`}
+            >
+              📋 Cas à valider
+            </button>
+            <button
+              onClick={() => setFollowupSubTab("email")}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                followupSubTab === "email" ? "bg-indigo-600 text-white" : "text-gray-600 hover:bg-gray-100"
+              }`}
+            >
+              ✉ Email à valider
+              {followupLeads.length > 0 && (
+                <span className={`ml-1.5 inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-medium rounded-full ${
+                  followupSubTab === "email" ? "bg-white/20 text-white" : "bg-pink-100 text-pink-700"
+                }`}>
+                  {followupLeads.length}
+                </span>
+              )}
+            </button>
+          </div>
+        )}
+
+        {/* Case picker sub-tab has its own rendering — skip the generic
+            loading/empty UI below for that state. */}
+        {tab === "followup_email" && followupSubTab === "case" && (
+          <FollowupCasePicker />
+        )}
+
+        {isLoading && !(tab === "followup_email" && followupSubTab === "case") && (
           <div className="text-center py-12 text-gray-400">Chargement...</div>
         )}
 
-        {!isLoading && leads.length === 0 && (
+        {!isLoading && leads.length === 0 && !(tab === "followup_email" && followupSubTab === "case") && (
           <div className="text-center py-12 text-gray-400">
             {tab === "linkedin" ? "Aucun message LinkedIn en attente."
              : tab === "email" ? "Aucun email en attente. Task D n'a pas encore tourné ou tous les emails ont été traités."
              : tab === "cold_email" ? "Aucun cold email en attente."
              : tab === "reinvite" ? "Aucune re-invitation en attente."
-             : "Aucune relance email en attente."}
+             : "Aucune relance email en attente. Prépare-en dans « Cas à valider »."}
           </div>
         )}
 
@@ -791,8 +834,8 @@ export default function MessagesDraft() {
           </div>
         )}
 
-        {/* Followup email drafts */}
-        {tab === "followup_email" && (
+        {/* Followup email drafts — only in the "email" sub-tab */}
+        {tab === "followup_email" && followupSubTab === "email" && (
           <div className="space-y-4">
             {followupLeads.map((lead) => {
               const edited = editedFollowups[lead.id];

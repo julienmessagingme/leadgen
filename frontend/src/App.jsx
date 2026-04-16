@@ -12,7 +12,6 @@ import HubspotSignals from "./pages/HubspotSignals";
 import MessagesDraft from "./pages/MessagesDraft";
 import Invitations from "./pages/Invitations";
 import EmailTracking from "./pages/EmailTracking";
-import EmailFollowups from "./pages/EmailFollowups";
 
 const queryClient = new QueryClient();
 
@@ -135,14 +134,9 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/email-followups"
-        element={
-          <ProtectedRoute>
-            <EmailFollowups />
-          </ProtectedRoute>
-        }
-      />
+      {/* /email-followups was folded into /messages-draft tab "Relances email"
+          > sous-tab "Cas à valider". Redirect old bookmarks. */}
+      <Route path="/email-followups" element={<Navigate to="/messages-draft" replace />} />
       <Route
         path="/settings"
         element={
