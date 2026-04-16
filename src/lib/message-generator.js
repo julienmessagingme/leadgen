@@ -657,6 +657,17 @@ async function generateColdEmail(lead) {
   }
 }
 
+// Expose the hardcoded defaults so scripts/seed-default-templates.js (and any
+// future admin reseed endpoint) can persist them into the global_settings
+// table without retyping the long strings.
+const DEFAULT_TEMPLATES = {
+  template_invitation: DEFAULT_INVITATION_TEMPLATE,
+  template_followup: DEFAULT_FOLLOWUP_TEMPLATE,
+  template_email: DEFAULT_EMAIL_TEMPLATE,
+  template_email_followup: DEFAULT_EMAIL_FOLLOWUP_TEMPLATE,
+  template_whatsapp: DEFAULT_WHATSAPP_TEMPLATE,
+};
+
 module.exports = {
   loadTemplates,
   generateInvitationNote,
@@ -667,4 +678,5 @@ module.exports = {
   generateWhatsAppBody,
   generateInMail,
   isColdLead,
+  DEFAULT_TEMPLATES,
 };

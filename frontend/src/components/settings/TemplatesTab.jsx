@@ -4,7 +4,8 @@ import { useConfig, useUpdateConfig } from "../../hooks/useSettings";
 const TEMPLATE_KEYS = [
   { key: "template_invitation", label: "Invitation LinkedIn" },
   { key: "template_followup", label: "Suivi LinkedIn" },
-  { key: "template_email", label: "Email J+7" },
+  { key: "template_email", label: "Email J+7 (1er mail)" },
+  { key: "template_email_followup", label: "Email J+14 (relance — cas client)" },
   { key: "template_whatsapp", label: "WhatsApp J+14" },
 ];
 
