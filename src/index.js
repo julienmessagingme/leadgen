@@ -79,6 +79,20 @@ app.use(cors({
 }));
 app.use(express.json({ limit: "50kb" }));
 
+// Turn Express's default HTML "Bad Request" page into a JSON error with the
+// exact parser message + character position, so clients calling our JSON
+// endpoints (webhooks, agents) can debug their payload without guessing.
+app.use((err, req, res, next) => {
+  if (err && err.type === "entity.parse.failed") {
+    return res.status(400).json({
+      error: "invalid_json",
+      message: err.message,
+      hint: "Check for trailing commas, unescaped quotes, smart quotes (“ ” instead of \"), or single quotes.",
+    });
+  }
+  next(err);
+});
+
 // Auth routes (public -- no middleware)
 app.use("/api/auth", require("./api/auth"));
 
