@@ -276,7 +276,34 @@ router.get("/email-tracking", async (req, res) => {
       }
     });
 
-    res.json({ rows: rows });
+    // Backward-compat: older frontend builds (cached) expect `leads` shape with
+    // aggregated opens/clicks. Keep that field alongside the new `rows` so a
+    // stale cached JS bundle doesn't render an empty page while the server has
+    // already moved on.
+    var legacyLeads = leads.map(function (l) {
+      var evts = (events || []).filter(function (e) { return e.lead_id === l.id; });
+      var opens = evts.filter(function (e) { return e.event_type === "open"; });
+      var clicks = evts.filter(function (e) { return e.event_type === "click"; });
+      return {
+        id: l.id,
+        full_name: l.full_name,
+        company_name: l.company_name,
+        email: l.email,
+        status: l.status,
+        icp_score: l.icp_score,
+        tier: l.tier,
+        linkedin_url: l.linkedin_url,
+        cold_outbound: !!(l.metadata && l.metadata.cold_outbound),
+        email_sent_at: l.email_sent_at,
+        email_followup_sent_at: l.email_followup_sent_at,
+        opens: opens.length,
+        first_open: opens.length > 0 ? opens[0].created_at : null,
+        clicks: clicks.length,
+        first_click: clicks.length > 0 ? clicks[0].created_at : null,
+      };
+    });
+
+    res.json({ rows: rows, leads: legacyLeads });
   } catch (err) {
     console.error("Dashboard /email-tracking error:", err.message);
     res.status(500).json({ error: "Internal server error" });
