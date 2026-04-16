@@ -76,9 +76,7 @@ router.post("/delivery-status", webhookAuth, async (req, res) => {
     if (!status || !VALID_STATUSES.has(status)) {
       return res.status(400).json({ error: "status must be one of " + [...VALID_STATUSES].join(", ") });
     }
-    if (status === "failed" && !body.error_code) {
-      return res.status(400).json({ error: "error_code is required when status=failed" });
-    }
+    // error_code is optional — Julien's uChat flow sends only error_message.
 
     // 1. Try to resolve the lead via message_id first (exact match, robust to
     //    phone reuse or number porting).
@@ -129,8 +127,15 @@ router.post("/delivery-status", webhookAuth, async (req, res) => {
     const updatedMeta = Object.assign({}, md, {
       whatsapp_status: status,
       whatsapp_status_at: new Date().toISOString(),
-      whatsapp_error_code: status === "failed" ? String(body.error_code) : (md.whatsapp_error_code || null),
-      whatsapp_error_message: status === "failed" ? (body.error_message ? String(body.error_message).slice(0, 500) : null) : (md.whatsapp_error_message || null),
+      // Both error fields are optional — store whichever was sent, keep the
+      // previous value otherwise (so a later 'delivered' event doesn't wipe
+      // a recorded failure before it was actioned on).
+      whatsapp_error_code: (status === "failed" && body.error_code)
+        ? String(body.error_code).slice(0, 50)
+        : (md.whatsapp_error_code || null),
+      whatsapp_error_message: (status === "failed" && body.error_message)
+        ? String(body.error_message).slice(0, 500)
+        : (md.whatsapp_error_message || null),
       whatsapp_webhook_last_payload: {
         phone_number: phone,
         status,
