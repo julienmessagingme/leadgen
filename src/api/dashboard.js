@@ -1,9 +1,15 @@
 const { Router } = require("express");
 const authMiddleware = require("./middleware");
 const { supabase } = require("../lib/supabase");
+const { checkLimits } = require("../lib/bereach");
 
 const router = Router();
 router.use(authMiddleware);
+
+// In-memory cache for BeReach limits — BeReach rate-limits /me/limits and the
+// dashboard auto-refetches every ~60s, so we cache briefly.
+let bereachCache = { data: null, fetchedAt: 0 };
+const BEREACH_CACHE_MS = 30_000;
 
 /**
  * Helper: Get start of "today" in Europe/Paris timezone as UTC Date.
@@ -256,6 +262,61 @@ router.get("/email-tracking", async (req, res) => {
   } catch (err) {
     console.error("Dashboard /email-tracking error:", err.message);
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
+ * GET /api/dashboard/bereach-live
+ *
+ * Live usage snapshot from BeReach /me/limits. The daily counters returned here
+ * are the authoritative source of truth for quota — they reflect EVERY call
+ * made with the BeReach key (leadgen pipeline + Troudebal cold outreach agent +
+ * manual cold-outbound searches), not just what we happen to have logged.
+ *
+ * Cached ~30s to avoid hammering /me/limits when the UI auto-refreshes.
+ *
+ * Response shape:
+ * {
+ *   updated_at: ISO,
+ *   actions: {
+ *     scraping:           { current, limit, remaining },  // collect/search -> Task A + Troudebal
+ *     profile_visit:      { current, limit, remaining },  // enrichment
+ *     connection_request: { current, limit, remaining },  // Task B invitations
+ *     message:            { current, limit, remaining },  // Task C messages
+ *     chat_search:        { current, limit, remaining },  // lookups
+ *   }
+ * }
+ */
+router.get("/bereach-live", async (_req, res) => {
+  try {
+    const now = Date.now();
+    let raw = bereachCache.data;
+    if (!raw || now - bereachCache.fetchedAt > BEREACH_CACHE_MS) {
+      raw = await checkLimits();
+      bereachCache = { data: raw, fetchedAt: now };
+    }
+
+    const limits = (raw && raw.limits) || {};
+    const wanted = ["scraping", "profile_visit", "connection_request", "message", "chat_search"];
+    const actions = {};
+    for (const key of wanted) {
+      const d = limits[key] && limits[key].daily;
+      if (d && typeof d.limit === "number") {
+        actions[key] = {
+          current: d.current || 0,
+          limit: d.limit,
+          remaining: typeof d.remaining === "number" ? d.remaining : Math.max(0, d.limit - (d.current || 0)),
+        };
+      }
+    }
+
+    res.json({
+      updated_at: new Date(bereachCache.fetchedAt).toISOString(),
+      actions,
+    });
+  } catch (err) {
+    console.error("Dashboard /bereach-live error:", err.message);
+    res.status(502).json({ error: "Failed to query BeReach", detail: err.message });
   }
 });
 
