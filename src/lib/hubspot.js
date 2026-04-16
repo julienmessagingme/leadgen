@@ -123,7 +123,10 @@ async function existsInHubspotByEmail(email) {
     const client = getClient();
     if (!client) return { found: false, contactId: null };
 
-    const response = await hubspotLimit(() => client.crm.contacts.searchApi.doSearch({
+    // Same reasoning as findPhoneInHubspot: retry on 429 so a burst doesn't
+    // push us into wrong decisions (e.g. "contact doesn't exist, create it"
+    // when it actually does).
+    const response = await withHubspotRetry(() => client.crm.contacts.searchApi.doSearch({
       filterGroups: [{
         filters: [
           { propertyName: "email", operator: "EQ", value: email },
@@ -138,7 +141,7 @@ async function existsInHubspotByEmail(email) {
     }
     return { found: false, contactId: null };
   } catch (err) {
-    console.error("HubSpot email check failed:", err.message);
+    console.error("HubSpot email check failed (after retries):", err.message);
     return { found: false, contactId: null };
   }
 }
@@ -234,10 +237,39 @@ async function getLastEmail(contactId) {
 }
 
 /**
+ * Retry a HubSpot call through the concurrency limiter, with exponential
+ * backoff on 429 (secondly rate-limit). The secondly policy typically
+ * clears within 1-2 seconds, so 3 tries spaced 1s/2s/4s is enough to ride
+ * through a burst without paying downstream (e.g. FullEnrich 10 credits).
+ *
+ * Non-429 errors bubble up immediately — no point retrying a 403 or 500.
+ */
+async function withHubspotRetry(fn, attempts = 3) {
+  let lastErr = null;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await hubspotLimit(fn);
+    } catch (err) {
+      const code = err && (err.code || (err.response && err.response.status));
+      const isRateLimited = code === 429 || /ratelimit|rate limit|too many/i.test((err && err.message) || "");
+      if (!isRateLimited || i === attempts - 1) throw err;
+      const delayMs = 1000 * Math.pow(2, i); // 1s, 2s, 4s
+      await new Promise((r) => setTimeout(r, delayMs));
+      lastErr = err;
+    }
+  }
+  throw lastErr || new Error("withHubspotRetry: exhausted");
+}
+
+/**
  * Find a contact's phone number in HubSpot. Tries by email first (most
  * reliable), falls back to firstname+lastname (+ optional company) if we
  * don't have an email. Used before hitting FullEnrich (10 credits) to see
  * if we already have the phone in CRM for free.
+ *
+ * Retries on HubSpot 429 up to 3 times (spaced 1/2/4 s) — without this,
+ * a secondly rate-limit burst drops us straight to FullEnrich for a
+ * contact we already own in CRM, paying 10 credits for nothing.
  *
  * Returns { phone, source } where source is "mobile" | "phone" | null, or
  * null if nothing found. Prefers mobilephone over plain phone (more likely
@@ -256,7 +288,7 @@ async function findPhoneInHubspot(args) {
     let response;
 
     if (email) {
-      response = await hubspotLimit(() => client.crm.contacts.searchApi.doSearch({
+      response = await withHubspotRetry(() => client.crm.contacts.searchApi.doSearch({
         filterGroups: [{ filters: [{ propertyName: "email", operator: "EQ", value: email }] }],
         properties: props,
         limit: 1,
@@ -267,7 +299,7 @@ async function findPhoneInHubspot(args) {
         { propertyName: "lastname", operator: "EQ", value: lastName },
       ];
       if (companyName) filters.push({ propertyName: "company", operator: "EQ", value: companyName });
-      response = await hubspotLimit(() => client.crm.contacts.searchApi.doSearch({
+      response = await withHubspotRetry(() => client.crm.contacts.searchApi.doSearch({
         filterGroups: [{ filters }],
         properties: props,
         limit: 1,
@@ -291,7 +323,7 @@ async function findPhoneInHubspot(args) {
     }
     return null;
   } catch (err) {
-    console.warn("findPhoneInHubspot failed:", err.message);
+    console.warn("findPhoneInHubspot failed (after retries):", err.message);
     return null;
   }
 }
