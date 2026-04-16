@@ -551,6 +551,7 @@ router.post("/:id/approve-email", async (req, res) => {
 
     const updatedMetadata = Object.assign({}, lead.metadata || {}, {
       email_subject: subject,
+      email_body: body,              // archive the sent body so the UI can show it later (accordion in /email-followups)
       email_message_id: messageId,
       draft_email_subject: null,
       draft_email_body: null,
@@ -898,6 +899,40 @@ router.get("/:id/hubspot-email", async (req, res) => {
 });
 
 /**
+ * GET /:id/first-email — fetch the subject + archived HTML body of the first
+ * email that was actually sent to this lead. Used by the /email-followups
+ * accordion to let Julien reread the initial mail before picking a case study
+ * for the follow-up.
+ *
+ * Response: { subject, body, sent_at, message_id, body_archived }
+ *   - body is non-null only for mails approved AFTER the archival fix (see
+ *     approve-email); older mails have body_archived=false and body=null.
+ */
+router.get("/:id/first-email", async (req, res) => {
+  try {
+    const { data: lead, error } = await supabase
+      .from("leads")
+      .select("id, metadata, email_sent_at")
+      .eq("id", req.params.id)
+      .single();
+    if (error || !lead) return res.status(404).json({ error: "Lead not found" });
+    if (!lead.email_sent_at) return res.status(404).json({ error: "No first email on this lead" });
+
+    const md = lead.metadata || {};
+    res.json({
+      subject: md.email_subject || null,
+      body: md.email_body || null,
+      sent_at: lead.email_sent_at,
+      message_id: md.email_message_id || null,
+      body_archived: Boolean(md.email_body),
+    });
+  } catch (err) {
+    console.error("GET /leads/:id/first-email error:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
  * POST /:id/generate-followup-now -- Generate a follow-up email draft on demand.
  *
  * Use case: Julien sees in /email-tracking that a prospect opened the first
@@ -1043,6 +1078,7 @@ router.post("/:id/approve-email-followup", async (req, res) => {
 
     const updatedMetadata = Object.assign({}, lead.metadata || {}, {
       followup_subject: subject,
+      followup_body: body,           // same rationale as email_body on approve-email: keep sent copy for UI preview
       followup_message_id: messageId,
       draft_followup_subject: null,
       draft_followup_body: null,

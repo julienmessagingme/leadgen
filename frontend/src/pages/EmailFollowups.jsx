@@ -91,8 +91,19 @@ export default function EmailFollowups() {
   );
 }
 
+function useFirstEmail(leadId, enabled) {
+  return useQuery({
+    queryKey: ["lead-first-email", leadId],
+    queryFn: () => api.get(`/leads/${leadId}/first-email`),
+    enabled: Boolean(enabled && leadId),
+    staleTime: 5 * 60_000,
+  });
+}
+
 function CandidateRow({ candidate: c, cases }) {
   const qc = useQueryClient();
+  const [expanded, setExpanded] = useState(false);
+  const { data: firstEmail, isLoading: firstEmailLoading } = useFirstEmail(c.id, expanded);
   const [selectedCaseId, setSelectedCaseId] = useState(() => {
     // Pre-select the case whose sector best matches the lead, so Julien only
     // has to confirm in the common case. "none" if no sector match.
@@ -203,6 +214,55 @@ function CandidateRow({ candidate: c, cases }) {
           )}
         </div>
       )}
+
+      <div className="mt-3">
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"
+        >
+          <span className="inline-block w-3 transition-transform" style={{ transform: expanded ? "rotate(90deg)" : "rotate(0deg)" }}>▸</span>
+          {expanded ? "Masquer le 1er mail" : "Voir le 1er mail envoyé"}
+        </button>
+
+        {expanded && (
+          <div className="mt-2 border border-gray-200 rounded-md bg-gray-50 p-3">
+            {firstEmailLoading ? (
+              <div className="text-xs text-gray-400">Chargement…</div>
+            ) : !firstEmail ? (
+              <div className="text-xs text-red-600">Impossible de charger le mail.</div>
+            ) : (
+              <>
+                <div className="text-xs text-gray-500 mb-1">
+                  Envoyé le{" "}
+                  <span className="font-mono">
+                    {new Date(firstEmail.sent_at).toLocaleString("fr-FR", {
+                      day: "2-digit", month: "2-digit", year: "numeric",
+                      hour: "2-digit", minute: "2-digit",
+                    })}
+                  </span>
+                </div>
+                {firstEmail.subject && (
+                  <div className="text-sm font-semibold text-gray-800 mb-2">
+                    Objet : {firstEmail.subject}
+                  </div>
+                )}
+                {firstEmail.body_archived && firstEmail.body ? (
+                  <div
+                    className="text-sm text-gray-700 bg-white rounded border border-gray-200 p-3 prose prose-sm max-w-none"
+                    dangerouslySetInnerHTML={{ __html: firstEmail.body }}
+                  />
+                ) : (
+                  <div className="text-xs text-gray-500 italic">
+                    Corps du mail non archivé pour ce lead (antérieur à la feature). Si besoin,
+                    retrouve-le dans Gmail Sent avec l'ID{" "}
+                    <span className="font-mono">{firstEmail.message_id || "—"}</span>.
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
