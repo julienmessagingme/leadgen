@@ -9,8 +9,12 @@
  * to keep the UI in sync.
  *
  * Usage (from repo root on VPS):
- *   node scripts/seed-default-templates.js            # dry-run diff
- *   node scripts/seed-default-templates.js --apply    # actually upsert
+ *   node scripts/seed-default-templates.js                  # dry-run diff
+ *   node scripts/seed-default-templates.js --apply          # overwrite all keys
+ *   node scripts/seed-default-templates.js --insert-missing # only INSERT keys
+ *                                                           # absent from DB
+ *                                                           # (preserves any
+ *                                                           # existing override)
  */
 
 require("dotenv").config({ quiet: true });
@@ -18,6 +22,7 @@ const { supabase } = require("../src/lib/supabase");
 const { DEFAULT_TEMPLATES } = require("../src/lib/message-generator");
 
 const APPLY = process.argv.includes("--apply");
+const INSERT_MISSING = process.argv.includes("--insert-missing");
 
 async function main() {
   const keys = Object.keys(DEFAULT_TEMPLATES);
@@ -42,8 +47,22 @@ async function main() {
     if (!same) changes++;
   }
 
-  if (!APPLY) {
-    console.log(`\nDry run — ${changes} change(s) would be applied. Re-run with --apply.`);
+  if (!APPLY && !INSERT_MISSING) {
+    console.log(`\nDry run — ${changes} change(s) would be applied by --apply.`);
+    console.log("Use --apply to overwrite everything, or --insert-missing to only INSERT keys absent from DB.");
+    return;
+  }
+
+  if (INSERT_MISSING) {
+    const missingKeys = keys.filter((k) => byKey[k] === undefined);
+    if (missingKeys.length === 0) {
+      console.log("\nNothing to insert — all keys already exist in DB (use --apply to overwrite).");
+      return;
+    }
+    const rows = missingKeys.map((k) => ({ key: k, value: DEFAULT_TEMPLATES[k] }));
+    const { error: insErr } = await supabase.from("global_settings").insert(rows);
+    if (insErr) throw insErr;
+    console.log(`\nInserted ${missingKeys.length} missing row(s): ${missingKeys.join(", ")}`);
     return;
   }
 
