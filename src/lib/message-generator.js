@@ -95,29 +95,31 @@ var DEFAULT_FOLLOWUP_TEMPLATE =
 var DEFAULT_EMAIL_TEMPLATE =
   "Redige un email de relance pour un prospect qui n'a PAS accepte l'invitation LinkedIn apres 7 jours.\n\n" +
   "REGLES :\n" +
-  "1. REAGIR AU SIGNAL : Meme principe que le message LinkedIn. On part du signal detecte.\n" +
-  "2. APPORTER DE LA VALEUR : Partager un insight, une tendance, un retour d'experience concret sur le sujet du signal. Pas un pitch produit.\n" +
-  "3. SI SIGNAL CONCURRENT : Se positionner comme consultant en strategie conversationnelle. On aide a choisir les bons canaux, la bonne approche. Notre techno vient en complement.\n" +
-  "4. PAS DE CTA : ne propose PAS de RDV, PAS de lien Calendly, PAS de 'reserver un creneau', PAS de 'programmer un echange'. Le lien sera ajoute automatiquement en signature.\n" +
-  "5. FORMAT : Objet court et accrocheur (pas 'Relance' ou 'Suite a'). Corps : 4-6 phrases. HTML simple. Terminer par une question ouverte.\n" +
-  "6. SIGNATURE : NE PAS mettre de signature, NE PAS mettre 'Bonne journee', NE PAS mettre 'Cordialement'. Tout sera ajoute automatiquement.\n" +
-  "7. EN FRANCAIS si le prospect est en France, EN ANGLAIS si zone GCC/international.\n" +
-  "8. INTERDICTIONS ABSOLUES : 'j ai vu que vous avez like/commente/reagi', 'vous avez reagi a mes posts', 'vous suivez de pres', 'vos interactions recentes', 'votre activite recente', 'your repeated engagement', 'I noticed you ve been exploring', 'caught my attention', 'le sujet revient souvent dans vos echanges'. JAMAIS de reference au fait qu on surveille ou observe l activite LinkedIn du prospect — ca fait flicage/stalking. On ecrit parce que le SUJET nous interesse, pas parce qu on a vu que la personne a like un post. Pas de 'MessagingMe', pas de nom de societe.\n" +
-  "9. ANTI-HALLUCINATION — NOMS PROPRES : NE JAMAIS inventer de nom d auteur de post. Si l auteur du post n est PAS explicitement fourni dans le contexte (champ 'Auteur du post :'), NE PAS nommer l auteur. Reference seulement le sujet/theme du post (ex: 'Un post recent sur l experience client...'). JAMAIS utiliser un label interne (ex: 'nahmias', 'wax', 'mtarget', 'alcmeon') comme nom de personne. Si tu n es pas 100% sur d un nom, tu ne le cites pas — tu parles du sujet directement.";
+  "1. ANCRAGE OBLIGATOIRE — MESSAGING CONVERSATIONNEL : le mail DOIT parler explicitement de messaging conversationnel (WhatsApp Business, chatbots IA, RCS) comme levier concret d amelioration de l experience client ou de la performance commerciale. Pas juste 'experience client' en general — ca fait generique, on passe pour un consultant CX random. Le conversationnel est TOUJOURS le fil rouge, meme court.\n" +
+  "2. REAGIR AU SUJET DU SIGNAL : part du theme du post/signal, mais tord-le vers l angle conversationnel pertinent pour le metier du prospect. Exemple : si le post parle de SAV dans le retail, l angle devient 'WhatsApp pour automatiser le SAV 1er niveau et desengorger les conseillers' — pas 'l experience SAV en general'.\n" +
+  "3. APPORTER DE LA VALEUR : un insight concret, une tendance, ou un retour d experience sur comment le conversationnel resout un probleme specifique au secteur/taille du prospect. Tu peux dire 'le messaging conversationnel' ou 'WhatsApp Business' ou 'chatbot IA' sans probleme. Pas un pitch produit.\n" +
+  "4. SI SIGNAL CONCURRENT (Sinch, WAX, Respond.io, Brevo, CM.com, etc.) : on se positionne comme conseil en strategie conversationnelle (on aide a choisir le bon canal, la bonne approche), notre techno (messagingme.app) vient en complement. Ne jamais denigrer le concurrent.\n" +
+  "5. PAS DE CTA : ne propose PAS de RDV, PAS de lien Calendly, PAS de 'reserver un creneau', PAS de 'programmer un echange'. Le lien sera ajoute automatiquement en signature.\n" +
+  "6. FORMAT : Objet court et accrocheur qui contient le theme conversationnel de maniere evidente (ex: 'WhatsApp + SAV chez [SECTEUR]', 'Chatbot et conversion e-commerce', 'Messaging conversationnel en assurance'). Evite 'Relance' ou 'Suite a'. Corps : 4-6 phrases. HTML simple. Terminer par une question ouverte, concrete, metier — pas une banalite.\n" +
+  "7. SIGNATURE : NE PAS mettre de signature, NE PAS mettre 'Bonne journee', NE PAS mettre 'Cordialement'. Tout sera ajoute automatiquement.\n" +
+  "8. EN FRANCAIS si le prospect est en France, EN ANGLAIS si zone GCC/international.\n" +
+  "9. INTERDICTIONS ABSOLUES : 'j ai vu que vous avez like/commente/reagi', 'vous avez reagi a mes posts', 'vous suivez de pres', 'vos interactions recentes', 'votre activite recente', 'your repeated engagement', 'I noticed you ve been exploring', 'caught my attention', 'le sujet revient souvent dans vos echanges'. JAMAIS de reference au fait qu on surveille ou observe l activite LinkedIn du prospect — ca fait flicage/stalking. On ecrit parce que le SUJET nous interesse, pas parce qu on a vu que la personne a like un post. Pas de 'MessagingMe' comme nom de societe (juste le sujet 'messaging conversationnel').\n" +
+  "10. ANTI-HALLUCINATION — NOMS PROPRES : NE JAMAIS inventer de nom d auteur de post. Si l auteur n est PAS explicitement fourni (champ 'Auteur du post :'), reference le theme/sujet du post, pas l auteur. JAMAIS utiliser un label interne (ex: 'nahmias', 'wax', 'mtarget', 'alcmeon') comme nom de personne. Si pas 100% sur d un nom, ne le cite pas.";
 
 var DEFAULT_EMAIL_FOLLOWUP_TEMPLATE =
   "Redige un 2e email de relance (le 1er est reste sans reponse depuis 7 jours).\n\n" +
   "REGLES :\n" +
-  "1. ANGLE DIFFERENT du 1er email : ne re-cite PAS le signal initial (like/commentaire sur un post). Pars sur un cas client concret.\n" +
-  "2. CITER UN CAS CLIENT : si un cas est fourni dans le contexte (champ 'Cas client a citer'), cite le nom du client + le chiffre + 1 phrase de contexte. Si AUCUN cas n est fourni, parle d une tendance generale du secteur SANS inventer de chiffres precis.\n" +
-  "3. MENTIONNER MessagingMe UNE FOIS MAX : juste pour situer (ex: 'c est le type de sujet qu on travaille chez MessagingMe'). Pas de pitch produit, pas de 'notre solution'.\n" +
-  "4. PAS DE CTA : ne propose PAS de RDV, PAS de lien Calendly, PAS de 'reserver un creneau', PAS de 'programmer un echange'. Le lien sera ajoute automatiquement en signature.\n" +
-  "5. FORMAT : Objet court ET DIFFERENT du 1er email (pas de 'Re:' — la signature de thread est geree automatiquement). Corps : 4-6 phrases. HTML simple. Terminer par une question ouverte.\n" +
-  "6. SIGNATURE : NE PAS mettre de signature, NE PAS mettre 'Bonne journee', NE PAS mettre 'Cordialement'. Tout sera ajoute automatiquement.\n" +
-  "7. EN FRANCAIS si le prospect est en France, EN ANGLAIS si zone GCC/international.\n" +
-  "8. INTERDICTIONS ABSOLUES : 'j ai vu que vous avez like/commente/reagi', 'vous avez reagi a mes posts', 'vous suivez de pres', 'vos interactions recentes', 'votre activite recente', 'your repeated engagement', 'I noticed you ve been exploring', 'caught my attention', 'le sujet revient souvent dans vos echanges'. JAMAIS de reference au fait qu on surveille ou observe l activite LinkedIn du prospect — ca fait flicage/stalking.\n" +
-  "9. ANTI-HALLUCINATION — NOMS PROPRES : NE JAMAIS inventer de nom d auteur de post. Pas de label interne (nahmias, wax, mtarget).\n" +
-  "10. ANTI-FAKE-METRIC : si AUCUN cas client n est fourni dans le contexte, NE PAS inventer de chiffre precis. Tu peux dire 'on observe' ou 'la tendance est' sans donner un pourcentage invente.";
+  "1. ANCRAGE OBLIGATOIRE — MESSAGING CONVERSATIONNEL : comme le 1er email, le mail DOIT parler explicitement de messaging conversationnel (WhatsApp Business, chatbots IA) comme levier concret. Pas juste 'experience client' en general.\n" +
+  "2. ANGLE DIFFERENT du 1er email : ne re-cite PAS le signal initial (like/commentaire sur un post). Pars sur un cas client concret et croise avec le metier/taille du prospect via l angle conversationnel.\n" +
+  "3. CITER UN CAS CLIENT : si un cas est fourni dans le contexte (champ 'Cas client a citer'), cite le nom du client + le chiffre + 1 phrase de contexte ET fais le lien explicite avec le conversationnel (quel canal, quel use-case). Si AUCUN cas n est fourni, parle d une tendance generale sur le conversationnel dans le secteur SANS inventer de chiffres precis.\n" +
+  "4. MENTIONNER MessagingMe UNE FOIS MAX : juste pour situer (ex: 'c est le type de deploiement qu on pilote chez MessagingMe'). Pas de pitch produit, pas de 'notre solution'.\n" +
+  "5. PAS DE CTA : ne propose PAS de RDV, PAS de lien Calendly, PAS de 'reserver un creneau', PAS de 'programmer un echange'. Le lien sera ajoute automatiquement en signature.\n" +
+  "6. FORMAT : Objet court ET DIFFERENT du 1er email (pas de 'Re:' — la signature de thread est geree automatiquement). L objet doit evoquer explicitement le conversationnel (WhatsApp, chatbot, messaging). Corps : 4-6 phrases. HTML simple. Terminer par une question ouverte et concrete.\n" +
+  "7. SIGNATURE : NE PAS mettre de signature, NE PAS mettre 'Bonne journee', NE PAS mettre 'Cordialement'. Tout sera ajoute automatiquement.\n" +
+  "8. EN FRANCAIS si le prospect est en France, EN ANGLAIS si zone GCC/international.\n" +
+  "9. INTERDICTIONS ABSOLUES : 'j ai vu que vous avez like/commente/reagi', 'vous avez reagi a mes posts', 'vous suivez de pres', 'vos interactions recentes', 'votre activite recente', 'your repeated engagement', 'I noticed you ve been exploring', 'caught my attention', 'le sujet revient souvent dans vos echanges'. JAMAIS de reference au fait qu on surveille ou observe l activite LinkedIn du prospect — ca fait flicage/stalking.\n" +
+  "10. ANTI-HALLUCINATION — NOMS PROPRES : NE JAMAIS inventer de nom d auteur de post. Pas de label interne (nahmias, wax, mtarget).\n" +
+  "11. ANTI-FAKE-METRIC : si AUCUN cas client n est fourni dans le contexte, NE PAS inventer de chiffre precis. Tu peux dire 'on observe' ou 'la tendance est' sans donner un pourcentage invente.";
 
 var DEFAULT_WHATSAPP_TEMPLATE =
   "Redige un message WhatsApp pour ce prospect.\n\n" +

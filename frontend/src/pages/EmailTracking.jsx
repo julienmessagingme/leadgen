@@ -87,6 +87,7 @@ export default function EmailTracking() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nom</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Entreprise</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
                   <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Envoyé</th>
@@ -140,6 +141,9 @@ function EmailRow({ row }) {
           <a href={row.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline">LinkedIn</a>
         )}
       </td>
+      <td className="px-4 py-3 text-xs whitespace-nowrap">
+        <TypeBadge origin={row.origin} isFollowup={isFollowup} />
+      </td>
       <td className="px-4 py-3 text-sm text-gray-600">{isFollowup ? "" : (row.company_name || "--")}</td>
       <td className="px-4 py-3 text-xs text-gray-500">{isFollowup ? "" : (row.email || "--")}</td>
       <td className="px-4 py-3 text-center text-xs text-gray-500">{relativeTime(row.sent_at)}</td>
@@ -170,6 +174,24 @@ function EmailRow({ row }) {
         {!isFollowup && <FollowupAction row={row} />}
       </td>
     </tr>
+  );
+}
+
+function TypeBadge({ origin, isFollowup }) {
+  // Two axes: origin of the lead (pipeline / cold / troudebal) × email type
+  // (initial / followup). Pipeline leads get distinct colours so the eye
+  // picks them out quickly; follow-up rows are always prefixed with "Relance".
+  const originConf = {
+    pipeline:  { label: "Pipeline",   cls: "bg-emerald-100 text-emerald-800" },
+    cold:      { label: "Cold",       cls: "bg-amber-100 text-amber-800" },
+    troudebal: { label: "Troudebal",  cls: "bg-indigo-100 text-indigo-800" },
+  };
+  const conf = originConf[origin] || { label: origin || "?", cls: "bg-gray-100 text-gray-700" };
+  const prefix = isFollowup ? "Relance · " : "1er mail · ";
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded font-medium uppercase tracking-wide ${conf.cls}`}>
+      {prefix}{conf.label}
+    </span>
   );
 }
 

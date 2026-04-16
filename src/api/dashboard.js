@@ -206,7 +206,7 @@ router.get("/email-tracking", async (req, res) => {
     // Get all leads that had an email sent
     var { data: leads, error: leadsErr } = await supabase
       .from("leads")
-      .select("id, full_name, company_name, email, status, icp_score, tier, email_sent_at, email_followup_sent_at, linkedin_url, metadata")
+      .select("id, full_name, company_name, email, status, icp_score, tier, email_sent_at, email_followup_sent_at, linkedin_url, signal_source, signal_type, signal_category, metadata")
       .not("email_sent_at", "is", null)
       .order("email_sent_at", { ascending: false })
       .limit(200);
@@ -237,6 +237,18 @@ router.get("/email-tracking", async (req, res) => {
       eventsByLeadType[key].push(e);
     });
 
+    // Origin classification — 3 buckets used as the "Type" column in the UI:
+    //   - "troudebal": proposed by the autonomous OpenClaw cold agent
+    //                  (signal_source='cold_outreach_ai' or metadata.cold_run_id set)
+    //   - "cold":      from the manual Cold Outbound page (cold_outbound=true but not Troudebal)
+    //   - "pipeline":  default — warm signals collected by Task A (likes/comments/etc.)
+    function classifyOrigin(lead) {
+      const md = lead.metadata || {};
+      if (lead.signal_source === "cold_outreach_ai" || md.cold_run_id != null) return "troudebal";
+      if (md.cold_outbound === true || lead.signal_category === "cold_outbound") return "cold";
+      return "pipeline";
+    }
+
     function buildRow(lead, emailType, sentAt) {
       var evts = eventsByLeadType[lead.id + "|" + emailType] || [];
       var opens = evts.filter(function (e) { return e.event_type === "open"; });
@@ -245,6 +257,7 @@ router.get("/email-tracking", async (req, res) => {
         row_key: lead.id + "-" + emailType,
         lead_id: lead.id,
         email_type: emailType, // "email_1" | "email_followup"
+        origin: classifyOrigin(lead), // "pipeline" | "cold" | "troudebal"
         full_name: lead.full_name,
         company_name: lead.company_name,
         email: lead.email,
