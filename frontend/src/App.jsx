@@ -12,6 +12,7 @@ import HubspotSignals from "./pages/HubspotSignals";
 import MessagesDraft from "./pages/MessagesDraft";
 import Invitations from "./pages/Invitations";
 import EmailTracking from "./pages/EmailTracking";
+import EmailFollowups from "./pages/EmailFollowups";
 
 const queryClient = new QueryClient();
 
@@ -131,6 +132,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <EmailTracking />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/email-followups"
+        element={
+          <ProtectedRoute>
+            <EmailFollowups />
           </ProtectedRoute>
         }
       />

@@ -310,6 +310,94 @@ router.get("/email-tracking", async (req, res) => {
   }
 });
 
+// ────────────────────────────────────────────────────────────
+// GET /followup-candidates -- leads eligible to a manual relance email
+// ────────────────────────────────────────────────────────────
+//
+// Window: email_sent_at between J-21 and J-3 (inclusive).
+//   - floor J-3: give the prospect at least 3 days to reply before poking again
+//   - ceiling J-21: anything older is Task F's automatic J+14 territory (kept
+//     as a safety net per Julien's decision, option B in the discussion)
+//
+// Exclusions:
+//   - email_followup_sent_at already set (a relance already went out)
+//   - status in terminal set (replied / meeting_booked / disqualified)
+//   - status already email_followup_pending (a draft is waiting in validation)
+//
+// Response also includes open/click flags so the UI can surface "has opened"
+// leads first, and passes through metadata fields useful for context.
+router.get("/followup-candidates", async (req, res) => {
+  try {
+    const now = Date.now();
+    const floorIso = new Date(now - 3 * 86400 * 1000).toISOString();
+    const ceilIso = new Date(now - 21 * 86400 * 1000).toISOString();
+
+    const { data: leads, error } = await supabase
+      .from("leads")
+      .select("id, full_name, company_name, company_sector, email, headline, status, icp_score, tier, email_sent_at, linkedin_url, metadata")
+      .not("email_sent_at", "is", null)
+      .is("email_followup_sent_at", null)
+      .lte("email_sent_at", floorIso)     // sent at least 3 days ago
+      .gte("email_sent_at", ceilIso)      // sent within the last 21 days
+      .not("status", "in", "(replied,meeting_booked,disqualified,email_followup_pending)")
+      .order("icp_score", { ascending: false })
+      .order("email_sent_at", { ascending: true })
+      .limit(100);
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    const candidates = leads || [];
+    if (candidates.length === 0) return res.json({ candidates: [] });
+
+    // Enrich with open/click tallies so the UI can prioritise "opened" leads.
+    const ids = candidates.map((l) => l.id);
+    const { data: events } = await supabase
+      .from("email_events")
+      .select("lead_id, email_type, event_type, created_at")
+      .in("lead_id", ids)
+      .eq("email_type", "email_1")
+      .order("created_at", { ascending: true });
+
+    const evtByLead = {};
+    (events || []).forEach((e) => {
+      if (!evtByLead[e.lead_id]) evtByLead[e.lead_id] = [];
+      evtByLead[e.lead_id].push(e);
+    });
+
+    const result = candidates.map((l) => {
+      const evts = evtByLead[l.id] || [];
+      const opens = evts.filter((e) => e.event_type === "open");
+      const clicks = evts.filter((e) => e.event_type === "click");
+      const daysSinceSent = Math.floor((now - new Date(l.email_sent_at).getTime()) / 86400000);
+      return {
+        id: l.id,
+        full_name: l.full_name,
+        company_name: l.company_name,
+        company_sector: l.company_sector,
+        email: l.email,
+        headline: l.headline,
+        status: l.status,
+        icp_score: l.icp_score,
+        tier: l.tier,
+        linkedin_url: l.linkedin_url,
+        cold_outbound: !!(l.metadata && l.metadata.cold_outbound),
+        email_sent_at: l.email_sent_at,
+        days_since_sent: daysSinceSent,
+        opens: opens.length,
+        first_open: opens.length > 0 ? opens[0].created_at : null,
+        last_open: opens.length > 0 ? opens[opens.length - 1].created_at : null,
+        clicks: clicks.length,
+        first_click: clicks.length > 0 ? clicks[0].created_at : null,
+      };
+    });
+
+    res.json({ candidates: result });
+  } catch (err) {
+    console.error("Dashboard /followup-candidates error:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 /**
  * GET /api/dashboard/bereach-live
  *

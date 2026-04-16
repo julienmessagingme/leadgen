@@ -942,7 +942,27 @@ router.post("/:id/generate-followup-now", async (req, res) => {
     }
 
     const [templates, caseStudies] = await Promise.all([loadTemplates(), loadCaseStudies()]);
-    const caseStudy = pickCaseStudyForLead(lead, caseStudies);
+
+    // Case study selection:
+    //   - body.case_study_id = integer → Julien explicitly picked one in the UI (new flow)
+    //   - body.case_study_id = null / "none" → Julien asked Sonnet to stay generic
+    //   - body absent / undefined → fallback to sector-matching (Task F's behavior)
+    let caseStudy = null;
+    const rawCaseId = req.body && req.body.case_study_id;
+    if (rawCaseId === null || rawCaseId === "none") {
+      caseStudy = null;
+    } else if (rawCaseId !== undefined && rawCaseId !== "") {
+      const parsed = Number.parseInt(rawCaseId, 10);
+      if (!Number.isInteger(parsed)) {
+        return res.status(400).json({ error: "case_study_id must be an integer, null, or 'none'" });
+      }
+      caseStudy = caseStudies.find((c) => c.id === parsed) || null;
+      if (!caseStudy) {
+        return res.status(404).json({ error: "Case study " + parsed + " not found or inactive" });
+      }
+    } else {
+      caseStudy = pickCaseStudyForLead(lead, caseStudies);
+    }
 
     const emailContent = await generateFollowupEmail(lead, templates, caseStudy);
     if (!emailContent || !emailContent.subject || !emailContent.body) {
