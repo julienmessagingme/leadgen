@@ -109,6 +109,10 @@ app.use("/api/agent", require("./api/agent"));
 // Cold Outreach API routes (protected -- authMiddleware applied inside router)
 app.use("/api/cold-outreach", require("./api/cold-outreach"));
 
+// WhatsApp delivery status webhook (public-ish -- static bearer token
+// WHATSAPP_WEBHOOK_TOKEN; updates metadata.whatsapp_* only)
+app.use("/api/whatsapp", require("./api/whatsapp-webhook"));
+
 // Serve React build
 app.use(express.static(path.join(__dirname, "..", "dist")));
 
