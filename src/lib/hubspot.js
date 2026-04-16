@@ -343,4 +343,68 @@ async function setPhoneInHubspot(contactId, phone, opts) {
   }
 }
 
-module.exports = { existsInHubspot, existsInHubspotByEmail, findEmailInHubspot, findPhoneInHubspot, setPhoneInHubspot, getLastEmail };
+/**
+ * Create a new HubSpot contact. Used right after FullEnrich finds a phone
+ * for a lead that wasn't in CRM yet — Julien doesn't want to lose costly
+ * data points and prefers creating the contact while we're at it.
+ *
+ * Only fills what we actually have. HubSpot requires `email` to identify the
+ * contact. On 409 CONFLICT (email already taken — race with another create),
+ * we return the existing contact id instead of failing.
+ *
+ * @param {object} input - { email (required), firstname?, lastname?, phone?,
+ *                          mobilephone?, company?, jobtitle?, website?,
+ *                          linkedinbio?, source? }
+ * @returns {Promise<{contactId: string, created: boolean}|null>}
+ */
+async function createContactInHubspot(input) {
+  if (!input || !input.email) return null;
+  try {
+    const client = getClient();
+    if (!client) return null;
+
+    // Whitelist properties we support. Skip empty/null values so we don't
+    // wipe defaults or send "undefined" strings.
+    const allowed = ["email", "firstname", "lastname", "phone", "mobilephone",
+      "company", "jobtitle", "website", "lifecyclestage", "hs_lead_status"];
+    const properties = {};
+    for (const k of allowed) {
+      const v = input[k];
+      if (v !== undefined && v !== null && v !== "") {
+        properties[k] = String(v).slice(0, 500); // HubSpot max for most fields
+      }
+    }
+    // Default lifecycle / lead status so the contact isn't a dangling ghost
+    if (!properties.lifecyclestage) properties.lifecyclestage = "lead";
+
+    const resp = await hubspotLimit(() =>
+      client.crm.contacts.basicApi.create({ properties })
+    );
+    return { contactId: resp.id, created: true };
+  } catch (err) {
+    // HubSpot returns 409 when the email is already used — resolve to the
+    // existing id so the caller can still associate the lead with it.
+    const code = err && err.code;
+    const message = (err && err.message) || "";
+    if (code === 409 || /already exists/i.test(message)) {
+      try {
+        const existing = await existsInHubspotByEmail(input.email);
+        if (existing.found && existing.contactId) {
+          return { contactId: existing.contactId, created: false };
+        }
+      } catch (_e) { /* fall through */ }
+    }
+    console.warn("createContactInHubspot failed:", message);
+    return null;
+  }
+}
+
+module.exports = {
+  existsInHubspot,
+  existsInHubspotByEmail,
+  findEmailInHubspot,
+  findPhoneInHubspot,
+  setPhoneInHubspot,
+  createContactInHubspot,
+  getLastEmail,
+};

@@ -1023,22 +1023,53 @@ router.post("/:id/send-whatsapp", async (req, res) => {
         phone = normalize(enriched.phone);
         phoneSource = "fullenrich";
 
-        // Push the costly find back to HubSpot so we don't pay 10 credits again
-        // next time. Only if we have an email to identify the contact, and only
-        // if a HubSpot contact already exists (we don't proactively create CRM
-        // contacts from here — that's Julien's curation workflow).
+        // We just spent 10 credits — don't lose the data. If the lead is in
+        // HubSpot, write the phone back on its contact. If it isn't, create
+        // the contact with everything we know (email, name, phone, company,
+        // headline). That way Julien's CRM accretes value instead of us
+        // re-paying FullEnrich for the same lead later.
         if (lead.email) {
           try {
-            const { existsInHubspotByEmail, setPhoneInHubspot } = require("../lib/hubspot");
+            const { existsInHubspotByEmail, setPhoneInHubspot, createContactInHubspot } = require("../lib/hubspot");
             const hs = await existsInHubspotByEmail(lead.email);
+            let hubspotContactId = null;
+            let hubspotAction = null;
+
             if (hs.found && hs.contactId) {
+              hubspotContactId = hs.contactId;
               const pushed = await setPhoneInHubspot(hs.contactId, phone);
-              if (pushed) {
-                console.log("[send-whatsapp] pushed phone back to HubSpot lead_id=" + lead.id + " contact_id=" + hs.contactId);
+              hubspotAction = pushed ? "updated" : "skipped_existing_phone";
+            } else {
+              const created = await createContactInHubspot({
+                email: lead.email,
+                firstname: lead.first_name,
+                lastname: lead.last_name,
+                mobilephone: phone,
+                company: lead.company_name,
+                jobtitle: lead.headline,
+                website: lead.company_linkedin_url || undefined,
+              });
+              if (created && created.contactId) {
+                hubspotContactId = created.contactId;
+                hubspotAction = created.created ? "created" : "conflict_resolved";
               }
             }
+
+            if (hubspotContactId) {
+              console.log("[send-whatsapp] HubSpot " + hubspotAction + " lead_id=" + lead.id + " contact_id=" + hubspotContactId);
+              // Persist the contact id on the lead for future lookups.
+              // Note: this update is idempotent — we'll overwrite later in the
+              // main patch (`patch.metadata`), but we set it here so it's in
+              // place even if the main update then fails.
+              const nextMeta = Object.assign({}, lead.metadata || {}, {
+                hubspot_contact_id: hubspotContactId,
+                hubspot_phone_write_action: hubspotAction,
+                hubspot_phone_write_at: new Date().toISOString(),
+              });
+              lead.metadata = nextMeta;
+            }
           } catch (hsErr) {
-            console.warn("[send-whatsapp] HubSpot phone write-back failed:", hsErr.message);
+            console.warn("[send-whatsapp] HubSpot write-back failed:", hsErr.message);
           }
         }
       }
