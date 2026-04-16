@@ -81,7 +81,7 @@ function pickCaseStudyForLead(lead, caseStudies) {
 /**
  * Main Task F execution.
  */
-module.exports = async function taskFEmailFollowup(runId) {
+async function taskFEmailFollowup(runId) {
   await log(runId, TASK_NAME, "info", "Task F started — Email J+14 followup");
 
   var leads = await selectLeads(runId);
@@ -177,6 +177,7 @@ module.exports = async function taskFEmailFollowup(runId) {
     } catch (err) {
       await log(runId, TASK_NAME, "error", "Error processing lead " + (lead.full_name || lead.id) + ": " + err.message);
       skipped.other++;
+
     }
   }
 
@@ -187,4 +188,11 @@ module.exports = async function taskFEmailFollowup(runId) {
     ", linkedin=" + skipped.linkedin_reply +
     ", gen_failed=" + skipped.gen_failed +
     ", other=" + skipped.other + ")");
-};
+}
+
+module.exports = taskFEmailFollowup;
+// Expose helpers for on-demand follow-up generation from the dashboard
+// (POST /api/leads/:id/generate-followup-now) without duplicating the
+// case-study picking logic.
+module.exports.loadCaseStudies = loadCaseStudies;
+module.exports.pickCaseStudyForLead = pickCaseStudyForLead;

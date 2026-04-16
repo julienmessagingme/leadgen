@@ -216,7 +216,7 @@ router.get("/email-tracking", async (req, res) => {
     }
 
     if (!leads || leads.length === 0) {
-      return res.json({ leads: [] });
+      return res.json({ rows: [] });
     }
 
     // Get all email events for these leads
@@ -227,38 +227,56 @@ router.get("/email-tracking", async (req, res) => {
       .in("lead_id", leadIds)
       .order("created_at", { ascending: true });
 
-    // Group events by lead
-    var eventsByLead = {};
+    // Group events by lead THEN by email_type, so each email (initial vs follow-up)
+    // gets its own open/click counters. Julien wants to see them as two rows
+    // in the UI: the follow-up sits just under the initial email for the same lead.
+    var eventsByLeadType = {};
     (events || []).forEach(function (e) {
-      if (!eventsByLead[e.lead_id]) eventsByLead[e.lead_id] = [];
-      eventsByLead[e.lead_id].push(e);
+      var key = e.lead_id + "|" + (e.email_type || "email_1");
+      if (!eventsByLeadType[key]) eventsByLeadType[key] = [];
+      eventsByLeadType[key].push(e);
     });
 
-    // Build response
-    var result = leads.map(function (l) {
-      var evts = eventsByLead[l.id] || [];
+    function buildRow(lead, emailType, sentAt) {
+      var evts = eventsByLeadType[lead.id + "|" + emailType] || [];
       var opens = evts.filter(function (e) { return e.event_type === "open"; });
       var clicks = evts.filter(function (e) { return e.event_type === "click"; });
       return {
-        id: l.id,
-        full_name: l.full_name,
-        company_name: l.company_name,
-        email: l.email,
-        status: l.status,
-        icp_score: l.icp_score,
-        tier: l.tier,
-        linkedin_url: l.linkedin_url,
-        cold_outbound: !!(l.metadata && l.metadata.cold_outbound),
-        email_sent_at: l.email_sent_at,
-        email_followup_sent_at: l.email_followup_sent_at,
+        row_key: lead.id + "-" + emailType,
+        lead_id: lead.id,
+        email_type: emailType, // "email_1" | "email_followup"
+        full_name: lead.full_name,
+        company_name: lead.company_name,
+        email: lead.email,
+        status: lead.status,
+        icp_score: lead.icp_score,
+        tier: lead.tier,
+        linkedin_url: lead.linkedin_url,
+        cold_outbound: !!(lead.metadata && lead.metadata.cold_outbound),
+        sent_at: sentAt,
+        email_followup_sent_at: lead.email_followup_sent_at, // repeated on each row for convenience
+        has_followup_sent: !!lead.email_followup_sent_at,
+        has_followup_pending: lead.status === "email_followup_pending",
         opens: opens.length,
         first_open: opens.length > 0 ? opens[0].created_at : null,
+        last_open: opens.length > 0 ? opens[opens.length - 1].created_at : null,
         clicks: clicks.length,
         first_click: clicks.length > 0 ? clicks[0].created_at : null,
       };
+    }
+
+    // Flatten: 1 row per sent email (initial + optional follow-up), grouped by
+    // lead. The frontend uses lead_id + email_type to render the follow-up row
+    // right under its initial.
+    var rows = [];
+    leads.forEach(function (l) {
+      rows.push(buildRow(l, "email_1", l.email_sent_at));
+      if (l.email_followup_sent_at) {
+        rows.push(buildRow(l, "email_followup", l.email_followup_sent_at));
+      }
     });
 
-    res.json({ leads: result });
+    res.json({ rows: rows });
   } catch (err) {
     console.error("Dashboard /email-tracking error:", err.message);
     res.status(500).json({ error: "Internal server error" });

@@ -898,6 +898,87 @@ router.get("/:id/hubspot-email", async (req, res) => {
 });
 
 /**
+ * POST /:id/generate-followup-now -- Generate a follow-up email draft on demand.
+ *
+ * Use case: Julien sees in /email-tracking that a prospect opened the first
+ * email. He doesn't want to wait J+14 for Task F to kick in — he wants a draft
+ * ready to send right now, using the same "cite a case study + different angle"
+ * Sonnet flow. This endpoint mirrors Task F but for a single lead.
+ *
+ * Preconditions:
+ *   - lead exists, has email_sent_at (a first email went out)
+ *   - lead has no email_followup_sent_at (no follow-up already sent)
+ *   - lead is not in replied/meeting_booked/disqualified status
+ *
+ * If a draft already exists (status=email_followup_pending), we overwrite it
+ * with a fresh Sonnet pass.
+ *
+ * The resulting draft lands in /messages-draft under the "Relances mail" tab.
+ */
+router.post("/:id/generate-followup-now", async (req, res) => {
+  try {
+    const { generateFollowupEmail, loadTemplates } = require("../lib/message-generator");
+    const { loadCaseStudies, pickCaseStudyForLead } = require("../tasks/task-f-email-followup");
+
+    const { data: lead, error: fetchErr } = await supabase
+      .from("leads")
+      .select("*")
+      .eq("id", req.params.id)
+      .single();
+
+    if (fetchErr || !lead) return res.status(404).json({ error: "Lead not found" });
+    if (!lead.email_sent_at) {
+      return res.status(400).json({ error: "No first email was sent — nothing to follow up on" });
+    }
+    if (lead.email_followup_sent_at) {
+      return res.status(409).json({ error: "A follow-up email has already been sent to this lead" });
+    }
+    const terminal = ["replied", "meeting_booked", "disqualified"];
+    if (terminal.includes(lead.status)) {
+      return res.status(409).json({ error: "Lead status is terminal (" + lead.status + "), follow-up not applicable" });
+    }
+    if (!lead.email && !(lead.metadata && lead.metadata.draft_email_to)) {
+      return res.status(400).json({ error: "Lead has no email address" });
+    }
+
+    const [templates, caseStudies] = await Promise.all([loadTemplates(), loadCaseStudies()]);
+    const caseStudy = pickCaseStudyForLead(lead, caseStudies);
+
+    const emailContent = await generateFollowupEmail(lead, templates, caseStudy);
+    if (!emailContent || !emailContent.subject || !emailContent.body) {
+      return res.status(502).json({ error: "Follow-up generation failed (Sonnet returned empty)" });
+    }
+
+    const updatedMetadata = Object.assign({}, lead.metadata || {}, {
+      draft_followup_subject: emailContent.subject,
+      draft_followup_body: emailContent.body,
+      draft_followup_to: lead.email,
+      draft_followup_generated_at: new Date().toISOString(),
+      draft_followup_case_id: caseStudy ? caseStudy.id : null,
+      draft_followup_source: "manual_fast",
+    });
+
+    const { error: updErr } = await supabase
+      .from("leads")
+      .update({
+        status: "email_followup_pending",
+        metadata: updatedMetadata,
+      })
+      .eq("id", lead.id);
+
+    if (updErr) {
+      console.error("POST /leads/:id/generate-followup-now update error:", updErr.message);
+      return res.status(500).json({ error: "Failed to persist draft" });
+    }
+
+    res.json({ ok: true, subject: emailContent.subject, body: emailContent.body });
+  } catch (err) {
+    console.error("POST /leads/:id/generate-followup-now error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
  * POST /:id/approve-email-followup -- Send the followup email as a reply-in-thread.
  * Uses the original email's messageId to thread the conversation.
  * Injects click+open tracking before sending.
