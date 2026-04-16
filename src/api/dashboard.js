@@ -369,7 +369,11 @@ router.get("/followup-candidates", async (req, res) => {
 
     if (error) return res.status(500).json({ error: error.message });
 
-    const candidates = leads || [];
+    // Server-side filter: drop leads where Julien explicitly rejected the
+    // follow-up (POST /api/leads/:id/reject-followup writes
+    // metadata.followup_rejected_at). We filter here rather than in the SQL
+    // because Supabase's JSON operators make this query fragile.
+    const candidates = (leads || []).filter((l) => !(l.metadata && l.metadata.followup_rejected_at));
     if (candidates.length === 0) return res.json({ candidates: [] });
 
     // Enrich with open/click tallies so the UI can prioritise "opened" leads.

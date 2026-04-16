@@ -1197,6 +1197,42 @@ router.get("/:id/followup-email", async (req, res) => {
 });
 
 /**
+ * POST /:id/reject-followup — Julien doesn't want to send any follow-up for
+ * this lead. We don't change the lead's status (it's still in email_sent and
+ * could reply anytime), we just flag metadata.followup_rejected_at so it
+ * disappears from the "Cas à valider" queue. Reversible: clearing the flag
+ * puts the lead back in the queue if it's still inside the J-3..J-21 window.
+ */
+router.post("/:id/reject-followup", async (req, res) => {
+  try {
+    const { data: lead, error: fetchErr } = await supabase
+      .from("leads")
+      .select("id, status, metadata")
+      .eq("id", req.params.id)
+      .single();
+    if (fetchErr || !lead) return res.status(404).json({ error: "Lead not found" });
+
+    const updatedMetadata = Object.assign({}, lead.metadata || {}, {
+      followup_rejected_at: new Date().toISOString(),
+      followup_rejected_reason: req.body && req.body.reason ? String(req.body.reason).slice(0, 200) : null,
+    });
+
+    const { error: updErr } = await supabase
+      .from("leads")
+      .update({ metadata: updatedMetadata })
+      .eq("id", lead.id);
+    if (updErr) {
+      console.error("POST /leads/:id/reject-followup update error:", updErr.message);
+      return res.status(500).json({ error: "Failed to flag lead" });
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("POST /leads/:id/reject-followup error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
  * POST /:id/generate-followup-now -- Generate a follow-up email draft on demand.
  *
  * Use case: Julien sees in /email-tracking that a prospect opened the first

@@ -126,6 +126,13 @@ function CandidateRow({ candidate: c, cases }) {
     },
   });
 
+  const rejectFollowup = useMutation({
+    mutationFn: () => api.post(`/leads/${c.id}/reject-followup`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["followup-candidates"] });
+    },
+  });
+
   const onGenerate = async () => {
     setFeedback(null);
     try {
@@ -133,6 +140,17 @@ function CandidateRow({ candidate: c, cases }) {
         case_study_id: selectedCaseId === "none" ? "none" : Number.parseInt(selectedCaseId, 10),
       });
       setFeedback({ ok: true });
+    } catch (err) {
+      setFeedback({ ok: false, msg: err.message || "Erreur" });
+    }
+  };
+
+  const onReject = async () => {
+    if (!window.confirm(`Rejeter la relance pour ${c.full_name || "ce lead"} ? Il disparaîtra de cette liste sans changer son statut.`)) return;
+    setFeedback(null);
+    try {
+      await rejectFollowup.mutateAsync();
+      // On success the lead vanishes from the list on refetch
     } catch (err) {
       setFeedback({ ok: false, msg: err.message || "Erreur" });
     }
@@ -193,10 +211,18 @@ function CandidateRow({ candidate: c, cases }) {
           </div>
           <button
             onClick={onGenerate}
-            disabled={generate.isPending}
+            disabled={generate.isPending || rejectFollowup.isPending}
             className="px-3 py-2 text-sm rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 shrink-0"
           >
             {generate.isPending ? "Génération…" : "✉ Générer"}
+          </button>
+          <button
+            onClick={onReject}
+            disabled={generate.isPending || rejectFollowup.isPending}
+            className="px-3 py-2 text-sm rounded-md border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-50 shrink-0"
+            title="Ne pas relancer ce lead (il sort de la liste, son statut reste inchangé)"
+          >
+            {rejectFollowup.isPending ? "…" : "✕ Rejeter"}
           </button>
         </div>
       </div>
