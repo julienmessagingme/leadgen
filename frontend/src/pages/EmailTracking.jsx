@@ -20,11 +20,21 @@ function relativeTime(dateStr) {
 function useGenerateFollowupNow() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (leadId) => api.post(`/leads/${leadId}/generate-followup-now`),
+    mutationFn: ({ leadId, case_study_id }) =>
+      api.post(`/leads/${leadId}/generate-followup-now`, { case_study_id }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["email-tracking"] });
+      qc.invalidateQueries({ queryKey: ["followup-candidates"] });
       qc.invalidateQueries({ queryKey: ["leads"] });
     },
+  });
+}
+
+function useCaseStudies() {
+  return useQuery({
+    queryKey: ["case-studies"],
+    queryFn: () => api.get("/settings/case-studies"),
+    staleTime: 300_000,
   });
 }
 
@@ -179,10 +189,14 @@ function StatusBadge({ row, isFollowup, hasOpened, hasClicked, noResponse }) {
 }
 
 function FollowupAction({ row }) {
-  var [feedback, setFeedback] = useState(null);
-  var generate = useGenerateFollowupNow();
+  const [open, setOpen] = useState(false);
+  const [feedback, setFeedback] = useState(null);
+  const [selectedCaseId, setSelectedCaseId] = useState("auto"); // "auto" | "none" | "<id>"
+  const generate = useGenerateFollowupNow();
+  const { data: caseData } = useCaseStudies();
+  const activeCases = (caseData?.cases || []).filter((c) => c.is_active);
 
-  // Hide the button if the workflow is already past this step.
+  // Short-circuit states: no "Relancer" button needed when already done or in progress.
   if (row.has_followup_sent) {
     return <span className="text-[10px] text-gray-400">Relance partie</span>;
   }
@@ -197,34 +211,80 @@ function FollowupAction({ row }) {
     return <span className="text-[10px] text-gray-400">{row.status}</span>;
   }
 
-  var onClick = async function () {
+  const onGenerate = async () => {
     setFeedback(null);
+    // Map UI choice → API contract
+    // "auto" means "let the server do sector-matching" → omit case_study_id
+    // "none" means "no case" → pass the literal "none"
+    // otherwise integer id
+    const payloadId =
+      selectedCaseId === "auto"
+        ? undefined
+        : selectedCaseId === "none"
+          ? "none"
+          : Number.parseInt(selectedCaseId, 10);
     try {
-      await generate.mutateAsync(row.lead_id);
+      await generate.mutateAsync({ leadId: row.lead_id, case_study_id: payloadId });
       setFeedback({ ok: true });
+      setOpen(false);
     } catch (err) {
       setFeedback({ ok: false, msg: err.message || "Erreur" });
     }
   };
 
-  return (
-    <div className="flex flex-col items-end gap-0.5">
-      <button
-        onClick={onClick}
-        disabled={generate.isPending}
-        className="px-2.5 py-1 text-xs rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
-        title="Générer immédiatement une relance, sans attendre J+14"
-      >
-        {generate.isPending ? "..." : "✉ Relancer"}
-      </button>
-      {feedback && (
-        feedback.ok ? (
+  if (!open) {
+    return (
+      <div className="flex flex-col items-end gap-0.5">
+        <button
+          onClick={() => setOpen(true)}
+          className="px-2.5 py-1 text-xs rounded-md bg-indigo-600 text-white hover:bg-indigo-700"
+          title="Préparer une relance avec un cas client au choix"
+        >
+          ✉ Relancer
+        </button>
+        {feedback && feedback.ok && (
           <Link to="/messages-draft" className="text-[10px] text-green-700 hover:underline">
             Draft prêt →
           </Link>
-        ) : (
-          <span className="text-[10px] text-red-600" title={feedback.msg}>{feedback.msg.slice(0, 20)}</span>
-        )
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1 justify-end bg-white border border-indigo-200 rounded-md shadow-sm p-1.5">
+      <select
+        value={selectedCaseId}
+        onChange={(e) => setSelectedCaseId(e.target.value)}
+        className="text-xs rounded border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 max-w-[200px]"
+        disabled={generate.isPending}
+        autoFocus
+      >
+        <option value="auto">— Auto (secteur) —</option>
+        <option value="none">— Sans cas client —</option>
+        {activeCases.map((cs) => (
+          <option key={cs.id} value={String(cs.id)}>
+            {cs.client_name}{cs.sector ? " · " + cs.sector : ""}
+          </option>
+        ))}
+      </select>
+      <button
+        onClick={onGenerate}
+        disabled={generate.isPending}
+        className="px-2 py-1 text-xs rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+      >
+        {generate.isPending ? "…" : "Générer"}
+      </button>
+      <button
+        onClick={() => { setOpen(false); setFeedback(null); }}
+        disabled={generate.isPending}
+        className="px-1.5 py-1 text-xs text-gray-500 hover:text-gray-700"
+        title="Annuler"
+      >
+        ✕
+      </button>
+      {feedback && !feedback.ok && (
+        <span className="text-[10px] text-red-600 ml-1" title={feedback.msg}>err</span>
       )}
     </div>
   );
