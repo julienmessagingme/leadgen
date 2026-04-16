@@ -940,19 +940,33 @@ router.post("/:id/send-whatsapp", async (req, res) => {
       .single();
     if (fetchErr || !lead) return res.status(404).json({ error: "Lead not found" });
 
-    // Guard: don't re-trigger if already sent (frontend shows "envoyé" button
-    // hidden anyway, but a race or stale UI could retry).
+    // Guard (pre-check): terminal statuses don't get WhatsApp. The UI already
+    // hides the button, but a direct API call / stale tab would bypass that.
+    const terminal = ["replied", "meeting_booked", "disqualified"];
+    if (terminal.includes(lead.status)) {
+      return res.status(409).json({ error: "lead_terminal", status: lead.status });
+    }
+
+    // Guard (pre-check): obvious already-sent case, saves a DB roundtrip on
+    // stale-UI double clicks. The real anti-race is the atomic reserve below.
     if (lead.whatsapp_sent_at) {
       return res.status(409).json({ error: "whatsapp_already_sent", sent_at: lead.whatsapp_sent_at });
     }
 
-    // Normalize phone helper
+    // Normalize phone helper.
+    // Accepts: "+33…", "33…" (raw E.164), "0633921577" (FR national), with
+    // optional whitespace/dashes. Returns canonical "+XXXXXXXX".
     function normalize(p) {
       if (!p) return null;
       const s = String(p).replace(/[\s\-().]/g, "");
       if (!s) return null;
-      // Accept both leading + and raw digits; uChat stores with +
-      return s.startsWith("+") ? s : ("+" + s.replace(/^0+/, ""));
+      if (s.startsWith("+")) return s;
+      // French national mobile (10 digits starting with 0) — the most common
+      // paste case from the manual-entry modal. Map 0X… → +33X….
+      if (/^0\d{9}$/.test(s)) return "+33" + s.slice(1);
+      // Otherwise treat as raw international digits and prefix +.
+      if (/^\d+$/.test(s)) return "+" + s;
+      return s;
     }
 
     // 1. Resolve phone — priority: manual > stored > FullEnrich
@@ -964,6 +978,25 @@ router.post("/:id/send-whatsapp", async (req, res) => {
       if (!lead.linkedin_url) {
         return res.status(404).json({ error: "phone_required", reason: "no_linkedin_url" });
       }
+
+      // Daily cap on FullEnrich phone enrichments — each costs 10 credits and
+      // Julien agreed to a 50-credits/day ceiling (~5 clicks). Count recent
+      // enrichments by looking at metadata.whatsapp_send_source='fullenrich'
+      // OR phones fetched via this endpoint in the last 24h.
+      const FULLENRICH_PHONE_DAILY_CAP = 5;
+      const cutoff = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+      const { count: enrichedToday } = await supabase
+        .from("leads")
+        .select("id", { count: "exact", head: true })
+        .eq("metadata->>whatsapp_send_source", "fullenrich")
+        .gte("whatsapp_sent_at", cutoff);
+      if ((enrichedToday || 0) >= FULLENRICH_PHONE_DAILY_CAP) {
+        return res.status(429).json({
+          error: "fullenrich_daily_cap",
+          detail: "Already " + enrichedToday + " phone enrichments in the last 24h (cap: " + FULLENRICH_PHONE_DAILY_CAP + "). Send a manual phone or wait.",
+        });
+      }
+
       const enriched = await enrichPhone(lead.linkedin_url, null);
       if (enriched && enriched.phone) {
         phone = normalize(enriched.phone);
@@ -975,7 +1008,36 @@ router.post("/:id/send-whatsapp", async (req, res) => {
       return res.status(404).json({ error: "phone_required", reason: "enrich_empty" });
     }
 
-    // 2. Upsert uChat subscriber
+    // 2. ATOMIC RESERVE — close the double-click / double-render race.
+    // We mark whatsapp_sent_at=NOW *before* hitting uChat, conditional on
+    // whatsapp_sent_at being still null. If another request already reserved
+    // this lead, the update affects 0 rows and we return 409 without calling
+    // uChat. If uChat later fails, we rollback by clearing whatsapp_sent_at.
+    const reservedAt = new Date().toISOString();
+    const { data: reserveResult, error: reserveErr } = await supabase
+      .from("leads")
+      .update({ whatsapp_sent_at: reservedAt })
+      .eq("id", lead.id)
+      .is("whatsapp_sent_at", null)
+      .select("id");
+    if (reserveErr) {
+      console.error("[send-whatsapp] atomic reserve failed:", reserveErr.message);
+      return res.status(500).json({ error: "reserve_failed", detail: reserveErr.message });
+    }
+    if (!reserveResult || reserveResult.length === 0) {
+      return res.status(409).json({ error: "whatsapp_already_sent_race" });
+    }
+
+    async function rollback(reason) {
+      const { error: rbErr } = await supabase
+        .from("leads")
+        .update({ whatsapp_sent_at: null })
+        .eq("id", lead.id)
+        .eq("whatsapp_sent_at", reservedAt); // only undo OUR reservation
+      if (rbErr) console.error("[send-whatsapp] rollback failed (" + reason + "):", rbErr.message);
+    }
+
+    // 3. Upsert uChat subscriber
     let subscriber, created;
     try {
       const result = await findOrCreateSubscriber(phone, {
@@ -987,22 +1049,24 @@ router.post("/:id/send-whatsapp", async (req, res) => {
       created = result.created;
     } catch (uchatErr) {
       console.error("[send-whatsapp] uChat subscriber failed:", uchatErr.message);
+      await rollback("subscriber_fail");
       return res.status(502).json({ error: "uchat_failed", step: "subscriber", detail: uchatErr.message });
     }
 
     const userId = subscriber.user_id;
     const userNs = subscriber.user_ns;
 
-    // 3. Trigger the sub-flow (carousel template + tracking tag)
+    // 4. Trigger the sub-flow (carousel template + tracking tag)
     let flowResponse;
     try {
       flowResponse = await sendSubFlowByUserId(userId, subFlowNs);
     } catch (flowErr) {
       console.error("[send-whatsapp] sub-flow send failed:", flowErr.message);
+      await rollback("subflow_fail");
       return res.status(502).json({ error: "uchat_failed", step: "sub_flow", detail: flowErr.message });
     }
 
-    // 4. Persist on lead
+    // 5. Persist metadata + phone (the reservation already set whatsapp_sent_at)
     const updatedMetadata = Object.assign({}, lead.metadata || {}, {
       whatsapp_user_id: userId,
       whatsapp_user_ns: userNs,
@@ -1011,10 +1075,7 @@ router.post("/:id/send-whatsapp", async (req, res) => {
       whatsapp_send_source: manualPhone ? "manual" : (enrichedPhone ? "fullenrich" : "stored"),
       whatsapp_uchat_response: flowResponse,
     });
-    const patch = {
-      whatsapp_sent_at: new Date().toISOString(),
-      metadata: updatedMetadata,
-    };
+    const patch = { metadata: updatedMetadata };
     if (phone !== lead.phone) patch.phone = phone;
 
     const { error: updErr } = await supabase
@@ -1022,10 +1083,15 @@ router.post("/:id/send-whatsapp", async (req, res) => {
       .update(patch)
       .eq("id", lead.id);
     if (updErr) {
-      console.error("[send-whatsapp] DB update failed (WhatsApp already sent at uChat!):", updErr.message);
+      // WhatsApp IS sent via uChat and the lead IS marked whatsapp_sent_at
+      // (from the atomic reserve). The only thing missing is the metadata
+      // enrichment — not safe to rollback the reserve (would mask the send
+      // from the webhook's phone lookup). Log loudly so Julien can re-hydrate
+      // the metadata manually if he cares about the tracking detail.
+      console.error("[send-whatsapp] CRITICAL: uChat sent, reserve held, but metadata update failed:", updErr.message, "lead_id=" + lead.id);
       return res.status(200).json({
         ok: true,
-        warning: "WhatsApp sent via uChat but DB update failed: " + updErr.message,
+        warning: "WhatsApp sent and reserved but metadata update failed: " + updErr.message,
         phone_used: phone,
         user_id: userId,
         sub_flow_ns: subFlowNs,

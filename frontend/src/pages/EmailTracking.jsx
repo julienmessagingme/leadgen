@@ -314,7 +314,7 @@ function EmailRow({ row, expanded, onToggle }) {
         <StatusBadge row={row} isFollowup={isFollowup} hasOpened={hasOpened} hasClicked={hasClicked} noResponse={noResponse} />
       </td>
       <td className="px-4 py-3 text-right">
-        {!isFollowup && (
+        {!isFollowup && !isWhatsapp && (
           <div className="flex flex-col items-end gap-1.5">
             <FollowupAction row={row} />
             <WhatsappAction row={row} />
