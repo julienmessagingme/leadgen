@@ -34,8 +34,17 @@ const VALID_STATUSES = new Set(["sent", "delivered", "read", "failed"]);
 
 function normalizePhone(p) {
   if (!p) return null;
-  // Strip spaces/dashes but keep leading + for E.164
-  return String(p).replace(/[\s\-().]/g, "");
+  // Strip whitespace and punctuation we commonly see in uChat / CRM exports.
+  let s = String(p).replace(/[\s\-().]/g, "");
+  if (!s) return null;
+  // Already E.164
+  if (s.startsWith("+")) return s;
+  // Raw international digits (e.g. uChat sends "33633921577") → prefix +.
+  // We deliberately do NOT try to infer country from a leading 0 — that would
+  // require knowing the caller's region. If it ever shows up we'll see the
+  // lookup miss and flag it explicitly.
+  if (/^\d+$/.test(s)) return "+" + s;
+  return s;
 }
 
 /**
