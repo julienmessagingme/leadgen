@@ -4,6 +4,7 @@ import NavBar from "../components/shared/NavBar";
 import FunnelCard from "../components/dashboard/FunnelCard";
 import ActivityCard from "../components/dashboard/ActivityCard";
 import LinkedInGauge from "../components/dashboard/LinkedInGauge";
+import BeReachCreditsGauge from "../components/dashboard/BeReachCreditsGauge";
 import CronMonitor from "../components/dashboard/CronMonitor";
 import SourceChart from "../components/dashboard/SourceChart";
 import ScoreChart from "../components/dashboard/ScoreChart";
@@ -75,6 +76,7 @@ export default function Home() {
               <>
                 <ActivityCard data={stats.data.activity} />
                 <LinkedInGauge data={stats.data.linkedin} />
+                <BeReachCreditsGauge />
               </>
             )}
           </div>

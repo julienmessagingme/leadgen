@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useWatchlist, useCreateWatchlistEntry, useUpdateWatchlistEntry, useDeleteWatchlistEntry, useBeReachCredits } from "../../hooks/useSettings";
+import { useWatchlist, useCreateWatchlistEntry, useUpdateWatchlistEntry, useDeleteWatchlistEntry } from "../../hooks/useSettings";
 
 const SOURCE_TYPES = [
   { value: "competitor_page", label: "Page concurrent" },
@@ -27,101 +27,6 @@ const emptyEntry = {
   sequence_id: "",
   priority: "P2",
 };
-
-function CreditGauge({ sources }) {
-  const { data: histData } = useBeReachCredits();
-  const histDays = Array.isArray(histData) ? histData : [];
-  const DAILY_LIMIT = 300;
-
-  const active = (sources || []).filter((s) => s.is_active);
-
-  // Cost depends on source_type: keyword/job_keyword = 1 credit, influencer/competitor_page = 3 credits
-  const creditCost = (s) => (s.source_type === "keyword" || s.source_type === "job_keyword") ? 1 : 3;
-
-  const p1Sources = active.filter((s) => s.priority === "P1");
-  const p2Sources = active.filter((s) => s.priority === "P2");
-  const p3Sources = active.filter((s) => s.priority === "P3");
-  const p1Count = p1Sources.length;
-  const p2Count = p2Sources.length;
-  const p3Count = p3Sources.length;
-
-  // P1 = all daily, P2 = rotation, P3 = variable d'ajustement pour remplir jusqu'à 300
-  const p1Credits = p1Sources.reduce((sum, s) => sum + creditCost(s), 0);
-  const remainAfterP1 = Math.max(0, DAILY_LIMIT - p1Credits);
-  const p2Max = p2Sources.reduce((sum, s) => sum + creditCost(s), 0);
-  const p2Credits = Math.min(p2Max, remainAfterP1);
-  const remainAfterP2 = Math.max(0, remainAfterP1 - p2Credits);
-  const p3Max = p3Sources.reduce((sum, s) => sum + creditCost(s), 0);
-  const p3Credits = Math.min(p3Max, remainAfterP2);
-  const totalProjected = p1Credits + p2Credits + p3Credits;
-
-  // Rotation P3 : en combien de jours on écluse tout
-  const p3DailyBudget = remainAfterP2;
-  const p3RotationDays = p3Max > 0 && p3DailyBudget > 0 ? Math.ceil(p3Max / p3DailyBudget) : 0;
-
-  // Historical: last 3 days
-  const today = new Date();
-  const hist = [];
-  for (let i = 3; i >= 1; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    const key = d.toISOString().substring(0, 10);
-    const found = histDays.find((x) => x.day === key);
-    hist.push({
-      day: key,
-      label: i === 1 ? "Hier" : d.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" }),
-      used: found ? found.credits_used : 0,
-    });
-  }
-
-  const pct = (v) => Math.min(100, (v / DAILY_LIMIT) * 100);
-
-  return (
-    <div className="bg-white rounded-lg shadow p-4 mb-4 sticky top-0 z-10">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-gray-700">Credits BeReach ({DAILY_LIMIT}/jour)</h3>
-        <div className="flex gap-4 text-xs">
-          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-red-400 inline-block" /> P1: {p1Count} sources ({p1Credits} cr/jour)</span>
-          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-yellow-400 inline-block" /> P2: {p2Count} sources ({p2Max} cr. total)</span>
-          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-gray-400 inline-block" /> P3: {p3Count} sources — rotation {p3RotationDays > 0 ? p3RotationDays + "j" : "—"}</span>
-        </div>
-      </div>
-
-      {/* Projected daily bar: P1 (fixed) + P2 (rotation) + P3 (fills remaining) */}
-      <div className="mb-3">
-        <div className="flex justify-between items-baseline mb-1">
-          <span className="text-xs font-medium text-gray-600">Projection journaliere</span>
-          <span className="text-xs font-mono font-semibold text-gray-700">{totalProjected}/{DAILY_LIMIT}</span>
-        </div>
-        <div className="w-full bg-gray-200 rounded-full h-4 flex overflow-hidden">
-          {p1Credits > 0 && <div className="bg-red-400 h-4 transition-all" style={{ width: pct(p1Credits) + "%" }} title={"P1: " + p1Credits + " credits"} />}
-          {p2Credits > 0 && <div className="bg-yellow-400 h-4 transition-all" style={{ width: pct(p2Credits) + "%" }} title={"P2: " + p2Credits + " credits"} />}
-          {p3Credits > 0 && <div className="bg-gray-400 h-4 transition-all" style={{ width: pct(p3Credits) + "%" }} title={"P3: " + p3Credits + " credits"} />}
-        </div>
-      </div>
-
-      {/* Historical: last 3 days */}
-      {hist.some((h) => h.used > 0) && (
-        <div className="border-t border-gray-100 pt-2">
-          <p className="text-xs font-medium text-gray-500 mb-1.5">Historique (credits hors collection)</p>
-          <div className="flex gap-3">
-            {hist.map((h) => (
-              <div key={h.day} className="flex-1">
-                <div className="flex justify-between text-xs text-gray-500 mb-0.5">
-                  <span>{h.label}</span>
-                  <span className="font-mono">{h.used}</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div className="bg-indigo-400 h-2 rounded-full transition-all" style={{ width: pct(h.used) + "%" }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 export default function WatchlistTab() {
   const { data, isLoading } = useWatchlist();
@@ -204,8 +109,6 @@ export default function WatchlistTab() {
 
   return (
     <div>
-      <CreditGauge sources={allEntries} />
-
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-gray-800">Sources & Mots-cles</h2>
         {!adding && (
