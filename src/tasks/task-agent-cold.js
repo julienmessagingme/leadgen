@@ -84,6 +84,25 @@ async function runAgentCold(brief, runId) {
   const known = await loadKnownLeads();
   await log(runId, "agent-cold", "info", "Loaded " + known.count + " known leads for dedup");
 
+  // Load case studies (real client results) — injected into every agent prompt
+  // so they can cite concrete proof points and match angles by sector.
+  let caseStudiesBlock = "";
+  try {
+    const { data: cases } = await supabase
+      .from("case_studies")
+      .select("client_name, sector, metric_label, metric_value, description")
+      .eq("is_active", true);
+    if (cases && cases.length > 0) {
+      caseStudiesBlock = "\n\n## CAS CLIENTS RÉELS (à citer quand le secteur matche)\n" +
+        cases.map((c) =>
+          "- **" + c.client_name + "** (" + c.sector + ") — " +
+          c.metric_label + " : " + c.metric_value +
+          (c.description ? ". " + c.description.slice(0, 200) : "")
+        ).join("\n");
+      await log(runId, "agent-cold", "info", "Loaded " + cases.length + " case studies for agent context");
+    }
+  } catch (_e) { /* fail-open */ }
+
   const phases = {};
 
   // ═══════════════════════════════════════════════════════════════
@@ -100,6 +119,7 @@ async function runAgentCold(brief, runId) {
     "(La liste complète est trop longue pour le prompt. Quand tu trouves un candidat, vérifie que son URL LinkedIn canonicalisée n'est pas dans cette liste en me demandant via ton output.)",
     "",
     "Budget BeReach pour ta phase : max 150 crédits.",
+    caseStudiesBlock,
   ].filter(Boolean).join("\n");
 
   await log(runId, "agent-cold", "info", "Phase 1: RESEARCHER starting (Gemini Flash)");
@@ -161,6 +181,9 @@ async function runAgentCold(brief, runId) {
     "",
     "Applique les 5 checks sur chacun. Enrichis ceux qui passent les checks 1-3 avant de dépenser des crédits FullEnrich.",
     "Budget : ~100 crédits BeReach (visitProfile + visitCompany) + ~15 crédits FullEnrich (emails).",
+    caseStudiesBlock,
+    "",
+    "Quand tu construis l'angle_of_approach, cite le cas client le plus pertinent par secteur si il y en a un. Exemple : si le lead est en assurance, cite Gan Prévoyance. Si transport, cite Keolis. Si aucun cas ne matche le secteur, mentionne le concept sans citer de client.",
   ].filter(Boolean).join("\n");
 
   await log(runId, "agent-cold", "info", "Phase 2: QUALIFIER starting with " + dedupedCandidates.length + " candidates (Gemini Flash)");
@@ -210,6 +233,9 @@ async function runAgentCold(brief, runId) {
     JSON.stringify(qualifiedLeads, null, 2),
     "",
     "Challenge chaque lead. Sois dur. Julien préfère 6 leads A-tier que 10 leads B.",
+    caseStudiesBlock,
+    "",
+    "Quand tu évalues l'angle d'approche, vérifie qu'il cite un cas client de référence pertinent (si un matche le secteur). Un angle sans preuve sectorielle est plus faible qu'un angle avec.",
   ].join("\n");
 
   // Challenger uses Claude Sonnet — this is the ONE phase where reasoning
