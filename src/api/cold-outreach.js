@@ -14,12 +14,46 @@
  */
 
 const { Router } = require("express");
+const crypto = require("crypto");
 const authMiddleware = require("./middleware");
 const { supabase } = require("../lib/supabase");
 const { generateColdEmail } = require("../lib/message-generator");
+const { runAgentCold } = require("../tasks/task-agent-cold");
 
 const router = Router();
 router.use(authMiddleware);
+
+/**
+ * POST /api/cold-outreach/run-today
+ *
+ * Launch the multi-agent cold prospecting pipeline on demand.
+ * Body: { theme, geo?, exclusions?, target_count?, notes? }
+ *
+ * The pipeline runs asynchronously (can take 5-15 minutes).
+ * Returns immediately with the runId; poll GET /runs/:id for results.
+ */
+router.post("/run-today", async (req, res) => {
+  const brief = {
+    theme: req.body.theme || null,
+    geo: req.body.geo || null,
+    exclusions: req.body.exclusions || null,
+    target_count: req.body.target_count || 10,
+    notes: req.body.notes || null,
+  };
+
+  if (!brief.theme) {
+    return res.status(400).json({ error: "theme is required" });
+  }
+
+  const runId = crypto.randomUUID();
+  res.json({ ok: true, run_id: runId, status: "started", brief });
+
+  // Fire and forget — the pipeline runs in the background.
+  // Results will be visible in GET /runs and in the logs.
+  runAgentCold(brief, runId).catch((err) => {
+    console.error("[agent-cold] pipeline error:", err.message);
+  });
+});
 
 /**
  * GET /api/cold-outreach/runs
