@@ -102,13 +102,14 @@ async function runAgentCold(brief, runId) {
     "Budget BeReach pour ta phase : max 150 crédits.",
   ].filter(Boolean).join("\n");
 
-  await log(runId, "agent-cold", "info", "Phase 1: RESEARCHER starting");
+  await log(runId, "agent-cold", "info", "Phase 1: RESEARCHER starting (Gemini Flash)");
   const researcherResult = await runAgent({
     systemPrompt: RESEARCHER_PROMPT,
     userMessage: researcherBrief,
     tools: getToolDefinitions(RESEARCHER_TOOLS),
     toolHandlers: getToolHandlers(RESEARCHER_TOOLS),
-    model: "claude-sonnet-4-20250514",
+    provider: "gemini",
+    model: "gemini-2.5-flash",
     maxTokens: 8192,
     maxIterations: 40,
     runId,
@@ -162,15 +163,16 @@ async function runAgentCold(brief, runId) {
     "Budget : ~100 crédits BeReach (visitProfile + visitCompany) + ~15 crédits FullEnrich (emails).",
   ].filter(Boolean).join("\n");
 
-  await log(runId, "agent-cold", "info", "Phase 2: QUALIFIER starting with " + dedupedCandidates.length + " candidates");
+  await log(runId, "agent-cold", "info", "Phase 2: QUALIFIER starting with " + dedupedCandidates.length + " candidates (Gemini Flash)");
   const qualifierResult = await runAgent({
     systemPrompt: QUALIFIER_PROMPT,
     userMessage: qualifierInput,
     tools: getToolDefinitions(QUALIFIER_TOOLS),
     toolHandlers: getToolHandlers(QUALIFIER_TOOLS),
-    model: "claude-sonnet-4-20250514",
+    provider: "gemini",
+    model: "gemini-2.5-flash",
     maxTokens: 8192,
-    maxIterations: 60, // More iterations since enriching is slower (FullEnrich polling)
+    maxIterations: 60,
     runId,
     agentName: "qualifier",
   });
@@ -210,15 +212,19 @@ async function runAgentCold(brief, runId) {
     "Challenge chaque lead. Sois dur. Julien préfère 6 leads A-tier que 10 leads B.",
   ].join("\n");
 
-  await log(runId, "agent-cold", "info", "Phase 3: CHALLENGER starting with " + qualifiedLeads.length + " leads");
+  // Challenger uses Claude Sonnet — this is the ONE phase where reasoning
+  // quality matters most (critical judgement on lead strength). Flash would
+  // be too weak for nuanced argumentation.
+  await log(runId, "agent-cold", "info", "Phase 3: CHALLENGER starting with " + qualifiedLeads.length + " leads (Claude Sonnet)");
   const challengerResult = await runAgent({
     systemPrompt: CHALLENGER_PROMPT,
     userMessage: challengerInput,
-    tools: [], // No tools for challenger
+    tools: [],
     toolHandlers: {},
+    provider: "anthropic",
     model: "claude-sonnet-4-20250514",
     maxTokens: 4096,
-    maxIterations: 1, // Single pass — no tool loop
+    maxIterations: 1,
     runId,
     agentName: "challenger",
   });
