@@ -289,7 +289,7 @@ export default function ColdSearchResults({ search, onUpdate, bucketedIndexes, o
                         )}
                         {bucketedIndexes && bucketedIndexes.has(idx) && (
                           <span className="inline-flex items-center px-1.5 py-0.5 text-xs font-medium rounded bg-teal-100 text-teal-700">
-                            Bucket
+                            Campagne
                           </span>
                         )}
                       </div>

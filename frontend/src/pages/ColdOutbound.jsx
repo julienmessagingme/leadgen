@@ -8,9 +8,9 @@ import ColdBuckets from "../components/cold/ColdBuckets";
 import { useColdSearch } from "../hooks/useColdOutbound";
 
 var DEFAULT_BUCKETS = [
-  { id: "bucket-1", name: "Bucket 1", items: [] },
-  { id: "bucket-2", name: "Bucket 2", items: [] },
-  { id: "bucket-3", name: "Bucket 3", items: [] },
+  { id: "bucket-1", name: "Campagne 1", items: [] },
+  { id: "bucket-2", name: "Campagne 2", items: [] },
+  { id: "bucket-3", name: "Campagne 3", items: [] },
 ];
 
 function loadSessionState(key, fallback) {
@@ -194,9 +194,9 @@ export default function ColdOutbound() {
                 />
               </div>
 
-              {/* Bucket columns */}
-              <div className="w-[580px] flex-shrink-0">
-                <div className="sticky top-4">
+              {/* Campagne stack */}
+              <div className="w-[420px] flex-shrink-0">
+                <div className="sticky top-4 h-[calc(100vh-6rem)]">
                   <ColdBuckets
                     buckets={buckets}
                     onRenameBucket={handleRenameBucket}

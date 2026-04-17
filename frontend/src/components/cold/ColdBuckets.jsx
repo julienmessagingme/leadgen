@@ -32,7 +32,7 @@ function BucketColumn({ bucket, onRename, onRemove }) {
   return (
     <div
       ref={setNodeRef}
-      className={`flex flex-col w-48 rounded-lg border-2 transition-all duration-150 ${
+      className={`flex flex-col w-full flex-1 min-h-0 rounded-lg border-2 transition-all duration-150 ${
         isOver ? "border-indigo-400 bg-indigo-50/50 scale-[1.02] shadow-lg" : "border-gray-200 bg-gray-50"
       }`}
     >
@@ -60,7 +60,7 @@ function BucketColumn({ bucket, onRename, onRemove }) {
       </div>
 
       {/* Cards area */}
-      <div className="flex-1 overflow-y-auto p-1.5 space-y-1.5 min-h-[200px] max-h-[calc(100vh-22rem)]">
+      <div className="flex-1 min-h-0 overflow-y-auto p-1.5 space-y-1.5">
         {items.length === 0 ? (
           <div className="h-full flex items-center justify-center border-2 border-dashed border-gray-300 rounded-md p-3">
             <span className="text-xs text-gray-400 text-center">Glisser des profils ici</span>
@@ -86,7 +86,7 @@ function BucketColumn({ bucket, onRename, onRemove }) {
                   <button
                     onClick={function () { onRemove(p.linkedin_url, bucket.id); }}
                     className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 text-xs leading-none"
-                    title="Retirer du bucket"
+                    title="Retirer de la campagne"
                   >
                     x
                   </button>
@@ -170,7 +170,7 @@ function BucketEmailAction({ searchGroups, items }) {
 
 export default function ColdBuckets({ buckets, onRenameBucket, onRemoveFromBucket }) {
   return (
-    <div className="flex gap-2 h-full">
+    <div className="flex flex-col gap-2 h-full">
       {buckets.map(function (bucket) {
         return (
           <BucketColumn
