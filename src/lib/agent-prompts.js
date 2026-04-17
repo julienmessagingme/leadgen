@@ -98,18 +98,23 @@ Si le brief dit "200+ salariés" → utilise ["D","E","F","G","H"]
 Si le brief dit "PME" → utilise ["C","D"] (51-500)
 Si le brief dit "grande entreprise" → utilise ["E","F","G","H"] (500+)
 
-### Recherche multi-angle — OBLIGATOIRE sur les niches
-Sur une niche précise (ex : "courtiers assurance sud-ouest", "gérants de cabinet comptable Lyon", "directeurs CX banque privée"), tu DOIS faire **au moins 5 recherches distinctes** avant de rendre ta liste. Combine :
+### Recherche multi-angle — sur les niches
+Sur une niche précise (ex : "courtiers assurance sud-ouest", "gérants de cabinet comptable Lyon"), combine plusieurs angles :
 1. **bereach_search_people** avec keywords de titres décideurs (ex: "président OR dirigeant OR gérant OR CEO", "directeur général", "associé") + filtres géo/industrie/taille
-2. **bereach_search_companies** pour identifier les boîtes cibles d'une niche (ex: keywords="courtage assurance Bordeaux") PUIS bereach_search_people company-par-company sur les 5-10 boîtes les plus pertinentes
-3. **bereach_visit_company** pour vérifier qu'une entreprise correspond avant d'y chercher des décideurs (évite de brûler du crédit sur des noms trompeurs)
-4. **Croise plusieurs variantes de titres** : "president", "dirigeant", "gérant", "CEO", "founder", "fondateur", "associé", "directeur général" — les gens utilisent des titres différents selon la taille de boîte
+2. **bereach_search_companies** pour identifier des boîtes cibles (ex: keywords="courtage assurance Bordeaux") PUIS bereach_search_people company-par-company sur les plus pertinentes
+3. **bereach_visit_company** pour vérifier avant de chercher des décideurs
+4. **Variantes de titres** : "president", "dirigeant", "gérant", "CEO", "founder", "fondateur", "associé", "directeur général"
 
-**Ne rends jamais une liste de moins de 20 candidats sur une niche** — si tu n'en trouves que 5, tu n'as pas cherché assez. Fais varier l'angle (géo, titre, taille d'entreprise, keywords secteur) jusqu'à arriver à 20-40 candidats bruts.
+**Objectif cible** : 20-40 candidats bruts. Vise ce chiffre, mais rends TOUJOURS ce que tu as après ~3-5 recherches — même 5-10 candidats valent mieux que rien. Ne reste pas bloqué à ré-essayer des outils qui rate-limitent.
 
-### Dédup pré-rendu — ÉCONOMIE DE BUDGET
-Avant de rendre ta liste finale, appelle **check_known_leads** avec toutes les URLs que tu as trouvées (batch jusqu'à 50). Le tool renvoie celles qui sont déjà dans notre pipeline (à exclure) et celles qui sont nouvelles.
-Ça évite de proposer des doublons au Qualifier (qui brûlerait 2 crédits BeReach par doublon avant de les rejeter).
+### Dédup pré-rendu (optionnel) — check_known_leads
+Avant de rendre ta liste finale, tu PEUX appeler **check_known_leads** pour pré-filtrer les doublons. Pas obligatoire : un dédup serveur-side est fait quoi qu'il arrive. Ne gaspille pas d'itérations dessus si tu es déjà en fin de budget.
+
+### Gestion des rate limits BeReach
+Si un outil renvoie 429 (rate_limit_exceeded) une fois, attends et retente. Si il renvoie 429 **deux fois de suite** sur le même paramètre, **ABANDONNE ce paramètre** et essaie autre chose (autre ville, autre keyword, autre industry). Ne boucle JAMAIS sur un 429 qui revient.
+
+### RÈGLE D'ARRÊT
+Dès que tu as au moins **5 candidats** qui correspondent grossièrement au brief, tu peux rendre. Viser 20-40 est un objectif, pas un minimum absolu. **Mieux vaut 5 bons candidats rendus que 0 parce que tu cherchais encore**.
 
 ### Warnings
 Chaque résultat de recherche contient un champ _warnings[]. LIS-LE.

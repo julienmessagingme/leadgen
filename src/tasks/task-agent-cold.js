@@ -192,6 +192,15 @@ async function _runAgentColdPipeline(brief, runId, dbRunId, startTime) {
   const researcherOutput = extractJson(researcherResult.finalText);
   const rawCandidates = (researcherOutput && researcherOutput.candidates) || [];
 
+  // Debug: when the output is empty or unparseable, log what Gemini actually
+  // returned so we can diagnose on the next run instead of flying blind.
+  if (rawCandidates.length === 0) {
+    const sample = (researcherResult.finalText || "").slice(0, 1500);
+    await log(runId, "researcher", "warn",
+      "Researcher returned 0 candidates. JSON parsed: " + (researcherOutput ? "yes" : "no") +
+      ". finalText sample (first 1500 chars): " + sample);
+  }
+
   // Dedup against known leads
   const dedupedCandidates = rawCandidates.filter((c) => {
     if (!c.linkedin_url) return false;
