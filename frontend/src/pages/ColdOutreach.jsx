@@ -114,24 +114,48 @@ export default function ColdOutreach() {
                       <div className="p-4 text-gray-500 text-sm">Aucun run pour l'instant. Le prochain est prévu demain 11h00 Paris.</div>
                     )}
                     <ul className="divide-y divide-gray-100">
-                      {runs.map((run) => (
-                        <li key={run.id}>
-                          <button
-                            onClick={() => setSelectedRunId(run.id)}
-                            className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors ${
-                              selectedRunId === run.id ? "bg-indigo-50 border-l-4 border-indigo-500" : ""
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="font-medium text-gray-800">{run.run_date}</span>
-                              <span className="text-xs text-gray-500">{run.agent_name}</span>
-                            </div>
-                            <div className="text-xs text-gray-500 mt-1">
-                              {run.leads_count} leads · {run.credits_used} crédits
-                            </div>
-                          </button>
-                        </li>
-                      ))}
+                      {runs.map((run) => {
+                        const isRunning = run.status === "running";
+                        const isFailed = run.status === "failed";
+                        const phaseLabel = { researcher: "1/4 Researcher", qualifier: "2/4 Qualifier", challenger: "3/4 Challenger", persist: "4/4 Persist" }[run.phase] || run.phase;
+                        const theme = run.brief?.theme || run.metadata?.brief?.theme || run.metadata?.run_notes || "—";
+                        return (
+                          <li key={run.id}>
+                            <button
+                              onClick={() => setSelectedRunId(run.id)}
+                              className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors ${
+                                selectedRunId === run.id ? "bg-indigo-50 border-l-4 border-indigo-500" : ""
+                              } ${isRunning ? "bg-yellow-50/50" : ""} ${isFailed ? "bg-red-50/30" : ""}`}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-medium text-gray-800">{run.run_date}</span>
+                                {isRunning && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-200 text-yellow-900 font-semibold animate-pulse">
+                                    ⏳ {phaseLabel}
+                                  </span>
+                                )}
+                                {isFailed && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-semibold">
+                                    ✗ Échoué
+                                  </span>
+                                )}
+                                {!isRunning && !isFailed && (
+                                  <span className="text-xs text-gray-500">{run.agent_name}</span>
+                                )}
+                              </div>
+                              <div className="text-xs text-gray-600 mt-1 truncate italic">« {theme} »</div>
+                              <div className="text-xs text-gray-500 mt-0.5">
+                                {isRunning
+                                  ? "Démarré " + new Date(run.created_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
+                                  : run.leads_count + " leads · " + run.credits_used + " crédits"}
+                              </div>
+                              {isFailed && run.error_message && (
+                                <div className="text-[10px] text-red-600 mt-0.5 truncate">{run.error_message}</div>
+                              )}
+                            </button>
+                          </li>
+                        );
+                      })}
                     </ul>
                   </div>
                 </div>

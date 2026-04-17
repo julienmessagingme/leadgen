@@ -63,13 +63,21 @@ router.get("/runs", async (_req, res) => {
   try {
     const { data, error } = await supabase
       .from("cold_outreach_runs")
-      .select("id, run_date, agent_name, credits_used, leads_count, metadata, created_at")
-      .order("run_date", { ascending: false })
+      .select("id, run_date, agent_name, credits_used, leads_count, metadata, created_at, status, phase, brief, updated_at, error_message")
       .order("created_at", { ascending: false })
       .limit(200);
 
     if (error) throw error;
-    res.json({ runs: data || [] });
+
+    // Running first, then completed/failed by created_at desc (already sorted)
+    const rank = (r) => r.status === "running" ? 0 : 1;
+    const runs = (data || []).sort((a, b) => {
+      const ra = rank(a);
+      const rb = rank(b);
+      if (ra !== rb) return ra - rb;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+    res.json({ runs });
   } catch (err) {
     console.error("[cold-outreach/runs] list error:", err.message);
     res.status(500).json({ error: "Failed to list runs" });

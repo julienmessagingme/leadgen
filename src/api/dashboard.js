@@ -268,6 +268,8 @@ router.get("/email-tracking", async (req, res) => {
         tier: lead.tier,
         linkedin_url: lead.linkedin_url,
         cold_outbound: !!(md.cold_outbound),
+        campaign_id: md.campaign_id || null,
+        campaign_name: md.campaign_name || null,
         sent_at: sentAt,
         email_followup_sent_at: lead.email_followup_sent_at,
         has_followup_sent: !!lead.email_followup_sent_at,

@@ -6,10 +6,9 @@ const navItems = [
   { to: "/sequences", label: "Sequences" },
   { to: "/invitations", label: "🔗 Invitations" },
   { to: "/messages-draft", label: "✉ À valider" },
-  { to: "/hubspot-signals", label: "Signaux HubSpot" },
   { to: "/cold-outbound", label: "Cold Outbound" },
   { to: "/cold-outreach", label: "🤖 AI Agents" },
-  { to: "/email-tracking", label: "Tracking Emails" },
+  { to: "/email-tracking", label: "Tracking" },
   { to: "/settings", label: "Parametres" },
 ];
 

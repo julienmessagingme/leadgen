@@ -21,6 +21,7 @@ const {
 } = require("./bereach");
 const { enrichContactInfo } = require("./fullenrich");
 const { canonicalizeLinkedInUrl } = require("./url-utils");
+const { supabase } = require("./supabase");
 
 // ═══════════════════════════════════════════════════════════
 // RESEARCHER TOOLS — search + identify, no enrichment
@@ -266,12 +267,74 @@ const enrichEmailTool = {
 // TOOL SETS PER AGENT ROLE
 // ═══════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════
+// DEDUP TOOL — batch URL check against known leads in DB
+// ═══════════════════════════════════════════════════════════
+
+const checkKnownLeadsTool = {
+  definition: {
+    name: "check_known_leads",
+    description: `Batch-check a list of LinkedIn profile URLs against the leadgen DB. Returns which URLs are ALREADY in our pipeline (duplicates — do NOT propose them) and which are NEW (fair game).
+
+Use this AFTER a search returns profiles, BEFORE committing them to your final candidate list. Free to call (no BeReach credits, just a DB query). Pass up to 50 URLs per call.
+
+This replaces the old "check the known_leads list manually" instruction — now you HAVE a tool for it.`,
+    input_schema: {
+      type: "object",
+      properties: {
+        linkedin_urls: {
+          type: "array",
+          items: { type: "string" },
+          description: "Array of LinkedIn profile URLs (up to 50)",
+        },
+      },
+      required: ["linkedin_urls"],
+    },
+  },
+  handler: async (input) => {
+    const urls = Array.isArray(input.linkedin_urls) ? input.linkedin_urls.slice(0, 50) : [];
+    if (urls.length === 0) return { known: [], new: [], total_checked: 0 };
+
+    const canonicals = urls
+      .map((u) => ({ original: u, canonical: canonicalizeLinkedInUrl(u) }))
+      .filter((x) => x.canonical);
+
+    if (canonicals.length === 0) return { known: [], new: urls, total_checked: urls.length };
+
+    const { data, error } = await supabase
+      .from("leads")
+      .select("linkedin_url_canonical, status, metadata")
+      .in("linkedin_url_canonical", canonicals.map((c) => c.canonical));
+
+    if (error) {
+      return { error: error.message, known: [], new: urls, total_checked: urls.length };
+    }
+
+    const knownSet = new Set((data || []).map((r) => r.linkedin_url_canonical));
+    const known = [];
+    const newOnes = [];
+    for (const c of canonicals) {
+      if (knownSet.has(c.canonical)) known.push(c.original);
+      else newOnes.push(c.original);
+    }
+
+    return {
+      total_checked: urls.length,
+      known_count: known.length,
+      new_count: newOnes.length,
+      known,
+      new: newOnes,
+    };
+  },
+};
+
 const RESEARCHER_TOOLS = [
   searchPeopleTool,
   searchCompaniesTool,
   visitCompanyTool,
   collectLikersTool,
   collectCommentsTool,
+  checkKnownLeadsTool,
 ];
 
 const QUALIFIER_TOOLS = [

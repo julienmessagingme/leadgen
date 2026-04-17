@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import NavBar from "../components/shared/NavBar";
+import { useValidatedCampaigns } from "../hooks/useCampaigns";
 
 function relativeTime(dateStr) {
   if (!dateStr) return "--";
@@ -59,16 +60,24 @@ export default function EmailTracking() {
 
   var rawRows = data?.rows || [];
 
+  const [trackingTab, setTrackingTab] = useState("solo"); // "solo" | "campagne"
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all"); // all | opened | clicked | unread | to_relaunch
-  const [expandedRow, setExpandedRow] = useState(null); // row_key of the expanded email body, or null
+  const [originFilter, setOriginFilter] = useState("all"); // all | pipeline | cold | troudebal
+  const [expandedRow, setExpandedRow] = useState(null);
+
+  // Filter rawRows by origin for the "Solo" sub-tab. In Solo view we exclude
+  // campaign-batched emails (they have their own sub-tab).
+  const effectiveRawRows = trackingTab === "solo"
+    ? rawRows.filter((r) => !r.campaign_id && (originFilter === "all" || r.origin === originFilter))
+    : rawRows.filter((r) => !!r.campaign_id);
 
   // Group initial+follow-up rows by lead so a prospect's thread stays together
   // when we sort/filter/search. The backend already emits them in lead-then-
   // type order but we need to re-sort globally.
   const groups = [];
   const byLead = {};
-  for (const r of rawRows) {
+  for (const r of effectiveRawRows) {
     if (!byLead[r.lead_id]) {
       byLead[r.lead_id] = { lead_id: r.lead_id, rows: [] };
       groups.push(byLead[r.lead_id]);
@@ -119,7 +128,7 @@ export default function EmailTracking() {
   const rows = filteredGroups.flatMap((g) => g.rows);
 
   // Stats: compute from initial emails only (avoid double-counting the lead)
-  var initialRows = rawRows.filter(function (r) { return r.email_type === "email_1"; });
+  var initialRows = effectiveRawRows.filter(function (r) { return r.email_type === "email_1"; });
   var totalSent = initialRows.length;
   var totalOpened = initialRows.filter(function (l) { return l.opens > 0; }).length;
   var totalClicked = initialRows.filter(function (l) { return l.clicks > 0; }).length;
@@ -130,15 +139,67 @@ export default function EmailTracking() {
     <div className="min-h-screen bg-gray-100">
       <NavBar />
       <div className="max-w-7xl mx-auto px-4 py-6">
-        <div className="mb-6">
-          <h1 className="text-xl font-bold text-gray-800">Email Tracking</h1>
+        <div className="mb-4">
+          <h1 className="text-xl font-bold text-gray-800">Tracking</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Suivi des emails envoyés — ouvertures et clics. Quand un prospect a ouvert
-            mais pas répondu, utilise le bouton « ✉ Relancer » pour générer tout de
-            suite un 2<sup>e</sup> mail (draft visible dans <Link to="/messages-draft" className="text-indigo-600 underline">Relances mail</Link>).
+            Suivi des emails envoyés — 1 à 1 (Solo) ou en batch via une Campagne.
+            Relance manuelle via <Link to="/messages-draft" className="text-indigo-600 underline">À valider</Link>.
           </p>
         </div>
 
+        {/* Top-level Solo / Campagne */}
+        <div className="flex gap-1 mb-5 bg-gray-100 rounded-lg p-1 w-fit">
+          <button
+            onClick={() => setTrackingTab("solo")}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              trackingTab === "solo" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            ✉ Solo
+          </button>
+          <button
+            onClick={() => setTrackingTab("campagne")}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              trackingTab === "campagne" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            📦 Campagnes
+          </button>
+        </div>
+
+        {trackingTab === "campagne" && <CampagnesTracking rawRows={rawRows} />}
+        {trackingTab === "solo" && (
+          <>
+            {/* Origin macro filter — only in Solo tab */}
+            <div className="flex gap-1 mb-4 flex-wrap">
+              {[
+                { v: "all",       label: "Tous",        color: "indigo" },
+                { v: "pipeline",  label: "Pipeline",    color: "blue" },
+                { v: "cold",      label: "Cold",        color: "teal" },
+                { v: "troudebal", label: "Agent AI",    color: "purple" },
+              ].map((f) => {
+                const count = rawRows.filter((r) => r.email_type === "email_1" && !r.campaign_id && (f.v === "all" || r.origin === f.v)).length;
+                const isActive = originFilter === f.v;
+                return (
+                  <button
+                    key={f.v}
+                    onClick={() => setOriginFilter(f.v)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md border transition-colors ${
+                      isActive
+                        ? `bg-${f.color}-600 text-white border-${f.color}-600`
+                        : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                    }`}
+                  >
+                    {f.label} <span className="ml-1 opacity-75">({count})</span>
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {trackingTab === "solo" && (
+        <>
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
           <Stat label="Envoyés" value={totalSent} />
@@ -188,7 +249,7 @@ export default function EmailTracking() {
 
         {isLoading ? (
           <div className="text-center py-12 text-gray-400">Chargement...</div>
-        ) : rawRows.length === 0 ? (
+        ) : effectiveRawRows.length === 0 ? (
           <div className="text-center py-12 text-gray-400">Aucun email envoyé pour le moment.</div>
         ) : rows.length === 0 ? (
           <div className="text-center py-12 text-gray-400">
@@ -226,7 +287,112 @@ export default function EmailTracking() {
             </table>
           </div>
         )}
+        </>
+        )}
       </div>
+    </div>
+  );
+}
+
+// ── Campagnes sub-tab: aggregate stats per validated campaign ──
+
+function CampagnesTracking({ rawRows }) {
+  const { data: campaignsData } = useValidatedCampaigns();
+  const campagnes = campaignsData?.campaigns || [];
+
+  // Group initial emails by campaign_id
+  const initialRows = rawRows.filter((r) => r.email_type === "email_1" && r.campaign_id);
+  const byCampaign = {};
+  for (const r of initialRows) {
+    if (!byCampaign[r.campaign_id]) byCampaign[r.campaign_id] = [];
+    byCampaign[r.campaign_id].push(r);
+  }
+
+  if (campagnes.length === 0) {
+    return (
+      <div className="bg-white rounded-lg shadow p-8 text-center text-gray-500 text-sm">
+        Aucune campagne validée. Crée-en une depuis{" "}
+        <Link to="/cold-outbound" className="text-indigo-600 hover:underline">Cold Outbound</Link> ou{" "}
+        <Link to="/cold-outreach" className="text-indigo-600 hover:underline">AI Agents</Link>.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {campagnes.map((c) => {
+        const rows = byCampaign[c.id] || [];
+        const sent = rows.length;
+        const opened = rows.filter((r) => r.opens > 0).length;
+        const clicked = rows.filter((r) => r.clicks > 0).length;
+        const replied = rows.filter((r) => ["replied", "meeting_booked"].includes(r.status)).length;
+        const openRate = sent > 0 ? Math.round((opened / sent) * 100) : 0;
+        const clickRate = sent > 0 ? Math.round((clicked / sent) * 100) : 0;
+        const replyRate = sent > 0 ? Math.round((replied / sent) * 100) : 0;
+        const cs = c.case_studies;
+
+        return (
+          <div key={c.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-semibold text-gray-900">{c.name}</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">Slot {c.slot}</span>
+                  {cs && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">
+                      Cas : {cs.client_name} · {cs.metric_value}
+                    </span>
+                  )}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  Validée le {new Date(c.validated_at).toLocaleString("fr-FR")} · {c.items_count} leads
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <MiniStat label="Envoyés" value={sent} />
+              <MiniStat label="Ouverts" value={opened + " (" + openRate + "%)"} color="text-green-600" />
+              <MiniStat label="Clics" value={clicked + " (" + clickRate + "%)"} color="text-blue-600" />
+              <MiniStat label="Réponses" value={replied + " (" + replyRate + "%)"} color="text-purple-600" />
+              <MiniStat label="En attente" value={c.pending} color="text-yellow-600" />
+            </div>
+
+            {rows.length > 0 && (
+              <details className="mt-3">
+                <summary className="cursor-pointer text-xs text-gray-500 hover:text-gray-700">
+                  Voir les {rows.length} leads de cette campagne
+                </summary>
+                <div className="mt-2 space-y-1">
+                  {rows.map((r) => (
+                    <div key={r.row_key} className="text-xs bg-gray-50 rounded px-2 py-1 flex items-center justify-between">
+                      <div className="truncate">
+                        <span className="font-medium text-gray-900">{r.full_name}</span>
+                        <span className="text-gray-500 ml-1">· {r.company_name}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[10px] shrink-0">
+                        {r.opens > 0 && <span className="text-green-700">✉ {r.opens}</span>}
+                        {r.clicks > 0 && <span className="text-blue-700">🔗 {r.clicks}</span>}
+                        {r.status === "replied" && <span className="text-purple-700">Répondu</span>}
+                        {r.status === "meeting_booked" && <span className="text-pink-700">RDV</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function MiniStat({ label, value, color }) {
+  return (
+    <div className="bg-gray-50 rounded p-2">
+      <div className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</div>
+      <div className={`text-sm font-semibold ${color || "text-gray-800"}`}>{value}</div>
     </div>
   );
 }

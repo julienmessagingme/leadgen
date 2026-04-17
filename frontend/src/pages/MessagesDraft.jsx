@@ -10,6 +10,7 @@ import { useQuery } from "@tanstack/react-query";
 import { htmlToText, textToHtml } from "../utils/htmlText";
 import FollowupCasePicker from "../components/followups/FollowupCasePicker";
 import { useValidatedCampaigns } from "../hooks/useCampaigns";
+import HubspotSignalsPanel from "../components/hubspot/HubspotSignalsPanel";
 
 function useApproveMessage() {
   const qc = useQueryClient();
@@ -100,7 +101,7 @@ function useRegenerateEmailFollowup() {
 }
 
 export default function MessagesDraft() {
-  const [tab, setTab] = useState("linkedin"); // "linkedin" | "email" | "cold_email" | "campagne" | "reinvite" | "followup_email"
+  const [tab, setTab] = useState("linkedin"); // "linkedin" | "email" | "cold_email" | "campagne" | "hubspot" | "reinvite" | "followup_email"
   const [followupSubTab, setFollowupSubTab] = useState("case"); // "case" | "email" — only used when tab=="followup_email"
   const [selectedCampaignId, setSelectedCampaignId] = useState(null);
   const [editedMessages, setEditedMessages] = useState({});
@@ -143,6 +144,13 @@ export default function MessagesDraft() {
     order: "desc",
     limit: 200,
   });
+  const { data: hubspotData } = useLeads({
+    status: "hubspot_existing",
+    sort: "icp_score",
+    order: "desc",
+    limit: 100,
+  });
+  const hubspotLeadsCount = hubspotData?.leads?.length || 0;
 
   const approve = useApproveMessage();
   const reject = useRejectMessage();
@@ -306,6 +314,7 @@ export default function MessagesDraft() {
     : tab === "email" ? emailLoading
     : tab === "cold_email" ? emailLoading
     : tab === "campagne" ? (selectedCampaignId ? campagneLoading : false)
+    : tab === "hubspot" ? false
     : tab === "reinvite" ? reinviteLoading
     : followupLoading;
   const leads = tab === "linkedin" ? linkedinLeads
@@ -389,6 +398,21 @@ export default function MessagesDraft() {
             )}
           </button>
           <button
+            onClick={() => setTab("hubspot")}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              tab === "hubspot"
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Signaux HubSpot
+            {hubspotLeadsCount > 0 && (
+              <span className="ml-1.5 inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 rounded-full">
+                {hubspotLeadsCount}
+              </span>
+            )}
+          </button>
+          <button
             onClick={() => setTab("reinvite")}
             className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
               tab === "reinvite"
@@ -456,6 +480,9 @@ export default function MessagesDraft() {
         {tab === "followup_email" && followupSubTab === "case" && (
           <FollowupCasePicker />
         )}
+
+        {/* HubSpot signals tab */}
+        {tab === "hubspot" && <HubspotSignalsPanel />}
 
         {/* Campagne tab: list of validated campaigns (drill-down into drafts on click) */}
         {tab === "campagne" && !selectedCampaignId && (
@@ -543,7 +570,7 @@ export default function MessagesDraft() {
           <div className="text-center py-12 text-gray-400">Chargement...</div>
         )}
 
-        {!isLoading && leads.length === 0 && tab !== "campagne" && !(tab === "followup_email" && followupSubTab === "case") && (
+        {!isLoading && leads.length === 0 && tab !== "campagne" && tab !== "hubspot" && !(tab === "followup_email" && followupSubTab === "case") && (
           <div className="text-center py-12 text-gray-400">
             {tab === "linkedin" ? "Aucun message LinkedIn en attente."
              : tab === "email" ? "Aucun email en attente. Task D n'a pas encore tourné ou tous les emails ont été traités."

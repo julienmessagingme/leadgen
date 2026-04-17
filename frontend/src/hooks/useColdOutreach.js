@@ -8,7 +8,12 @@ export function useColdRuns() {
   return useQuery({
     queryKey: ["cold-runs"],
     queryFn: () => api.get("/cold-outreach/runs"),
-    staleTime: 30_000,
+    staleTime: 10_000,
+    // Poll every 15s when a run is in progress so phase changes show up live
+    refetchInterval: (query) => {
+      const runs = query.state.data?.runs || [];
+      return runs.some((r) => r.status === "running") ? 15_000 : false;
+    },
   });
 }
 

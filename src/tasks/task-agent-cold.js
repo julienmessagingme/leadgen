@@ -80,6 +80,59 @@ async function runAgentCold(brief, runId) {
   await log(runId, "agent-cold", "info",
     "Starting agent cold pipeline — theme: " + (brief.theme || "unspecified"));
 
+  // Insert the run row IMMEDIATELY with status='running' so the dashboard can
+  // display "en cours" and any mid-pipeline crash leaves a visible failed row.
+  const { data: runRowEarly, error: earlyErr } = await supabase
+    .from("cold_outreach_runs")
+    .insert({
+      run_date: new Date().toISOString().slice(0, 10),
+      agent_name: "agent-cold-v1",
+      credits_used: 0,
+      leads_count: 0,
+      status: "running",
+      phase: "researcher",
+      brief: brief,
+      metadata: { brief, phases: {}, run_notes: brief.theme || "agent cold run" },
+      updated_at: new Date().toISOString(),
+    })
+    .select()
+    .single();
+
+  if (earlyErr) {
+    await log(runId, "agent-cold", "error", "Failed to create run row: " + earlyErr.message);
+    throw new Error("Failed to create run row: " + earlyErr.message);
+  }
+
+  const dbRunId = runRowEarly.id;
+
+  try {
+    return await _runAgentColdPipeline(brief, runId, dbRunId, startTime);
+  } catch (err) {
+    console.error("[agent-cold] pipeline error (marking run failed):", err.message);
+    await log(runId, "agent-cold", "error", "Pipeline threw: " + err.message);
+    try {
+      await supabase.from("cold_outreach_runs")
+        .update({
+          status: "failed",
+          error_message: (err.message || String(err)).slice(0, 500),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", dbRunId);
+    } catch (_e) { /* best-effort */ }
+    throw err;
+  }
+}
+
+async function _runAgentColdPipeline(brief, runId, dbRunId, startTime) {
+
+  const updateRun = async (patch) => {
+    try {
+      await supabase.from("cold_outreach_runs")
+        .update({ ...patch, updated_at: new Date().toISOString() })
+        .eq("id", dbRunId);
+    } catch (_e) { /* non-blocking */ }
+  };
+
   // Load known leads for dedup
   const known = await loadKnownLeads();
   await log(runId, "agent-cold", "info", "Loaded " + known.count + " known leads for dedup");
@@ -115,8 +168,8 @@ async function runAgentCold(brief, runId) {
     brief.exclusions ? "Exclusions spécifiques : " + brief.exclusions : "",
     "Objectif : trouver 30-50 candidats bruts (PERSONNES décisionnaires, pas des entreprises).",
     "",
-    "DEDUP — ces " + known.count + " LinkedIn URLs sont DÉJÀ dans le pipeline, ne les propose PAS :",
-    "(La liste complète est trop longue pour le prompt. Quand tu trouves un candidat, vérifie que son URL LinkedIn canonicalisée n'est pas dans cette liste en me demandant via ton output.)",
+    "DEDUP — " + known.count + " LinkedIn URLs sont DÉJÀ dans notre pipeline et doivent être exclues.",
+    "Utilise l'outil **check_known_leads** (batch jusqu'à 50 URLs) pour filtrer tes candidats avant de les rendre. Gratuit, aucun crédit BeReach.",
     "",
     "Budget BeReach pour ta phase : max 150 crédits.",
     caseStudiesBlock,
@@ -165,8 +218,11 @@ async function runAgentCold(brief, runId) {
 
   if (dedupedCandidates.length === 0) {
     await log(runId, "agent-cold", "warn", "No candidates after dedup — aborting pipeline");
-    return { run_id: null, leads_inserted: 0, phases };
+    await updateRun({ status: "failed", phase: "researcher", error_message: "No candidates after dedup", metadata: { brief, phases } });
+    return { run_id: dbRunId, leads_inserted: 0, phases };
   }
+
+  await updateRun({ phase: "qualifier", metadata: { brief, phases } });
 
   // ═══════════════════════════════════════════════════════════════
   // PHASE 2 — QUALIFIER
@@ -219,8 +275,11 @@ async function runAgentCold(brief, runId) {
 
   if (qualifiedLeads.length === 0) {
     await log(runId, "agent-cold", "warn", "No leads qualified — aborting pipeline");
-    return { run_id: null, leads_inserted: 0, phases };
+    await updateRun({ status: "failed", phase: "qualifier", error_message: "No leads passed qualifier checks", metadata: { brief, phases } });
+    return { run_id: dbRunId, leads_inserted: 0, phases };
   }
+
+  await updateRun({ phase: "challenger", metadata: { brief, phases } });
 
   // ═══════════════════════════════════════════════════════════════
   // PHASE 3 — CHALLENGER
@@ -280,33 +339,14 @@ async function runAgentCold(brief, runId) {
   // PHASE 4 — PERSIST
   // ═══════════════════════════════════════════════════════════════
   await log(runId, "agent-cold", "info", "Phase 4: PERSIST — inserting " + finalLeads.length + " leads");
+  await updateRun({ phase: "persist", metadata: { brief, phases } });
 
-  // Create run header
   const totalCreditsEstimate =
     (phases.researcher.tool_calls || 0) * 2 +
     (phases.qualifier.tool_calls || 0) * 2;
 
-  const { data: runRow, error: runErr } = await supabase
-    .from("cold_outreach_runs")
-    .insert({
-      run_date: new Date().toISOString().slice(0, 10),
-      agent_name: "agent-cold-v1",
-      credits_used: totalCreditsEstimate,
-      leads_count: finalLeads.length,
-      metadata: {
-        brief,
-        phases,
-        duration_ms: Date.now() - startTime,
-        run_notes: brief.theme || "agent cold run",
-      },
-    })
-    .select()
-    .single();
-
-  if (runErr) {
-    await log(runId, "agent-cold", "error", "Failed to create run: " + runErr.message);
-    return { run_id: null, leads_inserted: 0, phases, error: runErr.message };
-  }
+  // Re-use the run row we created at the start of the pipeline
+  const runRow = { id: dbRunId };
 
   // Insert leads
   let inserted = 0;
@@ -340,7 +380,7 @@ async function runAgentCold(brief, runId) {
       status: "scored",
       signal_type: "cold_search",
       signal_category: "cold_outbound",
-      signal_source: "agent_cold_v1",
+      signal_source: lead.linkedin_only ? "agent_cold_v1_linkedin_only" : "agent_cold_v1",
       signal_date: new Date().toISOString(),
       icp_score: 70, // Agent-qualified leads start at warm minimum
       tier: "warm",
@@ -348,6 +388,7 @@ async function runAgentCold(brief, runId) {
         cold_run_id: runRow.id,
         cold_outbound: true,
         agent_name: "agent-cold-v1",
+        linkedin_only: !!lead.linkedin_only,
         icp_fit_reasoning: lead.icp_fit_reasoning || null,
         angle_of_approach: lead.angle_of_approach || null,
         enrichment: lead.enrichment || null,
@@ -361,6 +402,20 @@ async function runAgentCold(brief, runId) {
   await log(runId, "agent-cold", "info",
     "Phase 4 done: " + inserted + "/" + finalLeads.length + " leads inserted. " +
     "Run #" + runRow.id + ". Total duration: " + Math.round((Date.now() - startTime) / 1000) + "s.");
+
+  // Finalize the run row with the summary
+  await updateRun({
+    status: "completed",
+    phase: "persist",
+    credits_used: totalCreditsEstimate,
+    leads_count: inserted,
+    metadata: {
+      brief,
+      phases,
+      duration_ms: Date.now() - startTime,
+      run_notes: brief.theme || "agent cold run",
+    },
+  });
 
   return {
     run_id: runRow.id,
