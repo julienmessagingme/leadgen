@@ -30,10 +30,16 @@ export default function WatchlistTab() {
   const [editId, setEditId] = useState(null);
   const [editData, setEditData] = useState({});
   const [filterType, setFilterType] = useState("all");
+  const [search, setSearch] = useState("");
 
   const allEntries = data?.sources ?? [];
   const entries = allEntries.filter((e) => {
     if (filterType !== "all" && e.source_type !== filterType) return false;
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      const hay = [e.source_label, e.source_url, ...(Array.isArray(e.keywords) ? e.keywords : [e.keywords])].map((s) => (s || "").toLowerCase()).join(" ");
+      if (!hay.includes(q)) return false;
+    }
     return true;
   });
 
@@ -109,6 +115,15 @@ export default function WatchlistTab() {
         )}
       </div>
 
+      <div className="mb-3">
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Rechercher par label, URL ou mot-clé…"
+          className="w-full px-3 py-2 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+        />
+      </div>
       <div className="flex flex-wrap gap-2 mb-2">
         <span className="text-xs text-gray-400 self-center mr-1">Type:</span>
         {[{ value: "all", label: "Tout (" + allEntries.length + ")" }, ...SOURCE_TYPES.map((t) => ({ value: t.value, label: t.label + " (" + allEntries.filter((e) => e.source_type === t.value).length + ")" }))].map((f) => (
