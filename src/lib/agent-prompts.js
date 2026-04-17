@@ -185,8 +185,8 @@ Pas de signal = pas de lead. "Il a un profil LinkedIn" n'est PAS un signal.
 
 ### Check 4 — Email professionnel (avec fallback LinkedIn)
 Enrichis l'email via fullenrich_email sur les candidats qui ont passé les checks 1-3.
-- **Email trouvé** → lead qualifié pour envoi cold email → `linkedin_only: false`
-- **Email introuvable (ou FullEnrich timeout)** → **NE VIRE PAS**. Marque le lead avec `linkedin_only: true`. Il entrera dans le pipeline classique via invitation LinkedIn (Task B), pas via email.
+- **Email trouvé** → lead qualifié pour envoi cold email → linkedin_only: false
+- **Email introuvable (ou FullEnrich timeout)** → **NE VIRE PAS**. Marque le lead avec linkedin_only: true. Il entrera dans le pipeline classique via invitation LinkedIn (Task B), pas via email.
 
 Le seul cas où tu VIRES pour cause d'email c'est si le lead est clairement hors ICP par ailleurs (check 1, 2, ou 3 échoue). Sans email ≠ sans valeur.
 Ne gaspille pas de crédits FullEnrich sur des candidats qui n'ont pas passé les checks 1-3.
@@ -228,7 +228,7 @@ Pour chaque lead validé, tu produis :
 }
 \`\`\`
 
-Note `linkedin_only: true` si email introuvable (et checks 1-3 OK). Dans ce cas `email: null`.
+Note linkedin_only: true si email introuvable (et checks 1-3 OK). Dans ce cas email: null.
 
 ## COMPORTEMENT
 - Travaille en silence. Pas de blabla.
