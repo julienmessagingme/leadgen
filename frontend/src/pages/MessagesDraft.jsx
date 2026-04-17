@@ -6,6 +6,7 @@ import { useLeads } from "../hooks/useLeads";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import DOMPurify from "dompurify";
+import { useQuery } from "@tanstack/react-query";
 import { htmlToText, textToHtml } from "../utils/htmlText";
 import FollowupCasePicker from "../components/followups/FollowupCasePicker";
 
@@ -791,6 +792,10 @@ export default function MessagesDraft() {
                     >
                       Rejeter
                     </button>
+                    <RegenerateWithCases leadId={lead.id} onSuccess={() => {
+                      setEditedEmails((p) => { const n = { ...p }; delete n[lead.id]; return n; });
+                      refetchEmail();
+                    }} />
                     <div className="ml-auto flex items-center gap-1">
                       {["fr", "en"].map((lang) => {
                         const isCurrent = body.includes("Programmer un echange") ? "fr" : body.includes("Schedule a call") ? "en" : "fr";
@@ -1000,6 +1005,99 @@ export default function MessagesDraft() {
             })}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * RegenerateWithCases — "Refaire le mail" button with multi-select case studies.
+ * Sits next to "Envoyer" and "Rejeter" on email draft cards.
+ */
+function RegenerateWithCases({ leadId, onSuccess }) {
+  const [open, setOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [pending, setPending] = useState(false);
+  const [feedback, setFeedback] = useState(null);
+
+  const { data: caseData } = useQuery({
+    queryKey: ["case-studies"],
+    queryFn: () => api.get("/settings/case-studies"),
+    staleTime: 300_000,
+    enabled: open,
+  });
+  const cases = (caseData?.cases || []).filter((c) => c.is_active);
+
+  const toggle = (id) => setSelectedIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+
+  const onRegenerate = async () => {
+    setPending(true);
+    setFeedback(null);
+    try {
+      await api.post(`/leads/${leadId}/regenerate-email`, {
+        case_study_ids: selectedIds.length > 0 ? selectedIds : undefined,
+      });
+      setFeedback({ ok: true });
+      setOpen(false);
+      setSelectedIds([]);
+      if (onSuccess) onSuccess();
+    } catch (err) {
+      setFeedback({ ok: false, msg: err.message });
+    }
+    setPending(false);
+  };
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="px-3 py-2 bg-indigo-50 text-indigo-700 text-sm font-medium rounded-lg hover:bg-indigo-100 border border-indigo-200"
+      >
+        🔄 Refaire le mail
+      </button>
+    );
+  }
+
+  return (
+    <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 mt-2">
+      <div className="text-xs font-semibold text-indigo-800 mb-2">Cas clients à injecter dans le nouveau mail :</div>
+      <div className="flex flex-wrap gap-1 mb-3">
+        {cases.map((cs) => {
+          const isOn = selectedIds.includes(cs.id);
+          return (
+            <button
+              key={cs.id}
+              type="button"
+              onClick={() => toggle(cs.id)}
+              disabled={pending}
+              className={`px-2 py-1 text-[11px] rounded-full border transition-colors ${
+                isOn
+                  ? "bg-indigo-600 text-white border-indigo-600"
+                  : "bg-white text-gray-600 border-gray-200 hover:border-indigo-300 hover:bg-indigo-50"
+              }`}
+            >
+              {cs.client_name}{cs.metric_value ? " · " + cs.metric_value : ""}
+            </button>
+          );
+        })}
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={onRegenerate}
+          disabled={pending}
+          className="px-3 py-1.5 text-sm rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+        >
+          {pending ? "Régénération…" : "🔄 Regénérer avec " + selectedIds.length + " cas"}
+        </button>
+        <button
+          onClick={() => { setOpen(false); setSelectedIds([]); setFeedback(null); }}
+          disabled={pending}
+          className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800"
+        >
+          Annuler
+        </button>
+        {feedback && !feedback.ok && <span className="text-xs text-red-600">{feedback.msg}</span>}
+        {feedback && feedback.ok && <span className="text-xs text-green-700">✅ Nouveau mail généré</span>}
       </div>
     </div>
   );

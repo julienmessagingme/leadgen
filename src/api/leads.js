@@ -638,7 +638,8 @@ router.post("/:id/regenerate-message", async (req, res) => {
 
 /**
  * POST /:id/regenerate-email -- Regenerate email draft with forced language
- * Body: { lang: "fr" | "en" }
+ * and optional case studies to inject into the prompt.
+ * Body: { lang?: "fr" | "en", case_study_ids?: [1, 5, 12] }
  */
 router.post("/:id/regenerate-email", async (req, res) => {
   try {
@@ -653,16 +654,38 @@ router.post("/:id/regenerate-email", async (req, res) => {
     if (fetchErr || !lead) return res.status(404).json({ error: "Lead not found" });
     if (lead.status !== "email_pending") return res.status(400).json({ error: "Lead is not in email_pending status" });
 
-    const lang = req.body.lang === "en" ? "en" : "fr";
+    const lang = req.body.lang === "en" ? "en" : (req.body.lang === "fr" ? "fr" : null);
 
-    // Override language detection by temporarily injecting a location hint
+    // Override language detection if lang is explicitly forced
     const originalLocation = lead.location;
-    lead.location = lang === "en" ? "New York, US" : "Paris, France";
+    if (lang) {
+      lead.location = lang === "en" ? "New York, US" : "Paris, France";
+    }
+
+    // Inject case studies into lead context if provided
+    const rawIds = req.body && req.body.case_study_ids;
+    if (Array.isArray(rawIds) && rawIds.length > 0) {
+      const { data: allCases } = await supabase
+        .from("case_studies")
+        .select("*")
+        .eq("is_active", true);
+      const selectedCases = (allCases || []).filter((c) =>
+        rawIds.includes(c.id) || rawIds.includes(String(c.id))
+      );
+      if (selectedCases.length > 0) {
+        lead.metadata = Object.assign({}, lead.metadata || {}, {
+          _additional_case_studies: selectedCases.map((c) =>
+            c.client_name + " (" + c.sector + ") — " + c.metric_label + " : " + c.metric_value +
+            (c.description ? ". " + c.description.slice(0, 200) : "")
+          ),
+        });
+      }
+    }
 
     const templates = await loadTemplates();
     const emailContent = await generateEmail(lead, templates);
 
-    lead.location = originalLocation; // restore
+    if (lang) lead.location = originalLocation; // restore
 
     if (!emailContent) return res.status(500).json({ error: "Failed to generate email" });
 
@@ -670,15 +693,18 @@ router.post("/:id/regenerate-email", async (req, res) => {
       draft_email_subject: emailContent.subject,
       draft_email_body: emailContent.body,
       draft_email_generated_at: new Date().toISOString(),
-      forced_lang: lang,
+      forced_lang: lang || undefined,
+      regenerated_with_cases: Array.isArray(rawIds) ? rawIds : undefined,
     });
+    // Clean the temp injection field
+    delete updatedMetadata._additional_case_studies;
 
     await supabase
       .from("leads")
       .update({ metadata: updatedMetadata })
       .eq("id", lead.id);
 
-    res.json({ ok: true, lang, subject: emailContent.subject });
+    res.json({ ok: true, lang, subject: emailContent.subject, with_cases: Array.isArray(rawIds) ? rawIds.length : 0 });
   } catch (err) {
     console.error("POST /leads/:id/regenerate-email error:", err.message);
     res.status(500).json({ error: err.message });
