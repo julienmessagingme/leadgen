@@ -96,12 +96,9 @@ export default function ColdOutreach() {
             </p>
           </div>
 
-          <div className="max-w-7xl mb-6">
-            <LaunchForm />
-          </div>
-
           <div className="flex gap-4">
-            <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-0 space-y-4">
+              <LaunchForm />
               {selectedRunId ? (
                 <RunDetail runId={selectedRunId} campaignedUrls={campaignedUrls} />
               ) : (
