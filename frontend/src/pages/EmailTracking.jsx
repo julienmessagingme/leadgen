@@ -539,7 +539,7 @@ function StatusBadge({ row, isFollowup, hasOpened, hasClicked, noResponse }) {
 function FollowupAction({ row }) {
   const [open, setOpen] = useState(false);
   const [feedback, setFeedback] = useState(null);
-  const [selectedCaseId, setSelectedCaseId] = useState("auto"); // "auto" | "none" | "<id>"
+  const [selectedCaseIds, setSelectedCaseIds] = useState([]); // array of case study ids
   const generate = useGenerateFollowupNow();
   const { data: caseData } = useCaseStudies();
   const activeCases = (caseData?.cases || []).filter((c) => c.is_active);
@@ -561,18 +561,11 @@ function FollowupAction({ row }) {
 
   const onGenerate = async () => {
     setFeedback(null);
-    // Map UI choice → API contract
-    // "auto" means "let the server do sector-matching" → omit case_study_id
-    // "none" means "no case" → pass the literal "none"
-    // otherwise integer id
-    const payloadId =
-      selectedCaseId === "auto"
-        ? undefined
-        : selectedCaseId === "none"
-          ? "none"
-          : Number.parseInt(selectedCaseId, 10);
     try {
-      await generate.mutateAsync({ leadId: row.lead_id, case_study_id: payloadId });
+      await generate.mutateAsync({
+        leadId: row.lead_id,
+        case_study_ids: selectedCaseIds.length > 0 ? selectedCaseIds : undefined,
+      });
       setFeedback({ ok: true });
       setOpen(false);
     } catch (err) {
@@ -601,21 +594,24 @@ function FollowupAction({ row }) {
 
   return (
     <div className="flex items-center gap-1 justify-end bg-white border border-indigo-200 rounded-md shadow-sm p-1.5">
-      <select
-        value={selectedCaseId}
-        onChange={(e) => setSelectedCaseId(e.target.value)}
-        className="text-xs rounded border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 max-w-[200px]"
-        disabled={generate.isPending}
-        autoFocus
-      >
-        <option value="auto">— Auto (secteur) —</option>
-        <option value="none">— Sans cas client —</option>
-        {activeCases.map((cs) => (
-          <option key={cs.id} value={String(cs.id)}>
-            {cs.client_name}{cs.sector ? " · " + cs.sector : ""}
-          </option>
-        ))}
-      </select>
+      <div className="flex flex-wrap gap-0.5 max-w-[300px]">
+        {activeCases.map((cs) => {
+          const isOn = selectedCaseIds.includes(cs.id);
+          return (
+            <button
+              key={cs.id}
+              type="button"
+              onClick={() => setSelectedCaseIds((prev) => prev.includes(cs.id) ? prev.filter((x) => x !== cs.id) : [...prev, cs.id])}
+              disabled={generate.isPending}
+              className={`px-1.5 py-0.5 text-[10px] rounded-full border transition-colors ${
+                isOn ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-500 border-gray-200 hover:border-indigo-300"
+              }`}
+            >
+              {cs.client_name}
+            </button>
+          );
+        })}
+      </div>
       <button
         onClick={onGenerate}
         disabled={generate.isPending}

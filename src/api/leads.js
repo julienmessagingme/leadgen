@@ -1372,13 +1372,31 @@ router.post("/:id/generate-followup-now", async (req, res) => {
 
     const [templates, caseStudies] = await Promise.all([loadTemplates(), loadCaseStudies()]);
 
-    // Case study selection:
-    //   - body.case_study_id = integer → Julien explicitly picked one in the UI (new flow)
+    // Case study selection — supports MULTIPLE case studies:
+    //   - body.case_study_ids = [1, 5, 6] → Julien picked several in the UI
+    //   - body.case_study_id = integer → legacy single pick (backward compat)
     //   - body.case_study_id = null / "none" → Julien asked Sonnet to stay generic
     //   - body absent / undefined → fallback to sector-matching (Task F's behavior)
-    let caseStudy = null;
+    let caseStudy = null;       // primary (for generateFollowupEmail signature compat)
+    let additionalCases = [];   // extras injected into the prompt context
+    const rawIds = req.body && req.body.case_study_ids;
     const rawCaseId = req.body && req.body.case_study_id;
-    if (rawCaseId === null || rawCaseId === "none") {
+
+    if (Array.isArray(rawIds) && rawIds.length > 0) {
+      // Multi-select mode: load all requested case studies
+      const selectedCases = [];
+      for (const rid of rawIds) {
+        if (rid === "none" || rid === null) continue;
+        const parsed = Number.parseInt(rid, 10);
+        if (!Number.isInteger(parsed)) continue;
+        const found = caseStudies.find((c) => c.id === parsed);
+        if (found) selectedCases.push(found);
+      }
+      if (selectedCases.length > 0) {
+        caseStudy = selectedCases[0]; // primary
+        additionalCases = selectedCases.slice(1); // extras
+      }
+    } else if (rawCaseId === null || rawCaseId === "none") {
       caseStudy = null;
     } else if (rawCaseId !== undefined && rawCaseId !== "") {
       const parsed = Number.parseInt(rawCaseId, 10);
@@ -1391,6 +1409,17 @@ router.post("/:id/generate-followup-now", async (req, res) => {
       }
     } else {
       caseStudy = pickCaseStudyForLead(lead, caseStudies);
+    }
+
+    // If multiple case studies selected, inject the extras into the lead
+    // context so Sonnet sees them all in the prompt alongside the primary.
+    if (additionalCases.length > 0) {
+      lead.metadata = Object.assign({}, lead.metadata || {}, {
+        _additional_case_studies: additionalCases.map((c) =>
+          c.client_name + " (" + c.sector + ") — " + c.metric_label + " : " + c.metric_value +
+          (c.description ? ". " + c.description.slice(0, 200) : "")
+        ),
+      });
     }
 
     const emailContent = await generateFollowupEmail(lead, templates, caseStudy);

@@ -282,6 +282,15 @@ function buildLeadContext(lead) {
     }
   }
 
+  // Additional case studies (when Julien selected multiple in the UI)
+  if (meta._additional_case_studies && meta._additional_case_studies.length > 0) {
+    lines.push("");
+    lines.push("Cas clients supplementaires a citer si pertinents :");
+    for (var ac = 0; ac < meta._additional_case_studies.length; ac++) {
+      lines.push("  - " + meta._additional_case_studies[ac]);
+    }
+  }
+
   return lines.join("\n");
 }
 

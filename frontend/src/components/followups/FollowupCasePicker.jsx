@@ -102,18 +102,25 @@ function CandidateRow({ candidate: c, cases }) {
   const [expanded, setExpanded] = useState(false);
   const { data: firstEmail, isLoading: firstEmailLoading } = useFirstEmail(c.id, expanded);
 
-  const [selectedCaseId, setSelectedCaseId] = useState(() => {
+  const [selectedCaseIds, setSelectedCaseIds] = useState(() => {
+    // Pre-select the best sector-matching case
     const leadSector = (c.company_sector || "").toLowerCase();
     if (leadSector) {
       for (const cs of cases) {
         const csSector = (cs.sector || "").toLowerCase();
         if (csSector && (leadSector.includes(csSector) || csSector.includes(leadSector))) {
-          return String(cs.id);
+          return [cs.id];
         }
       }
     }
-    return cases[0] ? String(cases[0].id) : "none";
+    return [];
   });
+
+  const toggleCase = (id) => {
+    setSelectedCaseIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
 
   const [feedback, setFeedback] = useState(null);
 
@@ -137,7 +144,7 @@ function CandidateRow({ candidate: c, cases }) {
     setFeedback(null);
     try {
       await generate.mutateAsync({
-        case_study_id: selectedCaseId === "none" ? "none" : Number.parseInt(selectedCaseId, 10),
+        case_study_ids: selectedCaseIds.length > 0 ? selectedCaseIds : ["none"],
       });
       setFeedback({ ok: true });
     } catch (err) {
@@ -193,21 +200,31 @@ function CandidateRow({ candidate: c, cases }) {
         </div>
 
         <div className="flex items-end gap-2 shrink-0">
-          <div>
-            <label className="block text-[10px] text-gray-500 uppercase tracking-wide mb-0.5">Cas client</label>
-            <select
-              value={selectedCaseId}
-              onChange={(e) => setSelectedCaseId(e.target.value)}
-              className="text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500"
-              disabled={generate.isPending}
-            >
-              <option value="none">— Aucun (générique) —</option>
-              {cases.map((cs) => (
-                <option key={cs.id} value={String(cs.id)}>
-                  {cs.client_name}{cs.sector ? " · " + cs.sector : ""}{cs.metric_label ? " · " + cs.metric_label + " " + cs.metric_value : ""}
-                </option>
-              ))}
-            </select>
+          <div className="max-w-md">
+            <label className="block text-[10px] text-gray-500 uppercase tracking-wide mb-1">
+              Cas clients à citer ({selectedCaseIds.length} sélectionné{selectedCaseIds.length > 1 ? "s" : ""})
+            </label>
+            <div className="flex flex-wrap gap-1">
+              {cases.map((cs) => {
+                const isOn = selectedCaseIds.includes(cs.id);
+                return (
+                  <button
+                    key={cs.id}
+                    type="button"
+                    onClick={() => toggleCase(cs.id)}
+                    disabled={generate.isPending}
+                    className={`px-2 py-1 text-[11px] rounded-full border transition-colors ${
+                      isOn
+                        ? "bg-indigo-600 text-white border-indigo-600"
+                        : "bg-white text-gray-600 border-gray-200 hover:border-indigo-300 hover:bg-indigo-50"
+                    }`}
+                    title={cs.description ? cs.description.slice(0, 120) : undefined}
+                  >
+                    {cs.client_name}{cs.metric_value ? " · " + cs.metric_value : ""}
+                  </button>
+                );
+              })}
+            </div>
           </div>
           <button
             onClick={onGenerate}
