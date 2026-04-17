@@ -48,6 +48,7 @@ router.get("/", async (req, res) => {
       limit: limitStr = "200",
       offset: offsetStr = "0",
       paused,
+      campaign_id,
     } = req.query;
 
     const limit = Math.min(Math.max(parseInt(limitStr, 10) || 200, 1), 500);
@@ -93,6 +94,11 @@ router.get("/", async (req, res) => {
       query = query.eq("metadata->>is_paused", "true");
     } else if (paused === "false") {
       query = query.or("metadata->>is_paused.is.null,metadata->>is_paused.neq.true");
+    }
+
+    // Campaign filter (metadata->campaign_id)
+    if (campaign_id) {
+      query = query.eq("metadata->>campaign_id", String(campaign_id));
     }
 
     // Sort and paginate

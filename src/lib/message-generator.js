@@ -585,7 +585,7 @@ function isColdLead(lead) {
  * @param {object} lead - Lead row from Supabase (with metadata populated by the agent)
  * @returns {Promise<{subject: string, body: string}|null>}
  */
-async function generateColdEmail(lead) {
+async function generateColdEmail(lead, caseStudy) {
   try {
     var calendlyUrl = process.env.CALENDLY_URL || "https://calendly.com/julien-messagingme/30min";
     var lang = detectLanguage(lead);
@@ -620,10 +620,25 @@ async function generateColdEmail(lead) {
       ? "\n\nIMPORTANT: This prospect is NOT French-speaking. Write the ENTIRE email (subject + body) IN ENGLISH. Professional but warm tone."
       : "";
 
+    var caseStudyBlock = "";
+    if (caseStudy && caseStudy.client_name) {
+      var csLines = [
+        "Client: " + caseStudy.client_name,
+        "Secteur: " + (caseStudy.sector || ""),
+        "Metrique cle: " + (caseStudy.metric_label || "") + " = " + (caseStudy.metric_value || ""),
+      ];
+      if (caseStudy.description) csLines.push("Description: " + caseStudy.description);
+      caseStudyBlock =
+        "\n\nCAS CLIENT A UTILISER COMME PREUVE SOCIALE (complete l'angle, ne l'ecrase pas) :\n" +
+        csLines.join("\n") +
+        "\nGlisse une reference concise a ce cas dans le mail (chiffre + client) SI ca renforce naturellement l'angle. Sinon ignore-le. Ne cite jamais un chiffre ou un client absent de ce bloc.";
+    }
+
     var coldContext =
       "\n\nAngle d'attaque suggere par le scout :\n" + (angle || "(aucun)") +
       "\n\nICP fit (raison de cibler) :\n" + (icpReason || "(aucun)") +
-      (enrichText ? "\n\nContexte d'enrichissement (JSON brut) :\n" + enrichText : "");
+      (enrichText ? "\n\nContexte d'enrichissement (JSON brut) :\n" + enrichText : "") +
+      caseStudyBlock;
 
     var result = await callClaude(SYSTEM,
       instructions + langInstruction + "\n\n" +

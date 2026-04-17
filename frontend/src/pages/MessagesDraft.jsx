@@ -9,6 +9,7 @@ import DOMPurify from "dompurify";
 import { useQuery } from "@tanstack/react-query";
 import { htmlToText, textToHtml } from "../utils/htmlText";
 import FollowupCasePicker from "../components/followups/FollowupCasePicker";
+import { useValidatedCampaigns } from "../hooks/useCampaigns";
 
 function useApproveMessage() {
   const qc = useQueryClient();
@@ -99,8 +100,9 @@ function useRegenerateEmailFollowup() {
 }
 
 export default function MessagesDraft() {
-  const [tab, setTab] = useState("linkedin"); // "linkedin" | "email" | "cold_email" | "reinvite" | "followup_email"
+  const [tab, setTab] = useState("linkedin"); // "linkedin" | "email" | "cold_email" | "campagne" | "reinvite" | "followup_email"
   const [followupSubTab, setFollowupSubTab] = useState("case"); // "case" | "email" — only used when tab=="followup_email"
+  const [selectedCampaignId, setSelectedCampaignId] = useState(null);
   const [editedMessages, setEditedMessages] = useState({});
   const [editedEmails, setEditedEmails] = useState({}); // { id: { subject, body } }
   const [editedFollowups, setEditedFollowups] = useState({}); // { id: { subject, body } }
@@ -133,6 +135,14 @@ export default function MessagesDraft() {
     order: "desc",
     limit: 100,
   });
+  const { data: validatedCampaigns } = useValidatedCampaigns();
+  const { data: campagneData, isLoading: campagneLoading, refetch: refetchCampagne } = useLeads({
+    status: "email_pending",
+    campaign_id: selectedCampaignId ?? undefined,
+    sort: "icp_score",
+    order: "desc",
+    limit: 200,
+  });
 
   const approve = useApproveMessage();
   const reject = useRejectMessage();
@@ -148,10 +158,13 @@ export default function MessagesDraft() {
 
   const linkedinLeads = linkedinData?.leads ?? [];
   const allEmailLeads = emailData?.leads ?? [];
-  const emailLeads = allEmailLeads.filter(function (l) { return !l.metadata?.cold_outbound; });
-  const coldEmailLeads = allEmailLeads.filter(function (l) { return !!l.metadata?.cold_outbound; });
+  // Exclude campaign-tagged leads from legacy tabs — they live under "Campagnes"
+  const emailLeads = allEmailLeads.filter(function (l) { return !l.metadata?.cold_outbound && !l.metadata?.campaign_id; });
+  const coldEmailLeads = allEmailLeads.filter(function (l) { return !!l.metadata?.cold_outbound && !l.metadata?.campaign_id; });
   const reinviteLeads = reinviteData?.leads ?? [];
   const followupLeads = followupData?.leads ?? [];
+  const campagneLeads = campagneData?.leads ?? [];
+  const campagnes = validatedCampaigns?.campaigns ?? [];
 
   const handleApprove = (lead) => {
     const message = editedMessages[lead.id] ?? lead.metadata?.draft_message ?? "";
@@ -292,11 +305,13 @@ export default function MessagesDraft() {
   const isLoading = tab === "linkedin" ? linkedinLoading
     : tab === "email" ? emailLoading
     : tab === "cold_email" ? emailLoading
+    : tab === "campagne" ? (selectedCampaignId ? campagneLoading : false)
     : tab === "reinvite" ? reinviteLoading
     : followupLoading;
   const leads = tab === "linkedin" ? linkedinLeads
     : tab === "email" ? emailLeads
     : tab === "cold_email" ? coldEmailLeads
+    : tab === "campagne" ? campagneLeads
     : tab === "reinvite" ? reinviteLeads
     : followupLeads;
 
@@ -355,6 +370,21 @@ export default function MessagesDraft() {
             {coldEmailLeads.length > 0 && (
               <span className="ml-1.5 inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium bg-teal-100 text-teal-700 rounded-full">
                 {coldEmailLeads.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => { setTab("campagne"); setSelectedCampaignId(null); }}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              tab === "campagne"
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Campagnes
+            {campagnes.length > 0 && (
+              <span className="ml-1.5 inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 rounded-full">
+                {campagnes.length}
               </span>
             )}
           </button>
@@ -427,17 +457,105 @@ export default function MessagesDraft() {
           <FollowupCasePicker />
         )}
 
+        {/* Campagne tab: list of validated campaigns (drill-down into drafts on click) */}
+        {tab === "campagne" && !selectedCampaignId && (
+          <div className="space-y-3">
+            {campagnes.length === 0 && (
+              <div className="text-center py-12 text-gray-400">
+                Aucune campagne validée. Crée-en une depuis <a href="/cold-outbound" className="text-indigo-600 hover:underline">Cold Outbound</a> ou <a href="/cold-outreach" className="text-indigo-600 hover:underline">AI Agents</a> en glissant des leads dans une Campagne puis en cliquant "Valider".
+              </div>
+            )}
+            {campagnes.map((c) => {
+              const cs = c.case_studies;
+              return (
+                <button
+                  key={c.id}
+                  onClick={() => setSelectedCampaignId(c.id)}
+                  className="w-full text-left bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:border-purple-300 hover:shadow-md transition-all"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-gray-900">{c.name}</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
+                          Slot {c.slot}
+                        </span>
+                        {cs && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">
+                            Cas : {cs.client_name} · {cs.metric_value}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        Validée le {new Date(c.validated_at).toLocaleString("fr-FR")}
+                        {" · "}
+                        {c.items_count} lead{c.items_count > 1 ? "s" : ""}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {c.pending > 0 && (
+                        <span className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">
+                          {c.pending} à valider
+                        </span>
+                      )}
+                      {c.sent > 0 && (
+                        <span className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium bg-green-100 text-green-800 rounded-full">
+                          {c.sent} envoyé{c.sent > 1 ? "s" : ""}
+                        </span>
+                      )}
+                      {c.rejected > 0 && (
+                        <span className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600 rounded-full">
+                          {c.rejected} rejeté{c.rejected > 1 ? "s" : ""}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Campagne drill-down header */}
+        {tab === "campagne" && selectedCampaignId && (
+          <div className="mb-4 flex items-center gap-3">
+            <button
+              onClick={() => setSelectedCampaignId(null)}
+              className="text-sm text-gray-500 hover:text-gray-800"
+            >
+              ← Retour aux campagnes
+            </button>
+            {(() => {
+              const c = campagnes.find((x) => x.id === selectedCampaignId);
+              if (!c) return null;
+              const cs = c.case_studies;
+              return (
+                <div className="text-sm text-gray-700">
+                  <span className="font-semibold">{c.name}</span>
+                  {cs && <span className="text-xs text-blue-700 ml-2">· Cas : {cs.client_name}</span>}
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
         {isLoading && !(tab === "followup_email" && followupSubTab === "case") && (
           <div className="text-center py-12 text-gray-400">Chargement...</div>
         )}
 
-        {!isLoading && leads.length === 0 && !(tab === "followup_email" && followupSubTab === "case") && (
+        {!isLoading && leads.length === 0 && tab !== "campagne" && !(tab === "followup_email" && followupSubTab === "case") && (
           <div className="text-center py-12 text-gray-400">
             {tab === "linkedin" ? "Aucun message LinkedIn en attente."
              : tab === "email" ? "Aucun email en attente. Task D n'a pas encore tourné ou tous les emails ont été traités."
              : tab === "cold_email" ? "Aucun cold email en attente."
              : tab === "reinvite" ? "Aucune re-invitation en attente."
              : "Aucune relance email en attente. Prépare-en dans « Cas à valider »."}
+          </div>
+        )}
+
+        {!isLoading && tab === "campagne" && selectedCampaignId && campagneLeads.length === 0 && (
+          <div className="text-center py-12 text-gray-400">
+            Aucun draft en attente pour cette campagne (tous envoyés ou rejetés).
           </div>
         )}
 
@@ -617,9 +735,14 @@ export default function MessagesDraft() {
         )}
 
         {/* Email drafts */}
-        {(tab === "email" || tab === "cold_email") && (
+        {(tab === "email" || tab === "cold_email" || (tab === "campagne" && selectedCampaignId)) && (
           <div className="space-y-4">
-            {(tab === "cold_email" ? coldEmailLeads : emailLeads).map((lead) => {
+            {(tab === "cold_email"
+              ? coldEmailLeads
+              : tab === "campagne"
+              ? campagneLeads
+              : emailLeads
+            ).map((lead) => {
               const edited = editedEmails[lead.id];
               const subject = edited?.subject ?? lead.metadata?.draft_email_subject ?? "";
               const body = edited?.body ?? lead.metadata?.draft_email_body ?? "";

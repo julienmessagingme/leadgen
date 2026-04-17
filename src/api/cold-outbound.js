@@ -772,7 +772,7 @@ function matchScenario(scenarios, profile) {
   return best;
 }
 
-async function generateColdEmailDraft(profile, email, forcedScenario) {
+async function generateColdEmailDraft(profile, email, forcedScenario, caseStudy) {
   try {
     var client = getAnthropicClient();
     var calendlyUrl = process.env.CALENDLY_URL || "https://calendly.com/julien-messagingme/30min";
@@ -813,6 +813,19 @@ async function generateColdEmailDraft(profile, email, forcedScenario) {
         "\nProposition de valeur: " + (scenario.value_prop || "") +
         "\nPreuve sociale: " + (scenario.social_proof || "") +
         "\nUtilise ces macro-instructions pour structurer le mail. Adapte avec le nom, l'entreprise et le contexte enrichi du prospect. Ne copie pas mot pour mot — reformule naturellement.";
+    }
+
+    // Optional case study (complements the scenario, doesn't override it)
+    if (caseStudy && caseStudy.client_name) {
+      var csLines = [
+        "Client: " + caseStudy.client_name,
+        "Secteur: " + (caseStudy.sector || ""),
+        "Metrique cle: " + (caseStudy.metric_label || "") + " = " + (caseStudy.metric_value || ""),
+      ];
+      if (caseStudy.description) csLines.push("Description: " + caseStudy.description);
+      scenarioInstructions += "\n\nCAS CLIENT A UTILISER COMME PREUVE SOCIALE (complete, n'ecrase pas) :\n" +
+        csLines.join("\n") +
+        "\nGlisse une reference concise a ce cas (chiffre + client) SI ca renforce l'angle. Sinon ignore-le. Ne cite jamais un chiffre ou un client absent de ce bloc.";
     }
 
     var systemPrompt = "Tu es Julien Dumas, expert en strategie conversationnelle et messaging (WhatsApp, RCS, SMS). Tu diriges MessagingMe (messagingme.fr)." +
@@ -984,3 +997,9 @@ router.post("/searches/:id/similar-companies", async (req, res) => {
 });
 
 module.exports = router;
+module.exports._helpers = {
+  enrichContactInfo,
+  generateColdEmailDraft,
+  loadColdScenarios,
+  matchScenario,
+};

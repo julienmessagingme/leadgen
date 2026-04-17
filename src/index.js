@@ -123,6 +123,9 @@ app.use("/api/agent", require("./api/agent"));
 // Cold Outreach API routes (protected -- authMiddleware applied inside router)
 app.use("/api/cold-outreach", require("./api/cold-outreach"));
 
+// Campaigns (unified bucket system across Cold Outbound + AI Agents, protected)
+app.use("/api/campaigns", require("./api/campaigns"));
+
 // WhatsApp delivery status webhook (public-ish -- static bearer token
 // WHATSAPP_WEBHOOK_TOKEN; updates metadata.whatsapp_* only)
 app.use("/api/whatsapp", require("./api/whatsapp-webhook"));
