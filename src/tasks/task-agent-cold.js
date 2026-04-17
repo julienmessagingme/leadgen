@@ -87,41 +87,74 @@ function extractJson(text) {
 }
 
 /**
- * Scan text for balanced top-level JSON object literals and return those that
- * parse successfully. Tolerates trailing commas, escaped quotes, and a
- * truncated final object (which is skipped).
+ * Scan text for JSON object literals containing a linkedin_url and try to parse
+ * each one. Works regardless of nesting depth (candidates live at depth 2
+ * inside { "candidates": [ ... ] }). Tolerates truncated final object.
  */
 function extractTopLevelObjects(text) {
   const out = [];
+  // Anchor on "linkedin_url" — every candidate object contains one. For each
+  // match, scan backwards to find the opening '{' of its enclosing object,
+  // then scan forward to find the matching '}'.
+  const anchor = /"linkedin_url"\s*:/g;
+  let m;
+  const seen = new Set();
+  while ((m = anchor.exec(text)) !== null) {
+    // m.index points at the opening '"' of "linkedin_url". Start backward
+    // scanning ONE char before so we don't immediately flip into inString.
+    const anchorIdx = Math.max(0, m.index - 1);
+    const start = findEnclosingOpenBrace(text, anchorIdx);
+    if (start < 0 || seen.has(start)) continue;
+    seen.add(start);
+    // Scan forward for the matching close brace
+    const end = findMatchingCloseBrace(text, start);
+    if (end < 0) continue; // truncated — skip
+    const slice = text.slice(start, end + 1);
+    try {
+      const parsed = JSON.parse(slice);
+      if (parsed && (parsed.linkedin_url || parsed.full_name)) {
+        out.push(parsed);
+      }
+    } catch (_e) { /* malformed, skip */ }
+  }
+  return out;
+}
+
+function findEnclosingOpenBrace(text, from) {
   let depth = 0;
-  let start = -1;
   let inString = false;
   let escape = false;
-  for (let i = 0; i < text.length; i++) {
+  for (let i = from; i >= 0; i--) {
+    const ch = text[i];
+    // Backward string detection is tricky — approximate with a simple quote toggle
+    if (ch === '"' && (i === 0 || text[i - 1] !== "\\")) inString = !inString;
+    if (inString) continue;
+    if (ch === "}") depth++;
+    else if (ch === "{") {
+      if (depth === 0) return i;
+      depth--;
+    }
+  }
+  return -1;
+}
+
+function findMatchingCloseBrace(text, openIdx) {
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (let i = openIdx; i < text.length; i++) {
     const ch = text[i];
     if (escape) { escape = false; continue; }
     if (ch === "\\") { escape = true; continue; }
     if (ch === '"') { inString = !inString; continue; }
     if (inString) continue;
-    if (ch === "{") {
-      if (depth === 0) start = i;
-      depth++;
-    } else if (ch === "}") {
+    if (ch === "{") depth++;
+    else if (ch === "}") {
       depth--;
-      if (depth === 0 && start >= 0) {
-        const slice = text.slice(start, i + 1);
-        try {
-          const parsed = JSON.parse(slice);
-          // Only keep objects that look like a lead (have a linkedin_url or full_name)
-          if (parsed && (parsed.linkedin_url || parsed.full_name)) {
-            out.push(parsed);
-          }
-        } catch (_e) { /* skip malformed */ }
-        start = -1;
-      }
+      if (depth === 0) return i;
     }
   }
-  return out;
+  return -1;
 }
 
 /**
