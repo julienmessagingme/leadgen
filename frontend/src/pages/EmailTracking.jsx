@@ -20,8 +20,8 @@ function relativeTime(dateStr) {
 function useGenerateFollowupNow() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ leadId, case_study_id }) =>
-      api.post(`/leads/${leadId}/generate-followup-now`, { case_study_id }),
+    mutationFn: ({ leadId, case_study_ids }) =>
+      api.post(`/leads/${leadId}/generate-followup-now`, { case_study_ids }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["email-tracking"] });
       qc.invalidateQueries({ queryKey: ["followup-candidates"] });
