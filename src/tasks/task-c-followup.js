@@ -231,11 +231,8 @@ module.exports = async function taskCFollowup(runId) {
         for (var r = 0; r < eligible.length; r++) {
           var rl = eligible[r];
           try {
-            // Max 1 re-invite per lead
-            if (rl.metadata && rl.metadata.reinvite_count >= 1) {
-              skipped++;
-              continue;
-            }
+            // Log the reinvite attempt number so Julien sees the persistence
+            var reinvCount = (rl.metadata && rl.metadata.reinvite_count) || 0;
 
             var note = await generateInvitationNote(rl, templates);
             if (!note) {
@@ -248,6 +245,7 @@ module.exports = async function taskCFollowup(runId) {
               draft_invitation_note: note,
               draft_reinvite_run_id: runId,
               draft_reinvite_generated_at: new Date().toISOString(),
+              reinvite_attempt: reinvCount + 1,
             });
 
             var { error: reinvUpErr } = await supabase
@@ -258,7 +256,8 @@ module.exports = async function taskCFollowup(runId) {
             if (reinvUpErr) throw new Error("Supabase update failed: " + reinvUpErr.message);
 
             reinviteDrafts++;
-            await log(runId, "task-c-followup", "info", "Reinvite note draft saved for " + (rl.full_name || rl.id) + " — awaiting approval");
+            await log(runId, "task-c-followup", "info",
+              "Reinvite #" + (reinvCount + 1) + " draft saved for " + (rl.full_name || rl.id) + " — awaiting approval");
           } catch (err) {
             errors++;
             await log(runId, "task-c-followup", "error", "Failed to generate reinvite for " + (rl.full_name || rl.id) + ": " + err.message);
