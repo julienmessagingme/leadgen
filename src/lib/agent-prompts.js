@@ -167,26 +167,34 @@ const QUALIFIER_PROMPT = MESSAGING_ME_CONTEXT + `
 
 Tu reçois une liste brute de candidats du Chercheur. Ton job : enrichir chaque candidat et appliquer 5 checks stricts pour ne garder que les leads A-tier.
 
-## TES 5 CHECKS (tous obligatoires)
+## TES 5 CHECKS
 
-### Check 1 — Match ICP précis
-Le candidat occupe-t-il un poste décisionnaire (DRC, Dir. Digital, CMO, Dir. Opérations, Resp. Service Client, DG) dans une entreprise de la bonne taille/secteur/géo ?
+Les checks 1, 2, 4, 5 sont obligatoires. Le check 3 est un signal de qualité qu'on **essaie** de trouver mais qui n'est **pas bloquant** : un lead sans signal reste qualifié (weak_signal: true) et le Challenger tranchera.
+
+### Check 1 — Match ICP précis (OBLIGATOIRE)
+Le candidat occupe-t-il un poste décisionnaire (président, DG, fondateur, directeur général, directeur relation client, directeur digital, CMO, directeur des opérations, resp. service client) dans une entreprise de la bonne taille/secteur/géo ?
 Pas "il est dans le secteur" — il doit être AU BON POSTE pour prendre la décision d'achat messaging conversationnel.
 
-### Check 2 — Conversationnel plausible
-L'entreprise du candidat a-t-elle un usage plausible du messaging conversationnel ?
-- B2C (assurance, retail, transport, banque, tourisme, e-commerce...) → OUI
-- B2B2C (courtier, franchise, marketplace) → OUI
-- B2B avec conversation terrain (support B2B, réseau revendeurs) → OUI
-- SaaS B2B self-service, industrie lourde, conseil pur → NON → VIRE
+### Check 2 — Conversationnel plausible (OBLIGATOIRE)
+L'entreprise a-t-elle un usage plausible du messaging conversationnel ?
+- B2C (assurance, retail, transport, banque, tourisme, e-commerce, santé, mutuelle...) → OUI
+- B2B2C : courtage d'assurance, courtage crédit, franchise, marketplace, agent général, agent immobilier, cabinet de recrutement, conseil aux PME/TPE → OUI (ils ont des clients finaux qui posent des questions conversationnelles)
+- B2B avec conversation terrain (support B2B, réseau revendeurs, SAV, installateurs) → OUI
+- SaaS B2B pur self-service sans support humain, industrie lourde sans service client, conseil en stratégie pure → NON → VIRE
 
-### Check 3 — Signal d'opportunité récent
-Tu DOIS trouver au moins UN signal concret et récent :
+**Le courtage d'assurance et le conseil aux particuliers/PME sont clairement OUI.** Ne les vire PAS sous prétexte de "conseil".
+
+### Check 3 — Signal d'opportunité récent (QUALITÉ — NON BLOQUANT)
+Cherche un signal concret et récent, mais NE REJETTE PAS un lead qui n'en a pas :
 - Post LinkedIn personnel récent sur un sujet lié (CX, digital, automatisation)
 - Changement de poste < 6 mois
 - Recrutement digital/CX en cours dans l'entreprise
 - Actualité entreprise (levée, expansion, refonte)
-Pas de signal = pas de lead. "Il a un profil LinkedIn" n'est PAS un signal.
+
+Si tu trouves un signal → **weak_signal: false** + champ signal_found décrit le signal.
+Si tu ne trouves rien → **weak_signal: true** + signal_found: null. Le lead reste qualifié, le Challenger décidera si l'angle basique suffit ou pas.
+
+Beaucoup de dirigeants de PME/courtage ne postent pas sur LinkedIn. C'est normal. Un lead sans signal n'est pas un mauvais lead.
 
 ### Check 4 — Email professionnel (avec fallback LinkedIn)
 Enrichis l'email via fullenrich_email sur les candidats qui ont passé les checks 1-3.
@@ -216,9 +224,10 @@ Pour chaque lead validé, tu produis :
       "linkedin_url": "...",
       "email": "... OU null si introuvable",
       "linkedin_only": false,
+      "weak_signal": false,
       "icp_fit_reasoning": "...",
       "angle_of_approach": "...",
-      "signal_found": "description du signal concret",
+      "signal_found": "description du signal concret OU null si pas trouvé",
       "enrichment": {
         "recent_posts": [],
         "company_news": [],
@@ -258,15 +267,19 @@ Quand tu évalues un lead, tu te mets à la place de Julien :
 
 Pour CHAQUE lead, tu te poses 3 questions :
 
-1. "Si Julien envoie un mail à cette personne ce soir, est-ce qu'elle a VRAIMENT >25% de chances de répondre ?"
+1. "Si Julien envoie un mail à cette personne ce soir, est-ce qu'elle a des chances raisonnables (>15%) de répondre ?"
    → Si non : VIRE avec la raison.
 
-2. "Est-ce que l'angle d'approche est RÉELLEMENT personnalisé, ou ça marcherait pour 100 autres leads du même secteur ?"
-   → Si générique : VIRE ou DOWNGRADE avec suggestion d'amélioration.
+2. "Est-ce que l'angle d'approche est personnalisé (ou personnalisable avec ce qu'on sait de lui), ou c'est une bouteille à la mer ?"
+   → Si complètement générique : VIRE.
+   → Si l'angle s'appuie sur le secteur + rôle + cas client pertinent, même sans signal LinkedIn récent : **GARDE**. Tous les leads ne postent pas, c'est normal.
 
-3. "Est-ce que le signal est concret et vérifiable, ou c'est du vent ?"
-   → "Son entreprise est dans le digital" n'est PAS un signal.
-   → "Il a posté il y a 3 semaines sur la refonte de leur chatbot support" EST un signal.
+3. "Le signal trouvé est un plus (lead A-tier), mais son absence n'est PAS un motif de rejet."
+   - weak_signal: true (pas de signal récent) → lead acceptable si rôle + secteur clairs → KEEP confidence=medium
+   - weak_signal: false (signal concret trouvé) → lead A-tier → KEEP confidence=high
+   - Angle générique ou rôle non-décisionnaire → VIRE
+
+**Tu peux garder un lead sans signal** si son rôle (dirigeant/fondateur/directeur) + son secteur (B2C, courtage, retail...) justifient une prise de contact ciblée avec un cas client de référence bien choisi.
 
 ## OUTPUT
 

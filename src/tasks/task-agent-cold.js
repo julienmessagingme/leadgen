@@ -326,9 +326,11 @@ async function _runAgentColdPipeline(brief, runId, dbRunId, startTime) {
   const qualifierOutput = extractJson(qualifierResult.finalText);
   const qualifiedLeads = (qualifierOutput && qualifierOutput.qualified_leads) || [];
 
+  const rejectedArray = (qualifierOutput && qualifierOutput.rejected) || [];
   phases.qualifier = {
     qualified_count: qualifiedLeads.length,
-    rejected_count: qualifierOutput ? (qualifierOutput.rejected || []).length : 0,
+    rejected_count: rejectedArray.length,
+    rejected: rejectedArray.slice(0, 50), // persist reasons for diagnostic
     tool_calls: qualifierResult.toolCalls.length,
     iterations: qualifierResult.iterations,
     input_tokens: qualifierResult.inputTokens,
