@@ -47,23 +47,81 @@ async function loadKnownLeads() {
 
 /**
  * Extract JSON from the agent's final text response.
- * Handles ```json blocks and raw JSON.
+ * Handles ```json blocks, raw JSON, AND truncated JSON (e.g. when the LLM
+ * hits maxTokens mid-array). For truncated output we recover individual
+ * candidate objects by scanning the raw text.
  */
 function extractJson(text) {
   if (!text) return null;
-  // Try to extract from ```json ... ``` block
-  const match = text.match(/```json\s*([\s\S]*?)```/);
-  const raw = match ? match[1].trim() : text.trim();
-  try {
-    return JSON.parse(raw);
-  } catch (e) {
-    // Try to find the first { ... } block
-    const braceMatch = raw.match(/\{[\s\S]*\}/);
-    if (braceMatch) {
-      try { return JSON.parse(braceMatch[0]); } catch (_e2) {}
-    }
-    return null;
+
+  // 1. Try to extract from ```json ... ``` block (closing fence present)
+  const fenced = text.match(/```json\s*([\s\S]*?)```/);
+  let raw = fenced ? fenced[1].trim() : text.trim();
+
+  // If no closing fence, strip the opening ```json marker if present
+  if (!fenced) raw = raw.replace(/^```(?:json)?\s*/i, "").trim();
+
+  // 2. Try parsing as-is
+  try { return JSON.parse(raw); } catch (_e1) {}
+
+  // 3. Try the first { ... } block (greedy)
+  const braceMatch = raw.match(/\{[\s\S]*\}/);
+  if (braceMatch) {
+    try { return JSON.parse(braceMatch[0]); } catch (_e2) {}
   }
+
+  // 4. Truncation recovery: scan the raw text for individual candidate /
+  //    qualified_lead / validated objects and reconstruct the array manually.
+  //    Works when the LLM emitted a well-formed list of sub-objects but the
+  //    enclosing array or final brace got cut off by maxTokens.
+  const objects = extractTopLevelObjects(raw);
+  if (objects.length > 0) {
+    // Best-effort: figure out which key the objects belong to based on context.
+    const key = raw.includes("\"qualified_leads\"") ? "qualified_leads"
+      : raw.includes("\"validated\"") ? "validated"
+      : "candidates";
+    return { [key]: objects, _recovered_from_truncation: true };
+  }
+
+  return null;
+}
+
+/**
+ * Scan text for balanced top-level JSON object literals and return those that
+ * parse successfully. Tolerates trailing commas, escaped quotes, and a
+ * truncated final object (which is skipped).
+ */
+function extractTopLevelObjects(text) {
+  const out = [];
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  let escape = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (escape) { escape = false; continue; }
+    if (ch === "\\") { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === "{") {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (ch === "}") {
+      depth--;
+      if (depth === 0 && start >= 0) {
+        const slice = text.slice(start, i + 1);
+        try {
+          const parsed = JSON.parse(slice);
+          // Only keep objects that look like a lead (have a linkedin_url or full_name)
+          if (parsed && (parsed.linkedin_url || parsed.full_name)) {
+            out.push(parsed);
+          }
+        } catch (_e) { /* skip malformed */ }
+        start = -1;
+      }
+    }
+  }
+  return out;
 }
 
 /**
@@ -183,7 +241,7 @@ async function _runAgentColdPipeline(brief, runId, dbRunId, startTime) {
     toolHandlers: getToolHandlers(RESEARCHER_TOOLS),
     provider: "gemini",
     model: "gemini-2.5-flash",
-    maxTokens: 8192,
+    maxTokens: 16384,
     maxIterations: 40,
     runId,
     agentName: "researcher",
@@ -259,7 +317,7 @@ async function _runAgentColdPipeline(brief, runId, dbRunId, startTime) {
     toolHandlers: getToolHandlers(QUALIFIER_TOOLS),
     provider: "gemini",
     model: "gemini-2.5-flash",
-    maxTokens: 8192,
+    maxTokens: 16384,
     maxIterations: 60,
     runId,
     agentName: "qualifier",
