@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { api } from "../api/client";
 import NavBar from "../components/shared/NavBar";
 import { useColdRuns, useColdRun, useGenerateColdEmail } from "../hooks/useColdOutreach";
 
 /**
- * /cold-outreach — dashboard page for the autonomous cold outreach agent
- * (Troudebal on OpenClaw). Shows the history of runs, lets you drill into
- * a run to see the proposed leads, and exposes a "Générer email" button per
- * lead that calls Sonnet to draft an email (which then shows up in the
- * existing /messages-draft email tab for human approval).
+ * /cold-outreach — AI Agents dashboard.
+ * Launch the multi-agent cold prospecting pipeline (Researcher → Qualifier
+ * → Challenger) and see the history of past runs + their leads.
  */
 export default function ColdOutreach() {
   const [selectedRunId, setSelectedRunId] = useState(null);
@@ -20,21 +20,23 @@ export default function ColdOutreach() {
       <NavBar />
       <main className="max-w-7xl mx-auto px-4 py-6">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-800">Cold Outreach — Troudebal</h1>
+          <h1 className="text-2xl font-bold text-gray-800">🤖 AI Agents — Cold Outreach</h1>
           <p className="text-sm text-gray-600 mt-1">
-            Historique des runs quotidiens de l'agent de prospection froide.
-            Chaque run propose jusqu'à 10 leads cold + angle d'approche + enrichissement.
-            Le bouton « Générer email » déclenche Sonnet avec ce contexte et fait
-            apparaître le draft dans <Link to="/messages-draft" className="text-indigo-600 underline">À valider</Link>.
+            Pipeline multi-agents : Chercheur (BeReach) → Qualifieur (enrichissement + 5 checks) → Challenger (critique).
+            Le bouton « Générer email » déclenche Sonnet sur chaque lead validé → draft dans <Link to="/messages-draft" className="text-indigo-600 underline">À valider</Link>.
           </p>
         </div>
+
+        {/* Launch form */}
+        <LaunchForm />
+
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Runs list (left column) */}
           <div className="lg:col-span-1">
             <div className="bg-white rounded-lg shadow">
               <div className="px-4 py-3 border-b border-gray-200">
-                <h2 className="font-semibold text-gray-800">Runs</h2>
+                <h2 className="font-semibold text-gray-800">Historique des runs</h2>
               </div>
               {runsLoading && <div className="p-4 text-gray-500 text-sm">Chargement...</div>}
               {runsError && <div className="p-4 text-red-600 text-sm">Erreur : {runsError.message}</div>}
@@ -236,5 +238,100 @@ function StatusBadge({ status }) {
     <span className={`text-[10px] px-1.5 py-0.5 rounded uppercase tracking-wide ${entry.cls}`}>
       {entry.label}
     </span>
+  );
+}
+
+/**
+ * LaunchForm — brief du jour + bouton "Lancer aujourd'hui"
+ */
+function LaunchForm() {
+  const qc = useQueryClient();
+  const [theme, setTheme] = useState("");
+  const [geo, setGeo] = useState("");
+  const [exclusions, setExclusions] = useState("");
+  const [feedback, setFeedback] = useState(null);
+
+  const launch = useMutation({
+    mutationFn: (body) => api.post("/cold-outreach/run-today", body),
+    onSuccess: (data) => {
+      setFeedback({ ok: true, runId: data.run_id });
+      // Refresh runs list after a short delay (pipeline runs async)
+      setTimeout(() => qc.invalidateQueries({ queryKey: ["cold-runs"] }), 5000);
+    },
+    onError: (err) => {
+      setFeedback({ ok: false, msg: err.message });
+    },
+  });
+
+  const onSubmit = (e) => {
+    e.preventDefault();
+    if (!theme.trim()) return;
+    setFeedback(null);
+    launch.mutate({ theme: theme.trim(), geo: geo.trim() || undefined, exclusions: exclusions.trim() || undefined });
+  };
+
+  return (
+    <div className="bg-white rounded-lg shadow p-5 mb-6">
+      <h2 className="text-sm font-semibold text-gray-800 mb-3">🚀 Lancer un run aujourd'hui</h2>
+      <form onSubmit={onSubmit} className="space-y-3">
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            Thème / cible du jour <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            value={theme}
+            onChange={(e) => setTheme(e.target.value)}
+            placeholder='ex: "transporteurs 200+ salariés PACA" ou "courtage assurance Bordeaux"'
+            className="w-full px-3 py-2 text-sm rounded-md border border-gray-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+            required
+          />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Géo (optionnel)</label>
+            <input
+              type="text"
+              value={geo}
+              onChange={(e) => setGeo(e.target.value)}
+              placeholder="ex: PACA, IDF, France, GCC"
+              className="w-full px-3 py-2 text-sm rounded-md border border-gray-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Exclusions (optionnel)</label>
+            <input
+              type="text"
+              value={exclusions}
+              onChange={(e) => setExclusions(e.target.value)}
+              placeholder="ex: Keolis, Transdev (en plus de la blacklist standard)"
+              className="w-full px-3 py-2 text-sm rounded-md border border-gray-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+            />
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            type="submit"
+            disabled={launch.isPending || !theme.trim()}
+            className="px-4 py-2 text-sm font-medium rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+          >
+            {launch.isPending ? "Lancement en cours..." : "🚀 Lancer aujourd'hui"}
+          </button>
+          {feedback && feedback.ok && (
+            <div className="text-sm text-green-700 bg-green-50 px-3 py-1.5 rounded-md">
+              ✅ Pipeline lancé (run {feedback.runId.slice(0, 8)}…). Les résultats apparaîtront dans l'historique dans ~5-15 min.
+            </div>
+          )}
+          {feedback && !feedback.ok && (
+            <div className="text-sm text-red-700 bg-red-50 px-3 py-1.5 rounded-md">
+              ❌ {feedback.msg}
+            </div>
+          )}
+        </div>
+      </form>
+      <div className="mt-3 text-[11px] text-gray-400 leading-relaxed">
+        Pipeline : Chercheur (Sonnet + BeReach ~150 cr) → Qualifieur (Sonnet + enrich ~100 cr + FullEnrich ~15 cr) → Challenger (Sonnet, 0 tool). Durée ~5-15 min. Coût Claude ~$0.60/run.
+      </div>
+    </div>
   );
 }
