@@ -219,15 +219,35 @@ module.exports = async function taskBInvitations(runId) {
       errors++;
       await log(runId, "task-b-invitations", "error", "Failed to invite " + (lead.full_name || lead.id) + ": " + err.message);
 
-      // Track failure count so we stop retrying broken leads
-      var prevFailures = (lead.metadata && lead.metadata.invitation_failures) || 0;
-      await supabase.from("leads").update({
-        metadata: Object.assign({}, lead.metadata || {}, {
-          invitation_failures: prevFailures + 1,
-          last_invitation_error: err.message.substring(0, 200),
-        }),
-        last_processed_run_id: runId,
-      }).eq("id", lead.id);
+      // If BeReach says "already sent a connection request" → the invitation IS
+      // out there, we just didn't track it. Mark the lead as invitation_sent so
+      // Task B stops re-selecting it and Task C starts checking for acceptance.
+      // This handles: (a) leads invited manually by Julien outside the pipeline,
+      // (b) duplicate leads re-collected under a different URL variant.
+      var alreadySent = err.message && /already sent a connection request/i.test(err.message);
+      if (alreadySent) {
+        await supabase.from("leads").update({
+          status: "invitation_sent",
+          invitation_sent_at: new Date().toISOString(),
+          metadata: Object.assign({}, lead.metadata || {}, {
+            invitation_source: "bereach_already_sent_detected",
+            last_invitation_error: err.message.substring(0, 200),
+          }),
+          last_processed_run_id: runId,
+        }).eq("id", lead.id);
+        await log(runId, "task-b-invitations", "info",
+          "Marked " + (lead.full_name || lead.id) + " as invitation_sent (BeReach confirmed already sent)");
+      } else {
+        // Track failure count so we stop retrying broken leads
+        var prevFailures = (lead.metadata && lead.metadata.invitation_failures) || 0;
+        await supabase.from("leads").update({
+          metadata: Object.assign({}, lead.metadata || {}, {
+            invitation_failures: prevFailures + 1,
+            last_invitation_error: err.message.substring(0, 200),
+          }),
+          last_processed_run_id: runId,
+        }).eq("id", lead.id);
+      }
 
       // Sleep after error to avoid hammering BeReach (5-10s)
       await sleep(5000 + Math.floor(Math.random() * 5000));
