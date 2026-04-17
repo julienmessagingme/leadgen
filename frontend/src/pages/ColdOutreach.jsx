@@ -102,55 +102,68 @@ export default function ColdOutreach() {
 
           <div className="flex gap-4">
             <div className="flex-1 min-w-0">
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-1">
-                  <div className="bg-white rounded-lg shadow">
-                    <div className="px-4 py-3 border-b border-gray-200">
-                      <h2 className="font-semibold text-gray-800">Historique des runs</h2>
-                    </div>
-                    {runsLoading && <div className="p-4 text-gray-500 text-sm">Chargement...</div>}
-                    {runsError && <div className="p-4 text-red-600 text-sm">Erreur : {runsError.message}</div>}
+              {selectedRunId ? (
+                <RunDetail runId={selectedRunId} campaignedUrls={campaignedUrls} />
+              ) : (
+                <div className="bg-white rounded-lg shadow p-8 text-center text-gray-500">
+                  Sélectionne un run à droite pour voir les leads proposés.
+                </div>
+              )}
+            </div>
+
+            <div className="w-[420px] flex-shrink-0">
+              <div className="sticky top-4 h-[calc(100vh-6rem)] flex flex-col gap-3">
+                {/* Historique des runs — hauteur fixe, ~3 runs visibles + scroll */}
+                <div className="bg-white rounded-lg shadow flex flex-col flex-shrink-0 h-[260px]">
+                  <div className="px-3 py-2 border-b border-gray-200 flex-shrink-0">
+                    <h2 className="text-sm font-semibold text-gray-800">Historique des runs</h2>
+                  </div>
+                  <div className="flex-1 overflow-y-auto">
+                    {runsLoading && <div className="p-3 text-gray-500 text-xs">Chargement…</div>}
+                    {runsError && <div className="p-3 text-red-600 text-xs">Erreur : {runsError.message}</div>}
                     {!runsLoading && runs.length === 0 && (
-                      <div className="p-4 text-gray-500 text-sm">Aucun run pour l'instant. Le prochain est prévu demain 11h00 Paris.</div>
+                      <div className="p-3 text-gray-500 text-xs">Aucun run. Prochain prévu demain 11h Paris.</div>
                     )}
                     <ul className="divide-y divide-gray-100">
                       {runs.map((run) => {
                         const isRunning = run.status === "running";
                         const isFailed = run.status === "failed";
-                        const phaseLabel = { researcher: "1/4 Researcher", qualifier: "2/4 Qualifier", challenger: "3/4 Challenger", persist: "4/4 Persist" }[run.phase] || run.phase;
+                        const phaseLabel = { researcher: "1/4", qualifier: "2/4", challenger: "3/4", persist: "4/4" }[run.phase] || run.phase;
                         const theme = run.brief?.theme || run.metadata?.brief?.theme || run.metadata?.run_notes || "—";
                         return (
                           <li key={run.id}>
                             <button
                               onClick={() => setSelectedRunId(run.id)}
-                              className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors ${
+                              className={`w-full text-left px-3 py-2 hover:bg-gray-50 transition-colors ${
                                 selectedRunId === run.id ? "bg-indigo-50 border-l-4 border-indigo-500" : ""
                               } ${isRunning ? "bg-yellow-50/50" : ""} ${isFailed ? "bg-red-50/30" : ""}`}
                             >
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="font-medium text-gray-800">{run.run_date}</span>
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="text-xs font-medium text-gray-800">{run.run_date}</span>
                                 {isRunning && (
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-200 text-yellow-900 font-semibold animate-pulse">
+                                  <span className="text-[9px] px-1 py-0.5 rounded bg-yellow-200 text-yellow-900 font-semibold animate-pulse">
                                     ⏳ {phaseLabel}
                                   </span>
                                 )}
                                 {isFailed && (
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-semibold">
+                                  <span className="text-[9px] px-1 py-0.5 rounded bg-red-100 text-red-700 font-semibold">
                                     ✗ Échoué
                                   </span>
                                 )}
                                 {!isRunning && !isFailed && (
-                                  <span className="text-xs text-gray-500">{run.agent_name}</span>
+                                  <span className="text-[10px] text-gray-500">
+                                    {run.leads_count}L · {run.credits_used}cr
+                                  </span>
                                 )}
                               </div>
-                              <div className="text-xs text-gray-600 mt-1 truncate italic">« {theme} »</div>
-                              <div className="text-xs text-gray-500 mt-0.5">
-                                {isRunning
-                                  ? "Démarré " + new Date(run.created_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
-                                  : run.leads_count + " leads · " + run.credits_used + " crédits"}
-                              </div>
+                              <div className="text-[10px] text-gray-600 mt-0.5 truncate italic">« {theme} »</div>
+                              {isRunning && (
+                                <div className="text-[9px] text-gray-500 mt-0.5">
+                                  Démarré {new Date(run.created_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                                </div>
+                              )}
                               {isFailed && run.error_message && (
-                                <div className="text-[10px] text-red-600 mt-0.5 truncate">{run.error_message}</div>
+                                <div className="text-[9px] text-red-600 mt-0.5 truncate">{run.error_message}</div>
                               )}
                             </button>
                           </li>
@@ -160,21 +173,10 @@ export default function ColdOutreach() {
                   </div>
                 </div>
 
-                <div className="lg:col-span-2">
-                  {selectedRunId ? (
-                    <RunDetail runId={selectedRunId} campaignedUrls={campaignedUrls} />
-                  ) : (
-                    <div className="bg-white rounded-lg shadow p-8 text-center text-gray-500">
-                      Sélectionne un run à gauche pour voir les leads proposés.
-                    </div>
-                  )}
+                {/* 3 Campagnes — prennent le reste de la hauteur */}
+                <div className="flex-1 min-h-0">
+                  <Campaigns />
                 </div>
-              </div>
-            </div>
-
-            <div className="w-[420px] flex-shrink-0">
-              <div className="sticky top-4 h-[calc(100vh-6rem)]">
-                <Campaigns />
               </div>
             </div>
           </div>

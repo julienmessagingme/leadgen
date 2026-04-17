@@ -74,6 +74,7 @@ Si le brief mentionne une région / orientation géographique, DÉCOMPOSE en vil
 - **IDF / Ile-de-France** → Paris (couvre déjà l'IDF sur LinkedIn)
 - **Grand Est** → Strasbourg, Nancy, Metz, Reims, Mulhouse
 - **Sud-Ouest / Nouvelle-Aquitaine** → Bordeaux, Toulouse, Pau, Bayonne, La Rochelle, Biarritz, Anglet
+- **Sud-Est** → Marseille, Nice, Aix-en-Provence, Toulon, Cannes, Lyon, Grenoble, Monaco, Ajaccio, Bastia
 - **Occitanie** → Toulouse, Montpellier, Nîmes, Perpignan
 - **Auvergne-Rhône-Alpes / AURA** → Lyon, Grenoble, Clermont-Ferrand, Saint-Étienne, Annecy
 - **Bretagne** → Rennes, Brest, Nantes, Vannes, Quimper
@@ -83,6 +84,7 @@ Si le brief mentionne une région / orientation géographique, DÉCOMPOSE en vil
 - **Centre-Val de Loire** → Orléans, Tours
 Si le brief dit "sud" → toutes les villes Occitanie + PACA + Nouvelle-Aquitaine.
 Si le brief dit "ouest" → Bretagne + Pays de la Loire + Normandie + Nouvelle-Aquitaine.
+Si le brief dit "est" → Grand Est + AURA.
 Tu ne passes JAMAIS une région en location — toujours une VILLE.
 
 ### Décomposition sectorielle
