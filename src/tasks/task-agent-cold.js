@@ -18,6 +18,7 @@ const { RESEARCHER_TOOLS, QUALIFIER_TOOLS, CHALLENGER_TOOLS, getToolDefinitions,
 const { RESEARCHER_PROMPT, QUALIFIER_PROMPT, CHALLENGER_PROMPT } = require("../lib/agent-prompts");
 const { canonicalizeLinkedInUrl } = require("../lib/url-utils");
 const { log } = require("../lib/logger");
+const { enrichAllCandidates } = require("../lib/agent-enrichment");
 
 /**
  * Load known leads from Supabase for dedup (same logic as dump-known-leads.sh
@@ -43,6 +44,32 @@ async function loadKnownLeads() {
     offset += pageSize;
   }
   return { urls, emails, count: urls.size };
+}
+
+/**
+ * Build a fallback candidate entry for leads that couldn't be processed by
+ * the Qualifier (silent drops, batch failures). They enter the pipeline as
+ * linkedin_only + weak_signal, ready for Task B (LinkedIn invitation).
+ */
+function fallbackCandidate(c, reason) {
+  return {
+    full_name: c.full_name,
+    headline: c.headline,
+    company: (c.enrichment && c.enrichment.company && c.enrichment.company.name) || c.company,
+    company_sector: c.enrichment && c.enrichment.company && c.enrichment.company.sector,
+    company_size: c.enrichment && c.enrichment.company && c.enrichment.company.size,
+    company_location: (c.enrichment && c.enrichment.company && c.enrichment.company.location) || c.location,
+    linkedin_url: c.linkedin_url,
+    linkedin_url_canonical: c.linkedin_url_canonical,
+    email: (c.enrichment && c.enrichment.email) || null,
+    linkedin_only: !(c.enrichment && c.enrichment.email),
+    weak_signal: true,
+    icp_fit_reasoning: "Recovered from Qualifier (" + reason + "). Rôle + secteur plausibles à la lecture.",
+    angle_of_approach: "Fallback : angle à affiner manuellement ou invitation LinkedIn sans note (Task B).",
+    signal_found: null,
+    enrichment: c.enrichment || null,
+    _recovered: true,
+  };
 }
 
 /**
@@ -310,6 +337,17 @@ async function _runAgentColdPipeline(brief, runId, dbRunId, startTime) {
     input_tokens: researcherResult.inputTokens,
     output_tokens: researcherResult.outputTokens,
     notes: researcherOutput ? researcherOutput.notes : null,
+    // Checkpoint: persist the full deduped list so a Phase 2+ crash doesn't
+    // lose the Researcher's work. Compact shape to stay JSONB-friendly.
+    output: dedupedCandidates.map((c) => ({
+      full_name: c.full_name,
+      headline: c.headline,
+      company: c.company,
+      linkedin_url: c.linkedin_url,
+      linkedin_url_canonical: c.linkedin_url_canonical,
+      location: c.location,
+      selection_reason: c.selection_reason,
+    })),
   };
 
   await log(runId, "agent-cold", "info",
@@ -322,100 +360,133 @@ async function _runAgentColdPipeline(brief, runId, dbRunId, startTime) {
     return { run_id: dbRunId, leads_inserted: 0, phases };
   }
 
+  // Phase 1 checkpoint persisted before we touch BeReach/FullEnrich
   await updateRun({ phase: "qualifier", metadata: { brief, phases } });
 
   // ═══════════════════════════════════════════════════════════════
-  // PHASE 2 — QUALIFIER (batched)
+  // PHASE 2a — ENRICHMENT (deterministic, Node async)
   // ═══════════════════════════════════════════════════════════════
   //
-  // With >20 candidates, a single Qualifier call sends ~15-30K input tokens
-  // to Gemini Flash and asks it to enrich + output N qualified_leads objects.
-  // This reliably hangs or truncates above ~40 inputs (observed in run #9:
-  // froze with 46 candidates, no log for 10+ min). Fix: batch into chunks
-  // of BATCH_SIZE and merge results.
+  // Every candidate gets visitProfile + visitCompany + fullenrich email in
+  // parallel (concurrency=3 to respect BeReach rate limits). Predictable
+  // cost (3 credits BeReach + 1 FullEnrich per candidate). Can't hang —
+  // if a specific call times out or 429s, only that field is null.
+  const enrichStartMs = Date.now();
+  let enrichResult;
+  try {
+    enrichResult = await enrichAllCandidates(dedupedCandidates, { runId, concurrency: 3 });
+  } catch (err) {
+    await log(runId, "agent-cold", "error", "Enrichment phase threw: " + err.message);
+    throw err;
+  }
+  const enrichedCandidates = enrichResult.enriched;
+  phases.enrichment = {
+    ...enrichResult.stats,
+    // Checkpoint: persist enriched candidates so a Qualifier crash doesn't
+    // waste the BeReach/FullEnrich credits we just burnt.
+    output: enrichedCandidates.map((c) => ({
+      full_name: c.full_name,
+      linkedin_url: c.linkedin_url,
+      email: c.enrichment && c.enrichment.email,
+      email_status: c.enrichment && c.enrichment.email_status,
+      has_profile: !!(c.enrichment && c.enrichment.profile),
+      has_company: !!(c.enrichment && c.enrichment.company),
+    })),
+  };
+  await updateRun({ phase: "qualifier", metadata: { brief, phases } });
+
+  // ═══════════════════════════════════════════════════════════════
+  // PHASE 2b — QUALIFIER (pure-text agent, no tools)
+  // ═══════════════════════════════════════════════════════════════
+  //
+  // The Qualifier now receives PRE-ENRICHED data and has NO tools. It just
+  // applies the 5 checks and outputs qualified/rejected arrays. No hang
+  // possible (single LLM call, no tool loops). Batched to keep input size
+  // reasonable (each batch = ~15 enriched candidates ≈ 5-8K tokens).
   const BATCH_SIZE = 15;
   const batches = [];
-  for (let i = 0; i < dedupedCandidates.length; i += BATCH_SIZE) {
-    batches.push(dedupedCandidates.slice(i, i + BATCH_SIZE));
+  for (let i = 0; i < enrichedCandidates.length; i += BATCH_SIZE) {
+    batches.push(enrichedCandidates.slice(i, i + BATCH_SIZE));
   }
 
   await log(runId, "agent-cold", "info",
-    "Phase 2: QUALIFIER starting with " + dedupedCandidates.length + " candidates " +
-    "split into " + batches.length + " batch(es) of up to " + BATCH_SIZE + " (Gemini Flash)");
+    "Phase 2b: QUALIFIER starting with " + enrichedCandidates.length + " pre-enriched candidates " +
+    "in " + batches.length + " batch(es) of up to " + BATCH_SIZE + " (Gemini Flash, no tools)");
 
   const qualifiedLeads = [];
   const rejectedArray = [];
-  let totalToolCalls = 0;
-  let totalIterations = 0;
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
-  let lastFinalText = "";
+  let totalIterations = 0;
 
   for (let b = 0; b < batches.length; b++) {
     const batch = batches[b];
+    // Compact the batch for the prompt — only fields the Qualifier needs
+    const compactBatch = batch.map((c, idx) => ({
+      idx: (b * BATCH_SIZE) + idx,
+      full_name: c.full_name,
+      headline: c.headline,
+      company: (c.enrichment && c.enrichment.company && c.enrichment.company.name) || c.company,
+      company_sector: c.enrichment && c.enrichment.company && c.enrichment.company.sector,
+      company_size: c.enrichment && c.enrichment.company && c.enrichment.company.size,
+      company_location: c.enrichment && c.enrichment.company && c.enrichment.company.location,
+      company_description: c.enrichment && c.enrichment.company && c.enrichment.company.description,
+      profile_summary: c.enrichment && c.enrichment.profile && c.enrichment.profile.summary,
+      recent_posts: c.enrichment && c.enrichment.profile && c.enrichment.profile.recent_posts,
+      experience: c.enrichment && c.enrichment.profile && c.enrichment.profile.experience,
+      linkedin_url: c.linkedin_url,
+      location: c.location,
+      email: c.enrichment && c.enrichment.email,
+      email_status: c.enrichment && c.enrichment.email_status,
+    }));
+
     const qualifierInput = [
       "BRIEF DU JOUR : " + (brief.theme || ""),
       brief.geo ? "Géo : " + brief.geo : "",
       "",
-      "CANDIDATS BRUTS DU CHERCHEUR (LOT " + (b + 1) + "/" + batches.length + " — " + batch.length + " candidats) :",
+      "CANDIDATS PRÉ-ENRICHIS (lot " + (b + 1) + "/" + batches.length + ", " + batch.length + " candidats) :",
+      "Les données de profil, entreprise et email sont déjà là. Tu N'AS PAS D'OUTILS. Tu appliques juste les 5 checks et tu rends un JSON.",
       "",
-      JSON.stringify(batch, null, 2),
+      JSON.stringify(compactBatch, null, 2),
       "",
-      "Applique les 5 checks sur chacun. Enrichis ceux qui passent les checks 1-3 avant de dépenser des crédits FullEnrich.",
-      "Budget pour CE LOT : ~" + (batch.length * 3) + " crédits BeReach (visitProfile + visitCompany) + ~" + batch.length + " crédits FullEnrich (emails).",
       caseStudiesBlock,
       "",
-      "Quand tu construis l'angle_of_approach, cite le cas client le plus pertinent par secteur si il y en a un. Exemple : si le lead est en assurance, cite Gan Prévoyance. Si transport, cite Keolis. Si aucun cas ne matche le secteur, mentionne le concept sans citer de client.",
+      "Rends ta réponse finale au format JSON : {\"qualified_leads\": [...], \"rejected\": [...]}. Chaque candidat d'entrée DOIT apparaître EXACTEMENT UNE FOIS dans qualified_leads OU rejected. Quand tu construis l'angle_of_approach, cite le cas client le plus pertinent par secteur si il y en a un.",
     ].filter(Boolean).join("\n");
-
-    await log(runId, "agent-cold", "info",
-      "Qualifier batch " + (b + 1) + "/" + batches.length + " — " + batch.length + " candidates");
 
     let batchResult;
     try {
       batchResult = await runAgent({
         systemPrompt: QUALIFIER_PROMPT,
         userMessage: qualifierInput,
-        tools: getToolDefinitions(QUALIFIER_TOOLS),
-        toolHandlers: getToolHandlers(QUALIFIER_TOOLS),
+        tools: [], // pure text, no tools → can't hang on tool calls
+        toolHandlers: {},
         provider: "gemini",
         model: "gemini-2.5-flash",
         maxTokens: 16384,
-        maxIterations: 40,
+        maxIterations: 2, // pure-text, no loops
         runId,
         agentName: "qualifier",
       });
     } catch (err) {
-      // Batch failed (timeout, API error). Log and recover this batch's
-      // candidates as linkedin_only — don't fail the whole pipeline.
       await log(runId, "agent-cold", "error",
         "Qualifier batch " + (b + 1) + " failed: " + err.message.slice(0, 100) +
-        ". Recovering " + batch.length + " candidates as linkedin_only.");
+        ". Recovering " + batch.length + " as linkedin_only.");
       batch.forEach((c) => {
-        qualifiedLeads.push({
-          full_name: c.full_name, headline: c.headline, company: c.company,
-          linkedin_url: c.linkedin_url, linkedin_url_canonical: c.linkedin_url_canonical,
-          email: null, linkedin_only: true, weak_signal: true,
-          icp_fit_reasoning: "Recovered after Qualifier batch " + (b + 1) + " failed (" + err.message.slice(0, 60) + ").",
-          angle_of_approach: "Fallback : invitation LinkedIn sans note, angle à valider manuellement.",
-          signal_found: null, enrichment: null, _recovered: true,
-        });
+        qualifiedLeads.push(fallbackCandidate(c, "Qualifier batch " + (b + 1) + " failed (" + err.message.slice(0, 60) + ")"));
       });
       continue;
     }
 
-    lastFinalText = batchResult.finalText || lastFinalText;
-    totalToolCalls += batchResult.toolCalls.length;
-    totalIterations += batchResult.iterations;
     totalInputTokens += batchResult.inputTokens || 0;
     totalOutputTokens += batchResult.outputTokens || 0;
+    totalIterations += batchResult.iterations;
 
     const batchOutput = extractJson(batchResult.finalText);
     const batchQualified = (batchOutput && batchOutput.qualified_leads) || [];
     const batchRejected = (batchOutput && batchOutput.rejected) || [];
 
-    // Exhaustivity guard PER BATCH: silently-dropped candidates get auto-
-    // recovered as linkedin_only.
+    // Exhaustivity guard per batch
     const accountedInBatch = new Set();
     [...batchQualified, ...batchRejected].forEach((l) => {
       if (l.linkedin_url) accountedInBatch.add(canonicalizeLinkedInUrl(l.linkedin_url));
@@ -426,21 +497,7 @@ async function _runAgentColdPipeline(brief, runId, dbRunId, startTime) {
       const byName = c.full_name && accountedInBatch.has("name:" + String(c.full_name).toLowerCase().trim());
       return !byUrl && !byName;
     });
-    if (batchDropped.length > 0) {
-      await log(runId, "agent-cold", "warn",
-        "Qualifier batch " + (b + 1) + " silently dropped " + batchDropped.length + "/" + batch.length +
-        ". Recovering as linkedin_only.");
-      batchDropped.forEach((c) => {
-        batchQualified.push({
-          full_name: c.full_name, headline: c.headline, company: c.company,
-          linkedin_url: c.linkedin_url, linkedin_url_canonical: c.linkedin_url_canonical,
-          email: null, linkedin_only: true, weak_signal: true,
-          icp_fit_reasoning: "Recovered from Qualifier (silent drop). Rôle + secteur plausibles à la lecture du headline.",
-          angle_of_approach: "Fallback : invitation LinkedIn sans note, angle à valider manuellement.",
-          signal_found: null, enrichment: null, _recovered: true,
-        });
-      });
-    }
+    batchDropped.forEach((c) => batchQualified.push(fallbackCandidate(c, "silent drop by Qualifier")));
 
     qualifiedLeads.push(...batchQualified);
     rejectedArray.push(...batchRejected);
@@ -450,29 +507,25 @@ async function _runAgentColdPipeline(brief, runId, dbRunId, startTime) {
       batchRejected.length + " rejected, " + batchDropped.length + " recovered.");
   }
 
-  const qualifierResult = {
-    finalText: lastFinalText,
-    toolCalls: new Array(totalToolCalls),
-    iterations: totalIterations,
-    inputTokens: totalInputTokens,
-    outputTokens: totalOutputTokens,
-  };
   const qualifierOutput = { qualified_leads: qualifiedLeads, rejected: rejectedArray };
 
   phases.qualifier = {
     qualified_count: qualifiedLeads.length,
     rejected_count: rejectedArray.length,
-    rejected: rejectedArray.slice(0, 50), // persist reasons for diagnostic
-    tool_calls: qualifierResult.toolCalls.length,
-    iterations: qualifierResult.iterations,
-    input_tokens: qualifierResult.inputTokens,
-    output_tokens: qualifierResult.outputTokens,
+    rejected: rejectedArray.slice(0, 50),
+    iterations: totalIterations,
+    input_tokens: totalInputTokens,
+    output_tokens: totalOutputTokens,
+    // Checkpoint
+    output: qualifiedLeads.map((l) => ({
+      full_name: l.full_name, linkedin_url: l.linkedin_url,
+      email: l.email, linkedin_only: l.linkedin_only, weak_signal: l.weak_signal,
+    })),
   };
+  await updateRun({ phase: "challenger", metadata: { brief, phases } });
 
   await log(runId, "agent-cold", "info",
-    "Phase 2 done: " + qualifiedLeads.length + " qualified, " +
-    (qualifierOutput ? (qualifierOutput.rejected || []).length : "?") + " rejected. " +
-    qualifierResult.toolCalls.length + " tool calls.");
+    "Phase 2 done: " + qualifiedLeads.length + " qualified, " + rejectedArray.length + " rejected.");
 
   if (qualifiedLeads.length === 0) {
     await log(runId, "agent-cold", "warn", "No leads qualified — aborting pipeline");
@@ -480,10 +533,8 @@ async function _runAgentColdPipeline(brief, runId, dbRunId, startTime) {
     return { run_id: dbRunId, leads_inserted: 0, phases };
   }
 
-  await updateRun({ phase: "challenger", metadata: { brief, phases } });
-
   // ═══════════════════════════════════════════════════════════════
-  // PHASE 3 — CHALLENGER
+  // PHASE 3 — CHALLENGER (permissive mode)
   // ═══════════════════════════════════════════════════════════════
   const challengerInput = [
     "BRIEF DU JOUR : " + (brief.theme || ""),
@@ -492,10 +543,8 @@ async function _runAgentColdPipeline(brief, runId, dbRunId, startTime) {
     "",
     JSON.stringify(qualifiedLeads, null, 2),
     "",
-    "Challenge chaque lead. Sois dur. Julien préfère 6 leads A-tier que 10 leads B.",
+    "Julien préfère trop de leads à pas assez. Ajuste la confidence (low/medium/high), ne rejette que les leads CLAIREMENT hors ICP.",
     caseStudiesBlock,
-    "",
-    "Quand tu évalues l'angle d'approche, vérifie qu'il cite un cas client de référence pertinent (si un matche le secteur). Un angle sans preuve sectorielle est plus faible qu'un angle avec.",
   ].join("\n");
 
   // Challenger uses Claude Sonnet — this is the ONE phase where reasoning
@@ -531,7 +580,10 @@ async function _runAgentColdPipeline(brief, runId, dbRunId, startTime) {
     input_tokens: challengerResult.inputTokens,
     output_tokens: challengerResult.outputTokens,
     summary: challengerOutput ? challengerOutput.summary : null,
+    // Checkpoint: the names kept — allows resuming Phase 4 persist from the qualifier checkpoint
+    kept_names: Array.from(validatedNames),
   };
+  await updateRun({ phase: "persist", metadata: { brief, phases } });
 
   await log(runId, "agent-cold", "info",
     "Phase 3 done: " + finalLeads.length + " kept, " + (qualifiedLeads.length - finalLeads.length) + " dropped.");
@@ -542,9 +594,12 @@ async function _runAgentColdPipeline(brief, runId, dbRunId, startTime) {
   await log(runId, "agent-cold", "info", "Phase 4: PERSIST — inserting " + finalLeads.length + " leads");
   await updateRun({ phase: "persist", metadata: { brief, phases } });
 
+  // Credit estimate: Researcher's BeReach tool calls (~2 credits each) +
+  // deterministic enrichment (2 BeReach + 1 FullEnrich per candidate enriched)
+  const enrichedCount = (phases.enrichment && phases.enrichment.total) || 0;
   const totalCreditsEstimate =
     (phases.researcher.tool_calls || 0) * 2 +
-    (phases.qualifier.tool_calls || 0) * 2;
+    enrichedCount * 3;
 
   // Re-use the run row we created at the start of the pipeline
   const runRow = { id: dbRunId };
