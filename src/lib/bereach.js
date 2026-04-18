@@ -37,24 +37,27 @@ async function bereach(endpoint, body = {}) {
 
   if (res.status === 429) {
     var errBody = await res.json().catch(() => ({}));
-    // If it's a per-minute rate limit (not daily exhausted), retry after delay
     var daily = errBody.error && errBody.error.daily;
     if (daily && daily.current >= daily.limit) {
       throw new Error("BeReach daily limit exhausted (" + daily.current + "/" + daily.limit + ")");
     }
-    var wait = (errBody.error && errBody.error.retryAfter) || 5;
-    await new Promise(function(r) { setTimeout(r, wait * 1000); });
-    // Retry once with original request body
-    var retry = await fetch(BEREACH_BASE + endpoint, {
-      method: "POST",
-      headers: { Authorization: "Bearer " + apiKey, "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (!retry.ok) {
-      var retryText = await retry.text();
-      throw new Error("BeReach " + endpoint + " failed after retry (" + retry.status + "): " + retryText);
+    // Burst rate limit — retry with exponential backoff (2s, 4s, 8s, up to 3 retries)
+    var baseWait = Math.max((errBody.error && errBody.error.retryAfter) || 2, 2);
+    for (var attempt = 1; attempt <= 3; attempt++) {
+      await new Promise(function(r) { setTimeout(r, baseWait * Math.pow(2, attempt - 1) * 1000); });
+      var retry = await fetch(BEREACH_BASE + endpoint, {
+        method: "POST",
+        headers: { Authorization: "Bearer " + apiKey, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (retry.ok) return retry.json();
+      if (retry.status !== 429) {
+        var retryText = await retry.text();
+        throw new Error("BeReach " + endpoint + " failed after retry (" + retry.status + "): " + retryText);
+      }
+      // still 429 — loop to next attempt
     }
-    return retry.json();
+    throw new Error("BeReach " + endpoint + " still 429 after 3 retries with exp backoff (burst rate limit persistent)");
   }
 
   if (!res.ok) {
@@ -85,17 +88,25 @@ async function bereachGet(endpoint) {
 
   if (res.status === 429) {
     var errBody = await res.json().catch(() => ({}));
-    var wait = (errBody.error && errBody.error.retryAfter) || 5;
-    await new Promise(function(r) { setTimeout(r, wait * 1000); });
-    var retry = await fetch(BEREACH_BASE + endpoint, {
-      method: "GET",
-      headers: { Authorization: "Bearer " + apiKey },
-    });
-    if (!retry.ok) {
-      var retryText = await retry.text();
-      throw new Error("BeReach GET " + endpoint + " failed after retry (" + retry.status + "): " + retryText);
+    var daily = errBody.error && errBody.error.daily;
+    if (daily && daily.current >= daily.limit) {
+      throw new Error("BeReach daily limit exhausted (" + daily.current + "/" + daily.limit + ")");
     }
-    return retry.json();
+    // Burst rate limit — retry with exponential backoff (2s, 4s, 8s, up to 3 retries)
+    var baseWait = Math.max((errBody.error && errBody.error.retryAfter) || 2, 2);
+    for (var attempt = 1; attempt <= 3; attempt++) {
+      await new Promise(function(r) { setTimeout(r, baseWait * Math.pow(2, attempt - 1) * 1000); });
+      var retry = await fetch(BEREACH_BASE + endpoint, {
+        method: "GET",
+        headers: { Authorization: "Bearer " + apiKey },
+      });
+      if (retry.ok) return retry.json();
+      if (retry.status !== 429) {
+        var retryText = await retry.text();
+        throw new Error("BeReach GET " + endpoint + " failed after retry (" + retry.status + "): " + retryText);
+      }
+    }
+    throw new Error("BeReach GET " + endpoint + " still 429 after 3 retries with exp backoff");
   }
 
   if (!res.ok) {
