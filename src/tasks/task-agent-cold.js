@@ -358,8 +358,48 @@ async function _runAgentColdPipeline(brief, runId, dbRunId, startTime) {
 
   const qualifierOutput = extractJson(qualifierResult.finalText);
   const qualifiedLeads = (qualifierOutput && qualifierOutput.qualified_leads) || [];
-
   const rejectedArray = (qualifierOutput && qualifierOutput.rejected) || [];
+
+  // Exhaustivity guard: if the Qualifier silently dropped candidates (Gemini
+  // Flash is lazy and sometimes ignores inputs without accounting for them),
+  // recover them as linkedin_only/weak_signal qualified leads. Julien's rule:
+  // "trop de leads à pas assez".
+  const accountedUrls = new Set();
+  [...qualifiedLeads, ...rejectedArray].forEach((l) => {
+    if (l.linkedin_url) accountedUrls.add(canonicalizeLinkedInUrl(l.linkedin_url));
+    if (l.full_name) accountedUrls.add("name:" + String(l.full_name).toLowerCase().trim());
+  });
+  const silentlyDropped = dedupedCandidates.filter((c) => {
+    const byUrl = accountedUrls.has(canonicalizeLinkedInUrl(c.linkedin_url));
+    const byName = c.full_name && accountedUrls.has("name:" + String(c.full_name).toLowerCase().trim());
+    return !byUrl && !byName;
+  });
+  if (silentlyDropped.length > 0) {
+    await log(runId, "agent-cold", "warn",
+      "Qualifier silently dropped " + silentlyDropped.length + "/" + dedupedCandidates.length +
+      " candidates. Recovering them as linkedin_only + weak_signal qualified.");
+    silentlyDropped.forEach((c) => {
+      qualifiedLeads.push({
+        full_name: c.full_name,
+        headline: c.headline,
+        company: c.company,
+        company_sector: null,
+        company_size: null,
+        company_location: c.location,
+        linkedin_url: c.linkedin_url,
+        linkedin_url_canonical: c.linkedin_url_canonical,
+        email: null,
+        linkedin_only: true,
+        weak_signal: true,
+        icp_fit_reasoning: "Recovered from Qualifier (silent drop). Rôle + secteur plausibles à la lecture du headline.",
+        angle_of_approach: "Fallback : invitation LinkedIn sans note, angle à valider manuellement.",
+        signal_found: null,
+        enrichment: null,
+        _recovered: true,
+      });
+    });
+  }
+
   phases.qualifier = {
     qualified_count: qualifiedLeads.length,
     rejected_count: rejectedArray.length,
