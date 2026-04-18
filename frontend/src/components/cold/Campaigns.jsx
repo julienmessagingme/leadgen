@@ -131,7 +131,7 @@ function LeadPill({ item, onRemove }) {
         </div>
         <button
           onClick={onRemove}
-          className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 text-xs leading-none"
+          className="text-gray-400 hover:text-red-600 hover:bg-red-50 rounded w-5 h-5 flex items-center justify-center flex-shrink-0 text-sm leading-none transition-colors"
           title="Retirer de la campagne"
         >
           ×
