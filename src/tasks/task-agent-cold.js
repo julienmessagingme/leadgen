@@ -325,80 +325,139 @@ async function _runAgentColdPipeline(brief, runId, dbRunId, startTime) {
   await updateRun({ phase: "qualifier", metadata: { brief, phases } });
 
   // ═══════════════════════════════════════════════════════════════
-  // PHASE 2 — QUALIFIER
+  // PHASE 2 — QUALIFIER (batched)
   // ═══════════════════════════════════════════════════════════════
-  const qualifierInput = [
-    "BRIEF DU JOUR : " + (brief.theme || ""),
-    brief.geo ? "Géo : " + brief.geo : "",
-    "",
-    "CANDIDATS BRUTS DU CHERCHEUR (" + dedupedCandidates.length + ") :",
-    "",
-    JSON.stringify(dedupedCandidates, null, 2),
-    "",
-    "Applique les 5 checks sur chacun. Enrichis ceux qui passent les checks 1-3 avant de dépenser des crédits FullEnrich.",
-    "Budget : ~100 crédits BeReach (visitProfile + visitCompany) + ~15 crédits FullEnrich (emails).",
-    caseStudiesBlock,
-    "",
-    "Quand tu construis l'angle_of_approach, cite le cas client le plus pertinent par secteur si il y en a un. Exemple : si le lead est en assurance, cite Gan Prévoyance. Si transport, cite Keolis. Si aucun cas ne matche le secteur, mentionne le concept sans citer de client.",
-  ].filter(Boolean).join("\n");
-
-  await log(runId, "agent-cold", "info", "Phase 2: QUALIFIER starting with " + dedupedCandidates.length + " candidates (Gemini Flash)");
-  const qualifierResult = await runAgent({
-    systemPrompt: QUALIFIER_PROMPT,
-    userMessage: qualifierInput,
-    tools: getToolDefinitions(QUALIFIER_TOOLS),
-    toolHandlers: getToolHandlers(QUALIFIER_TOOLS),
-    provider: "gemini",
-    model: "gemini-2.5-flash",
-    maxTokens: 16384,
-    maxIterations: 60,
-    runId,
-    agentName: "qualifier",
-  });
-
-  const qualifierOutput = extractJson(qualifierResult.finalText);
-  const qualifiedLeads = (qualifierOutput && qualifierOutput.qualified_leads) || [];
-  const rejectedArray = (qualifierOutput && qualifierOutput.rejected) || [];
-
-  // Exhaustivity guard: if the Qualifier silently dropped candidates (Gemini
-  // Flash is lazy and sometimes ignores inputs without accounting for them),
-  // recover them as linkedin_only/weak_signal qualified leads. Julien's rule:
-  // "trop de leads à pas assez".
-  const accountedUrls = new Set();
-  [...qualifiedLeads, ...rejectedArray].forEach((l) => {
-    if (l.linkedin_url) accountedUrls.add(canonicalizeLinkedInUrl(l.linkedin_url));
-    if (l.full_name) accountedUrls.add("name:" + String(l.full_name).toLowerCase().trim());
-  });
-  const silentlyDropped = dedupedCandidates.filter((c) => {
-    const byUrl = accountedUrls.has(canonicalizeLinkedInUrl(c.linkedin_url));
-    const byName = c.full_name && accountedUrls.has("name:" + String(c.full_name).toLowerCase().trim());
-    return !byUrl && !byName;
-  });
-  if (silentlyDropped.length > 0) {
-    await log(runId, "agent-cold", "warn",
-      "Qualifier silently dropped " + silentlyDropped.length + "/" + dedupedCandidates.length +
-      " candidates. Recovering them as linkedin_only + weak_signal qualified.");
-    silentlyDropped.forEach((c) => {
-      qualifiedLeads.push({
-        full_name: c.full_name,
-        headline: c.headline,
-        company: c.company,
-        company_sector: null,
-        company_size: null,
-        company_location: c.location,
-        linkedin_url: c.linkedin_url,
-        linkedin_url_canonical: c.linkedin_url_canonical,
-        email: null,
-        linkedin_only: true,
-        weak_signal: true,
-        icp_fit_reasoning: "Recovered from Qualifier (silent drop). Rôle + secteur plausibles à la lecture du headline.",
-        angle_of_approach: "Fallback : invitation LinkedIn sans note, angle à valider manuellement.",
-        signal_found: null,
-        enrichment: null,
-        _recovered: true,
-      });
-    });
+  //
+  // With >20 candidates, a single Qualifier call sends ~15-30K input tokens
+  // to Gemini Flash and asks it to enrich + output N qualified_leads objects.
+  // This reliably hangs or truncates above ~40 inputs (observed in run #9:
+  // froze with 46 candidates, no log for 10+ min). Fix: batch into chunks
+  // of BATCH_SIZE and merge results.
+  const BATCH_SIZE = 15;
+  const batches = [];
+  for (let i = 0; i < dedupedCandidates.length; i += BATCH_SIZE) {
+    batches.push(dedupedCandidates.slice(i, i + BATCH_SIZE));
   }
+
+  await log(runId, "agent-cold", "info",
+    "Phase 2: QUALIFIER starting with " + dedupedCandidates.length + " candidates " +
+    "split into " + batches.length + " batch(es) of up to " + BATCH_SIZE + " (Gemini Flash)");
+
+  const qualifiedLeads = [];
+  const rejectedArray = [];
+  let totalToolCalls = 0;
+  let totalIterations = 0;
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+  let lastFinalText = "";
+
+  for (let b = 0; b < batches.length; b++) {
+    const batch = batches[b];
+    const qualifierInput = [
+      "BRIEF DU JOUR : " + (brief.theme || ""),
+      brief.geo ? "Géo : " + brief.geo : "",
+      "",
+      "CANDIDATS BRUTS DU CHERCHEUR (LOT " + (b + 1) + "/" + batches.length + " — " + batch.length + " candidats) :",
+      "",
+      JSON.stringify(batch, null, 2),
+      "",
+      "Applique les 5 checks sur chacun. Enrichis ceux qui passent les checks 1-3 avant de dépenser des crédits FullEnrich.",
+      "Budget pour CE LOT : ~" + (batch.length * 3) + " crédits BeReach (visitProfile + visitCompany) + ~" + batch.length + " crédits FullEnrich (emails).",
+      caseStudiesBlock,
+      "",
+      "Quand tu construis l'angle_of_approach, cite le cas client le plus pertinent par secteur si il y en a un. Exemple : si le lead est en assurance, cite Gan Prévoyance. Si transport, cite Keolis. Si aucun cas ne matche le secteur, mentionne le concept sans citer de client.",
+    ].filter(Boolean).join("\n");
+
+    await log(runId, "agent-cold", "info",
+      "Qualifier batch " + (b + 1) + "/" + batches.length + " — " + batch.length + " candidates");
+
+    let batchResult;
+    try {
+      batchResult = await runAgent({
+        systemPrompt: QUALIFIER_PROMPT,
+        userMessage: qualifierInput,
+        tools: getToolDefinitions(QUALIFIER_TOOLS),
+        toolHandlers: getToolHandlers(QUALIFIER_TOOLS),
+        provider: "gemini",
+        model: "gemini-2.5-flash",
+        maxTokens: 16384,
+        maxIterations: 40,
+        runId,
+        agentName: "qualifier",
+      });
+    } catch (err) {
+      // Batch failed (timeout, API error). Log and recover this batch's
+      // candidates as linkedin_only — don't fail the whole pipeline.
+      await log(runId, "agent-cold", "error",
+        "Qualifier batch " + (b + 1) + " failed: " + err.message.slice(0, 100) +
+        ". Recovering " + batch.length + " candidates as linkedin_only.");
+      batch.forEach((c) => {
+        qualifiedLeads.push({
+          full_name: c.full_name, headline: c.headline, company: c.company,
+          linkedin_url: c.linkedin_url, linkedin_url_canonical: c.linkedin_url_canonical,
+          email: null, linkedin_only: true, weak_signal: true,
+          icp_fit_reasoning: "Recovered after Qualifier batch " + (b + 1) + " failed (" + err.message.slice(0, 60) + ").",
+          angle_of_approach: "Fallback : invitation LinkedIn sans note, angle à valider manuellement.",
+          signal_found: null, enrichment: null, _recovered: true,
+        });
+      });
+      continue;
+    }
+
+    lastFinalText = batchResult.finalText || lastFinalText;
+    totalToolCalls += batchResult.toolCalls.length;
+    totalIterations += batchResult.iterations;
+    totalInputTokens += batchResult.inputTokens || 0;
+    totalOutputTokens += batchResult.outputTokens || 0;
+
+    const batchOutput = extractJson(batchResult.finalText);
+    const batchQualified = (batchOutput && batchOutput.qualified_leads) || [];
+    const batchRejected = (batchOutput && batchOutput.rejected) || [];
+
+    // Exhaustivity guard PER BATCH: silently-dropped candidates get auto-
+    // recovered as linkedin_only.
+    const accountedInBatch = new Set();
+    [...batchQualified, ...batchRejected].forEach((l) => {
+      if (l.linkedin_url) accountedInBatch.add(canonicalizeLinkedInUrl(l.linkedin_url));
+      if (l.full_name) accountedInBatch.add("name:" + String(l.full_name).toLowerCase().trim());
+    });
+    const batchDropped = batch.filter((c) => {
+      const byUrl = accountedInBatch.has(canonicalizeLinkedInUrl(c.linkedin_url));
+      const byName = c.full_name && accountedInBatch.has("name:" + String(c.full_name).toLowerCase().trim());
+      return !byUrl && !byName;
+    });
+    if (batchDropped.length > 0) {
+      await log(runId, "agent-cold", "warn",
+        "Qualifier batch " + (b + 1) + " silently dropped " + batchDropped.length + "/" + batch.length +
+        ". Recovering as linkedin_only.");
+      batchDropped.forEach((c) => {
+        batchQualified.push({
+          full_name: c.full_name, headline: c.headline, company: c.company,
+          linkedin_url: c.linkedin_url, linkedin_url_canonical: c.linkedin_url_canonical,
+          email: null, linkedin_only: true, weak_signal: true,
+          icp_fit_reasoning: "Recovered from Qualifier (silent drop). Rôle + secteur plausibles à la lecture du headline.",
+          angle_of_approach: "Fallback : invitation LinkedIn sans note, angle à valider manuellement.",
+          signal_found: null, enrichment: null, _recovered: true,
+        });
+      });
+    }
+
+    qualifiedLeads.push(...batchQualified);
+    rejectedArray.push(...batchRejected);
+
+    await log(runId, "agent-cold", "info",
+      "Qualifier batch " + (b + 1) + " done: " + batchQualified.length + " qualified, " +
+      batchRejected.length + " rejected, " + batchDropped.length + " recovered.");
+  }
+
+  const qualifierResult = {
+    finalText: lastFinalText,
+    toolCalls: new Array(totalToolCalls),
+    iterations: totalIterations,
+    inputTokens: totalInputTokens,
+    outputTokens: totalOutputTokens,
+  };
+  const qualifierOutput = { qualified_leads: qualifiedLeads, rejected: rejectedArray };
 
   phases.qualifier = {
     qualified_count: qualifiedLeads.length,

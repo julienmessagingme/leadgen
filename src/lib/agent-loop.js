@@ -44,22 +44,45 @@ const RETRY_BASE_MS = 2000;
  * }>}
  */
 /**
+ * Wrap a promise with a hard timeout. Rejects with a "timeout" error if the
+ * promise takes longer than `ms` to settle. Used to prevent indefinite hangs
+ * on Gemini/Anthropic API calls (observed in run #9: Qualifier froze with
+ * no log for 10+ min on a large input).
+ */
+function withTimeout(promise, ms, label) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => {
+      const err = new Error("Timeout after " + ms + "ms" + (label ? " (" + label + ")" : ""));
+      err.code = "TIMEOUT";
+      reject(err);
+    }, ms);
+    promise.then(
+      (v) => { clearTimeout(t); resolve(v); },
+      (e) => { clearTimeout(t); reject(e); }
+    );
+  });
+}
+
+const DEFAULT_API_TIMEOUT_MS = 150_000; // 2.5 min per single API call
+
+/**
  * Retry wrapper for API calls (both Anthropic and Gemini).
- * Retries on 429, 529, 503, and network errors. Non-retriable errors bubble.
+ * Retries on 429, 529, 503, timeouts, and network errors. Non-retriable errors bubble.
  */
 async function withRetry(fn, runId, agentName) {
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
-      return await fn();
+      return await withTimeout(fn(), DEFAULT_API_TIMEOUT_MS, agentName + " API call");
     } catch (err) {
       const code = err && (err.status || err.code || (err.response && err.response.status));
       const retriable = code === 429 || code === 529 || code === 503 || code === 500 ||
-        /overloaded|rate.limit|too many|unavailable|ECONNRESET/i.test((err && err.message) || "");
+        code === "TIMEOUT" ||
+        /overloaded|rate.limit|too many|unavailable|ECONNRESET|timeout/i.test((err && err.message) || "");
       if (!retriable || attempt === MAX_RETRIES - 1) throw err;
       const delay = RETRY_BASE_MS * Math.pow(2, attempt);
       if (runId) {
         await log(runId, agentName, "warn",
-          "API error " + (code || "?") + ", retrying in " + delay + "ms (attempt " + (attempt + 1) + "/" + MAX_RETRIES + ")");
+          "API error " + (code || "?") + " (" + (err.message || "").slice(0, 80) + "), retrying in " + delay + "ms (attempt " + (attempt + 1) + "/" + MAX_RETRIES + ")");
       }
       await new Promise((r) => setTimeout(r, delay));
     }
