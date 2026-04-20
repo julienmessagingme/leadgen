@@ -102,7 +102,8 @@ function useRegenerateEmailFollowup() {
 
 export default function MessagesDraft() {
   const [tab, setTab] = useState("linkedin"); // "linkedin" | "email" | "cold_email" | "campagne" | "hubspot" | "reinvite" | "followup_email"
-  const [followupSubTab, setFollowupSubTab] = useState("case"); // "case" | "email" — only used when tab=="followup_email"
+  // followupSubTab state removed — the "Relances email" tab now shows drafts
+  // (email_followup_pending) AND candidates (picker) on the same page.
   const [selectedCampaignId, setSelectedCampaignId] = useState(null);
   const [editedMessages, setEditedMessages] = useState({});
   const [editedEmails, setEditedEmails] = useState({}); // { id: { subject, body } }
@@ -444,41 +445,16 @@ export default function MessagesDraft() {
           </button>
         </div>
 
-        {/* Sub-tabs under "Relances email" — decouple the case-picking step
-            from the actual email approval step. Each has its own data source
-            and state, so they never interfere. */}
-        {tab === "followup_email" && (
-          <div className="flex gap-1 mb-5 bg-white rounded-lg border border-gray-200 p-1 w-fit">
-            <button
-              onClick={() => setFollowupSubTab("case")}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                followupSubTab === "case" ? "bg-indigo-600 text-white" : "text-gray-600 hover:bg-gray-100"
-              }`}
-            >
-              📋 Cas à valider
-            </button>
-            <button
-              onClick={() => setFollowupSubTab("email")}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                followupSubTab === "email" ? "bg-indigo-600 text-white" : "text-gray-600 hover:bg-gray-100"
-              }`}
-            >
-              ✉ Email à valider
-              {followupLeads.length > 0 && (
-                <span className={`ml-1.5 inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-medium rounded-full ${
-                  followupSubTab === "email" ? "bg-white/20 text-white" : "bg-pink-100 text-pink-700"
-                }`}>
-                  {followupLeads.length}
-                </span>
-              )}
-            </button>
+        {/* Relances email — vue unifiée : les drafts générés apparaissent
+            en haut avec leur éditeur inline, la liste des candidats à
+            relancer en dessous. Julien a retiré le split Cas/Email car il
+            voulait tout voir d'un coup sans naviguer. */}
+        {tab === "followup_email" && followupLeads.length > 0 && (
+          <div className="mb-5">
+            <div className="text-xs font-semibold uppercase tracking-wide text-pink-700 mb-2">
+              ✉ Drafts prêts à valider ({followupLeads.length})
+            </div>
           </div>
-        )}
-
-        {/* Case picker sub-tab has its own rendering — skip the generic
-            loading/empty UI below for that state. */}
-        {tab === "followup_email" && followupSubTab === "case" && (
-          <FollowupCasePicker />
         )}
 
         {/* HubSpot signals tab */}
@@ -566,17 +542,16 @@ export default function MessagesDraft() {
           </div>
         )}
 
-        {isLoading && !(tab === "followup_email" && followupSubTab === "case") && (
+        {isLoading && tab !== "followup_email" && (
           <div className="text-center py-12 text-gray-400">Chargement...</div>
         )}
 
-        {!isLoading && leads.length === 0 && tab !== "campagne" && tab !== "hubspot" && !(tab === "followup_email" && followupSubTab === "case") && (
+        {!isLoading && leads.length === 0 && tab !== "campagne" && tab !== "hubspot" && tab !== "followup_email" && (
           <div className="text-center py-12 text-gray-400">
             {tab === "linkedin" ? "Aucun message LinkedIn en attente."
              : tab === "email" ? "Aucun email en attente. Task D n'a pas encore tourné ou tous les emails ont été traités."
              : tab === "cold_email" ? "Aucun cold email en attente."
-             : tab === "reinvite" ? "Aucune re-invitation en attente."
-             : "Aucune relance email en attente. Prépare-en dans « Cas à valider »."}
+             : "Aucune re-invitation en attente."}
           </div>
         )}
 
@@ -989,9 +964,11 @@ export default function MessagesDraft() {
           </div>
         )}
 
-        {/* Followup email drafts — only in the "email" sub-tab */}
-        {tab === "followup_email" && followupSubTab === "email" && (
-          <div className="space-y-4">
+        {/* Followup email drafts — rendered at the top of the "Relances email"
+            tab, before the FollowupCasePicker below. Generating a draft in
+            the picker makes the lead appear here on refetch (same page). */}
+        {tab === "followup_email" && followupLeads.length > 0 && (
+          <div className="space-y-4 mb-8">
             {followupLeads.map((lead) => {
               const edited = editedFollowups[lead.id];
               const subject = edited?.subject ?? lead.metadata?.draft_followup_subject ?? "";
@@ -1155,6 +1132,20 @@ export default function MessagesDraft() {
             })}
           </div>
         )}
+
+        {/* Liste des candidats à relancer — toujours visible sous les drafts.
+            Clic "Générer" → le lead passe status=email_followup_pending →
+            refetch → il remonte au-dessus dans la liste des drafts à valider. */}
+        {tab === "followup_email" && (
+          <div>
+            {followupLeads.length > 0 && (
+              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2 mt-4">
+                📋 Candidats à relancer
+              </div>
+            )}
+            <FollowupCasePicker />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1220,6 +1211,7 @@ function RegenerateWithCases({ leadId, onSuccess }) {
               type="button"
               onClick={() => toggle(cs.id)}
               disabled={pending}
+              title={cs.description || ""}
               className={`px-2 py-1 text-[11px] rounded-full border transition-colors ${
                 isOn
                   ? "bg-indigo-600 text-white border-indigo-600"

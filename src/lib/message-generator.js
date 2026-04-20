@@ -282,7 +282,11 @@ function buildLeadContext(lead) {
     }
   }
 
-  // Additional case studies (when Julien selected multiple in the UI)
+  // Additional case studies (when Julien selected multiple in the UI).
+  // Note: the case study "MessagingMe — Conseil conversationnel de stratégie"
+  // (id #20) acts as a positioning/angle directive rather than a client to
+  // cite — its description tells the LLM to adopt the agnostic consulting
+  // stance instead of name-dropping a client.
   if (meta._additional_case_studies && meta._additional_case_studies.length > 0) {
     lines.push("");
     lines.push("Cas clients supplementaires a citer si pertinents :");

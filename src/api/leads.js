@@ -682,7 +682,7 @@ router.post("/:id/regenerate-email", async (req, res) => {
         lead.metadata = Object.assign({}, lead.metadata || {}, {
           _additional_case_studies: selectedCases.map((c) =>
             c.client_name + " (" + c.sector + ") — " + c.metric_label + " : " + c.metric_value +
-            (c.description ? ". " + c.description.slice(0, 200) : "")
+            (c.description ? ". " + c.description.slice(0, 500) : "")
           ),
         });
       }
