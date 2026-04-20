@@ -445,17 +445,11 @@ export default function MessagesDraft() {
           </button>
         </div>
 
-        {/* Relances email — vue unifiée : les drafts générés apparaissent
-            en haut avec leur éditeur inline, la liste des candidats à
-            relancer en dessous. Julien a retiré le split Cas/Email car il
-            voulait tout voir d'un coup sans naviguer. */}
-        {tab === "followup_email" && followupLeads.length > 0 && (
-          <div className="mb-5">
-            <div className="text-xs font-semibold uppercase tracking-wide text-pink-700 mb-2">
-              ✉ Drafts prêts à valider ({followupLeads.length})
-            </div>
-          </div>
-        )}
+        {/* Relances email — vue unifiée. Vue principale = liste des
+            candidats à relancer (FollowupCasePicker). Les drafts déjà
+            générés (soit par Task F automatique J+14, soit par un clic
+            "Générer" précédent) apparaissent SOUS la liste, collapsibles,
+            pour ne pas parasiter la vue primaire. */}
 
         {/* HubSpot signals tab */}
         {tab === "hubspot" && <HubspotSignalsPanel />}
@@ -964,11 +958,18 @@ export default function MessagesDraft() {
           </div>
         )}
 
-        {/* Followup email drafts — rendered at the top of the "Relances email"
-            tab, before the FollowupCasePicker below. Generating a draft in
-            the picker makes the lead appear here on refetch (same page). */}
+        {/* Liste principale — candidats à relancer (FollowupCasePicker) */}
+        {tab === "followup_email" && <FollowupCasePicker />}
+
+        {/* Drafts déjà générés (Task F auto + générations précédentes) :
+            collapsible en dessous pour ne pas parasiter la vue primaire. */}
         {tab === "followup_email" && followupLeads.length > 0 && (
-          <div className="space-y-4 mb-8">
+          <details className="mb-2 mt-8 bg-pink-50 border border-pink-200 rounded-lg">
+            <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-pink-800 hover:bg-pink-100 rounded-lg flex items-center gap-2">
+              <span>📬 {followupLeads.length} draft{followupLeads.length > 1 ? "s" : ""} de relance déjà généré{followupLeads.length > 1 ? "s" : ""} à valider</span>
+              <span className="text-xs font-normal text-pink-600">(relances automatiques Task F ou générations précédentes)</span>
+            </summary>
+            <div className="space-y-4 p-4">
             {followupLeads.map((lead) => {
               const edited = editedFollowups[lead.id];
               const subject = edited?.subject ?? lead.metadata?.draft_followup_subject ?? "";
@@ -1130,21 +1131,8 @@ export default function MessagesDraft() {
                 </div>
               );
             })}
-          </div>
-        )}
-
-        {/* Liste des candidats à relancer — toujours visible sous les drafts.
-            Clic "Générer" → le lead passe status=email_followup_pending →
-            refetch → il remonte au-dessus dans la liste des drafts à valider. */}
-        {tab === "followup_email" && (
-          <div>
-            {followupLeads.length > 0 && (
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2 mt-4">
-                📋 Candidats à relancer
-              </div>
-            )}
-            <FollowupCasePicker />
-          </div>
+            </div>
+          </details>
         )}
       </div>
     </div>
