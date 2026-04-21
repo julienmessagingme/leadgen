@@ -1091,6 +1091,14 @@ export default function MessagesDraft() {
                     >
                       Rejeter
                     </button>
+                    <RegenerateWithCases
+                      leadId={lead.id}
+                      apiPath="regenerate-email-followup"
+                      onSuccess={() => {
+                        setEditedFollowups((p) => { const n = { ...p }; delete n[lead.id]; return n; });
+                        refetchFollowup();
+                      }}
+                    />
                     <div className="ml-auto flex items-center gap-1">
                       {["fr", "en"].map((lang) => {
                         const isCurrent = body.includes("Programmer un echange") ? "fr" : body.includes("Schedule a call") ? "en" : "fr";
@@ -1142,8 +1150,12 @@ export default function MessagesDraft() {
 /**
  * RegenerateWithCases — "Refaire le mail" button with multi-select case studies.
  * Sits next to "Envoyer" and "Rejeter" on email draft cards.
+ * `apiPath` lets us reuse the same UI for 1st emails (regenerate-email) and
+ * relance drafts (regenerate-email-followup). Both endpoints accept the same
+ * { case_study_ids } body shape.
  */
-function RegenerateWithCases({ leadId, onSuccess }) {
+function RegenerateWithCases({ leadId, onSuccess, apiPath }) {
+  const path = apiPath || "regenerate-email";
   const [open, setOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
   const [pending, setPending] = useState(false);
@@ -1163,7 +1175,7 @@ function RegenerateWithCases({ leadId, onSuccess }) {
     setPending(true);
     setFeedback(null);
     try {
-      await api.post(`/leads/${leadId}/regenerate-email`, {
+      await api.post(`/leads/${leadId}/${path}`, {
         case_study_ids: selectedIds.length > 0 ? selectedIds : undefined,
       });
       setFeedback({ ok: true });

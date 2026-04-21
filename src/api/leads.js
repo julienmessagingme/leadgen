@@ -1615,8 +1615,13 @@ router.post("/:id/reject-email-followup", async (req, res) => {
 });
 
 /**
- * POST /:id/regenerate-email-followup -- Regenerate followup draft with forced language.
- * Body: { lang: "fr" | "en" }
+ * POST /:id/regenerate-email-followup -- Regenerate followup draft.
+ * Body: { lang?: "fr" | "en", case_study_ids?: [1, 5, 12] }
+ *
+ * If case_study_ids is provided, the FIRST one becomes the "primary" case
+ * cited with metric, and any extras go in metadata._additional_case_studies
+ * so Sonnet has them for context. Without case_study_ids, we fall back to
+ * the originally-picked case (metadata.draft_followup_case_id).
  */
 router.post("/:id/regenerate-email-followup", async (req, res) => {
   try {
@@ -1633,18 +1638,43 @@ router.post("/:id/regenerate-email-followup", async (req, res) => {
       return res.status(400).json({ error: "Lead is not in email_followup_pending status" });
     }
 
-    const lang = req.body.lang === "en" ? "en" : "fr";
+    const lang = req.body.lang === "en" ? "en" : (req.body.lang === "fr" ? "fr" : "fr");
 
     // Override language detection by temporarily injecting a location hint
     const originalLocation = lead.location;
     lead.location = lang === "en" ? "New York, US" : "Paris, France";
 
-    // Re-fetch the same case study that was used originally (if any)
+    // Pick the case study to cite + any extras for Sonnet's context.
     let caseStudy = null;
-    const caseId = lead.metadata?.draft_followup_case_id;
-    if (caseId) {
-      const { data: cs } = await supabase.from("case_studies").select("*").eq("id", caseId).single();
-      caseStudy = cs;
+    const rawIds = req.body && req.body.case_study_ids;
+    const hasOverride = Array.isArray(rawIds) && rawIds.length > 0;
+
+    if (hasOverride) {
+      const { data: allCases } = await supabase
+        .from("case_studies")
+        .select("*")
+        .eq("is_active", true);
+      const selectedCases = (allCases || []).filter((c) =>
+        rawIds.includes(c.id) || rawIds.includes(String(c.id))
+      );
+      if (selectedCases.length > 0) {
+        caseStudy = selectedCases[0]; // primary
+        if (selectedCases.length > 1) {
+          lead.metadata = Object.assign({}, lead.metadata || {}, {
+            _additional_case_studies: selectedCases.slice(1).map((c) =>
+              c.client_name + " (" + c.sector + ") — " + c.metric_label + " : " + c.metric_value +
+              (c.description ? ". " + c.description.slice(0, 500) : "")
+            ),
+          });
+        }
+      }
+    } else {
+      // Fall back to the originally-picked case
+      const caseId = lead.metadata?.draft_followup_case_id;
+      if (caseId) {
+        const { data: cs } = await supabase.from("case_studies").select("*").eq("id", caseId).single();
+        caseStudy = cs;
+      }
     }
 
     const templates = await loadTemplates();
@@ -1659,10 +1689,14 @@ router.post("/:id/regenerate-email-followup", async (req, res) => {
       draft_followup_body: emailContent.body,
       draft_followup_generated_at: new Date().toISOString(),
       forced_lang: lang,
+      draft_followup_case_id: hasOverride && caseStudy ? caseStudy.id : (lead.metadata?.draft_followup_case_id || null),
+      regenerated_with_cases: hasOverride ? rawIds : undefined,
     });
+    // Clean the temp injection field
+    delete updatedMetadata._additional_case_studies;
 
     await supabase.from("leads").update({ metadata: updatedMetadata }).eq("id", lead.id);
-    res.json({ ok: true, lang, subject: emailContent.subject });
+    res.json({ ok: true, lang, subject: emailContent.subject, with_cases: hasOverride ? rawIds.length : 0 });
   } catch (err) {
     console.error("POST /leads/:id/regenerate-email-followup error:", err.message);
     res.status(500).json({ error: err.message });
