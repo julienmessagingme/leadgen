@@ -1696,7 +1696,13 @@ router.post("/:id/regenerate-email-followup", async (req, res) => {
     delete updatedMetadata._additional_case_studies;
 
     await supabase.from("leads").update({ metadata: updatedMetadata }).eq("id", lead.id);
-    res.json({ ok: true, lang, subject: emailContent.subject, with_cases: hasOverride ? rawIds.length : 0 });
+    res.json({
+      ok: true,
+      lang,
+      subject: emailContent.subject,
+      body: emailContent.body,
+      with_cases: hasOverride ? rawIds.length : 0,
+    });
   } catch (err) {
     console.error("POST /leads/:id/regenerate-email-followup error:", err.message);
     res.status(500).json({ error: err.message });
