@@ -93,7 +93,7 @@ var DEFAULT_FOLLOWUP_TEMPLATE =
   "Termine par une question sur LEUR usage/situation. Pas de pitch, pas d explication du messaging si le prospect est deja dans cet univers.";
 
 var DEFAULT_EMAIL_TEMPLATE =
-  "Redige un email de relance pour un prospect qui n'a PAS accepte l'invitation LinkedIn apres 7 jours.\n\n" +
+  "Redige un email de relance pour un prospect qui n'a PAS accepte l'invitation LinkedIn apres 3 jours.\n\n" +
   "REGLES :\n" +
   "1. ANCRAGE OBLIGATOIRE — MESSAGING CONVERSATIONNEL : le mail DOIT parler explicitement de messaging conversationnel (WhatsApp Business, chatbots IA, RCS) comme levier concret d amelioration de l experience client ou de la performance commerciale. Pas juste 'experience client' en general — ca fait generique, on passe pour un consultant CX random. Le conversationnel est TOUJOURS le fil rouge, meme court.\n" +
   "2. REAGIR AU SUJET DU SIGNAL : part du theme du post/signal, mais tord-le vers l angle conversationnel pertinent pour le metier du prospect. Exemple : si le post parle de SAV dans le retail, l angle devient 'WhatsApp pour automatiser le SAV 1er niveau et desengorger les conseillers' — pas 'l experience SAV en general'.\n" +
@@ -104,7 +104,8 @@ var DEFAULT_EMAIL_TEMPLATE =
   "7. SIGNATURE : NE PAS mettre de signature, NE PAS mettre 'Bonne journee', NE PAS mettre 'Cordialement'. Tout sera ajoute automatiquement.\n" +
   "8. EN FRANCAIS si le prospect est en France, EN ANGLAIS si zone GCC/international.\n" +
   "9. INTERDICTIONS ABSOLUES : 'j ai vu que vous avez like/commente/reagi', 'vous avez reagi a mes posts', 'vous suivez de pres', 'vos interactions recentes', 'votre activite recente', 'your repeated engagement', 'I noticed you ve been exploring', 'caught my attention', 'le sujet revient souvent dans vos echanges'. JAMAIS de reference au fait qu on surveille ou observe l activite LinkedIn du prospect — ca fait flicage/stalking. On ecrit parce que le SUJET nous interesse, pas parce qu on a vu que la personne a like un post. Pas de 'MessagingMe' comme nom de societe (juste le sujet 'messaging conversationnel').\n" +
-  "10. ANTI-HALLUCINATION — NOMS PROPRES : NE JAMAIS inventer de nom d auteur de post. Si l auteur n est PAS explicitement fourni (champ 'Auteur du post :'), reference le theme/sujet du post, pas l auteur. JAMAIS utiliser un label interne (ex: 'nahmias', 'wax', 'mtarget', 'alcmeon') comme nom de personne. Si pas 100% sur d un nom, ne le cite pas.";
+  "10. ANTI-HALLUCINATION — NOMS PROPRES : NE JAMAIS inventer de nom d auteur de post. Si l auteur n est PAS explicitement fourni (champ 'Auteur du post :'), reference le theme/sujet du post, pas l auteur. JAMAIS utiliser un label interne (ex: 'nahmias', 'wax', 'mtarget', 'alcmeon') comme nom de personne. Si pas 100% sur d un nom, ne le cite pas.\n" +
+  "11. POLITESSE EMAIL — QUESTIONS EN INVERSION OBLIGATOIRE : les questions DOIVENT utiliser l inversion sujet-verbe (« Explorez-vous ce sujet ? », « Avez-vous deja regarde ... ? », « Etes-vous confronte a ... ? », « Comment abordez-vous ... ? »). JAMAIS la forme orale « vous explorez ... ? », « vous avez ... ? », « vous etes ... ? ». C est un mail pro, registre poli francais correct. Le parler oral (sans inversion) ne marche qu en DM LinkedIn, pas en email.";
 
 var DEFAULT_EMAIL_FOLLOWUP_TEMPLATE =
   "Redige un 2e email de relance (le 1er est reste sans reponse depuis 7 jours).\n\n" +
@@ -119,7 +120,8 @@ var DEFAULT_EMAIL_FOLLOWUP_TEMPLATE =
   "8. EN FRANCAIS si le prospect est en France, EN ANGLAIS si zone GCC/international.\n" +
   "9. INTERDICTIONS ABSOLUES : 'j ai vu que vous avez like/commente/reagi', 'vous avez reagi a mes posts', 'vous suivez de pres', 'vos interactions recentes', 'votre activite recente', 'your repeated engagement', 'I noticed you ve been exploring', 'caught my attention', 'le sujet revient souvent dans vos echanges'. JAMAIS de reference au fait qu on surveille ou observe l activite LinkedIn du prospect — ca fait flicage/stalking.\n" +
   "10. ANTI-HALLUCINATION — NOMS PROPRES : NE JAMAIS inventer de nom d auteur de post. Pas de label interne (nahmias, wax, mtarget).\n" +
-  "11. ANTI-FAKE-METRIC : si AUCUN cas client n est fourni dans le contexte, NE PAS inventer de chiffre precis. Tu peux dire 'on observe' ou 'la tendance est' sans donner un pourcentage invente.";
+  "11. ANTI-FAKE-METRIC : si AUCUN cas client n est fourni dans le contexte, NE PAS inventer de chiffre precis. Tu peux dire 'on observe' ou 'la tendance est' sans donner un pourcentage invente.\n" +
+  "12. POLITESSE EMAIL — QUESTIONS EN INVERSION OBLIGATOIRE : les questions DOIVENT utiliser l inversion sujet-verbe (« Explorez-vous ... ? », « Avez-vous deja ... ? », « Etes-vous confronte a ... ? », « Comment abordez-vous ... ? »). JAMAIS la forme orale « vous explorez ... ? », « vous avez ... ? », « vous etes ... ? ». C est un mail pro, registre poli francais correct. Le parler oral sans inversion ne marche qu en DM LinkedIn, pas en email.";
 
 var DEFAULT_WHATSAPP_TEMPLATE =
   "Redige un message WhatsApp pour ce prospect.\n\n" +
