@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../api/client";
+import { htmlToText, textToHtml } from "../../utils/htmlText";
 
 /**
  * FollowupCasePicker — embedded inside MessagesDraft > "Relances email" tab.
@@ -335,9 +336,9 @@ function CandidateRow({ candidate: c, cases }) {
             <button
               type="button"
               onClick={() => setShowHtml((v) => !v)}
-              className="text-[10px] text-indigo-600 hover:text-indigo-800"
+              className="text-[10px] text-gray-400 hover:text-gray-600"
             >
-              {showHtml ? "aperçu" : "éditer HTML brut"}
+              {showHtml ? "Retour texte" : "HTML brut"}
             </button>
           </div>
           {showHtml ? (
@@ -346,12 +347,15 @@ function CandidateRow({ candidate: c, cases }) {
               onChange={(e) => setDraft({ ...draft, body: e.target.value })}
               disabled={isBusy}
               rows={14}
-              className="w-full border border-gray-200 rounded-md px-3 py-2 text-xs font-mono"
+              className="w-full border border-gray-200 rounded-md px-3 py-2 text-xs font-mono text-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-300"
             />
           ) : (
-            <div
-              className="border border-gray-200 rounded-md bg-gray-50 p-3 text-sm max-h-80 overflow-y-auto prose prose-sm max-w-none"
-              dangerouslySetInnerHTML={{ __html: draft.body }}
+            <textarea
+              value={htmlToText(draft.body)}
+              onChange={(e) => setDraft({ ...draft, body: textToHtml(e.target.value) })}
+              disabled={isBusy}
+              rows={12}
+              className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-800 resize-none focus:outline-none focus:ring-2 focus:ring-orange-300"
             />
           )}
           <div className="flex items-center gap-2 mt-3">

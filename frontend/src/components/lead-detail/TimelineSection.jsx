@@ -3,7 +3,7 @@ const TIMELINE_EVENTS = [
   { label: "Invitation envoyee", field: "invitation_sent_at" },
   { label: "Connexion acceptee", field: "connected_at" },
   { label: "Message de suivi", field: "message_sent_at" },
-  { label: "Email J+7", field: "email_sent_at" },
+  { label: "Email J+3", field: "email_sent_at" },
   { label: "WhatsApp J+14", field: "whatsapp_sent_at" },
   { label: "Reponse recue", field: "replied_at" },
 ];

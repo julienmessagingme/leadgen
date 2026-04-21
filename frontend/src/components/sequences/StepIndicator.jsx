@@ -3,7 +3,7 @@ export const OUTREACH_STEPS = [
   { key: "invited", label: "Invitation", field: "invitation_sent_at" },
   { key: "connected", label: "Connecte", field: "connected_at" },
   { key: "messaged", label: "Message", field: "message_sent_at" },
-  { key: "emailed", label: "Email J+7", field: "email_sent_at" },
+  { key: "emailed", label: "Email J+3", field: "email_sent_at" },
   { key: "whatsapped", label: "WhatsApp J+14", field: "whatsapp_sent_at" },
   { key: "replied", label: "Repondu", field: "replied_at" },
 ];
