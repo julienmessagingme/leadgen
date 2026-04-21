@@ -328,7 +328,7 @@ export default function MessagesDraft() {
   return (
     <div className="min-h-screen bg-gray-50">
       <NavBar />
-      <div className="max-w-4xl mx-auto px-4 py-8">
+      <div className={`${tab === "hubspot" ? "max-w-7xl" : "max-w-4xl"} mx-auto px-4 py-8`}>
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Messages à valider</h1>
           <p className="text-sm text-gray-500 mt-1">
@@ -825,8 +825,8 @@ export default function MessagesDraft() {
 
                   {/* Signal context */}
                   {lead.metadata?.post_text && (
-                    <div className="mb-3 bg-blue-50 rounded-lg px-3 py-2 text-xs text-blue-700 border border-blue-100">
-                      <span className="font-medium">Signal :</span> {lead.metadata.post_text.slice(0, 200)}{lead.metadata.post_text.length > 200 ? "…" : ""}
+                    <div className="mb-3 bg-blue-50 rounded-lg px-3 py-2 text-xs text-blue-700 border border-blue-100 whitespace-pre-wrap">
+                      <span className="font-medium">Signal :</span> {lead.metadata.post_text}
                     </div>
                   )}
                   {!lead.metadata?.post_text && lead.signal_source && (

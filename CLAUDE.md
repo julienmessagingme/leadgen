@@ -11,11 +11,12 @@ SSH : `ssh -i ~/.ssh/id_ed25519 ubuntu@146.59.233.252`
 
 ## Deploiement — REGLES STRICTES
 
+- **TOUJOURS committer sur `main` directement.** PAS de branche `claude/*`, PAS de worktree avec sa propre branche. Sauf contre-ordre explicite du user.
 - **JAMAIS de scp** — toujours git push
-- **JAMAIS modifier un fichier sur le VPS** — modifier en local, commit, push
-- Git root = `C:\Users\julie` (pas leadgen/)
-- Deploy : `cd /c/Users/julie && GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519" git push vps master`
-- **Apres deploy frontend** : `ssh ... "cd /home/openclaw/leadgen/frontend && npm run build"`
+- **JAMAIS modifier un fichier sur le VPS** sauf pour un hotfix 1-ligne urgent que le user a demande de regler immediatement — sinon modifier en local, commit, push
+- Git root = `C:\Users\julie\leadgen` (pas C:\Users\julie — CLAUDE.md etait obsolete)
+- Remote GitHub : `origin` (pas de remote `vps` configure). Deploy : `git push origin main` puis **appliquer/pull manuellement sur le VPS** (le VPS git n'a pas de remote, les fichiers sont intentionnellement untracked)
+- **Apres modif frontend** : `ssh ... "export PATH=/home/ubuntu/.nvm/versions/node/v20.20.1/bin:\$PATH && cd /home/openclaw/leadgen/frontend && npm run build"`
 - **TOUJOURS verifier les logs** : `pm2 logs leadgen --lines 30 --nostream`
 - **Flusher vieux logs PM2** : `pm2 flush leadgen`
 
@@ -92,7 +93,7 @@ Task C Phase 1 compare les connexions recentes avec les leads `invitation_sent` 
 - **Sleep apres erreur** : 5-10s au lieu de 0 (evite de mitrailler BeReach)
 - **Fix retry 429** : variable shadowing corrigee dans `bereach.js` (retry envoyait le body d'erreur au lieu de la requete)
 
-### Task D — Email J+7
+### Task D — Email J+3 (change de J+7 le 21/04 — J+7 rechauffait trop le signal HOT)
 - **FULLENRICH_API_KEY configuree** (07/04) — Task D operationnelle
 - **FullEnrich API** : `app.fullenrich.com/api/v1/contact/enrich/bulk` — async (submit + poll)
   - Input = juste `linkedin_url` (pas besoin nom/entreprise)
