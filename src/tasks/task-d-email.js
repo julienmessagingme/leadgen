@@ -28,7 +28,8 @@ const TASK_NAME = "task-d-email";
  * Criteria: invitation sent 7+ days ago, not yet emailed, hot/warm tier.
  */
 async function selectLeads(runId) {
-  var cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  // J+3 (was J+7) — on un lead HOT LinkedIn, J+7 rechauffe trop le signal.
+  var cutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
 
   var { data, error } = await supabase
     .from("leads")
