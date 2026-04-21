@@ -364,7 +364,10 @@ router.get("/followup-candidates", async (req, res) => {
       .is("email_followup_sent_at", null)
       .lte("email_sent_at", floorIso)     // sent at least 3 days ago
       .gte("email_sent_at", ceilIso)      // sent within the last 21 days
-      .not("status", "in", "(replied,meeting_booked,disqualified,email_followup_pending)")
+      // Keep email_followup_pending in the list so their draft can be
+       // edited/regenerated/sent inline from the Relances email tab, no
+       // more bouncing to the Email à valider tab.
+      .not("status", "in", "(replied,meeting_booked,disqualified)")
       .order("icp_score", { ascending: false })
       .order("email_sent_at", { ascending: true })
       .limit(100);
@@ -398,6 +401,7 @@ router.get("/followup-candidates", async (req, res) => {
       const opens = evts.filter((e) => e.event_type === "open");
       const clicks = evts.filter((e) => e.event_type === "click");
       const daysSinceSent = Math.floor((now - new Date(l.email_sent_at).getTime()) / 86400000);
+      const meta = l.metadata || {};
       return {
         id: l.id,
         full_name: l.full_name,
@@ -409,7 +413,7 @@ router.get("/followup-candidates", async (req, res) => {
         icp_score: l.icp_score,
         tier: l.tier,
         linkedin_url: l.linkedin_url,
-        cold_outbound: !!(l.metadata && l.metadata.cold_outbound),
+        cold_outbound: !!meta.cold_outbound,
         email_sent_at: l.email_sent_at,
         days_since_sent: daysSinceSent,
         opens: opens.length,
@@ -417,6 +421,11 @@ router.get("/followup-candidates", async (req, res) => {
         last_open: opens.length > 0 ? opens[opens.length - 1].created_at : null,
         clicks: clicks.length,
         first_click: clicks.length > 0 ? clicks[0].created_at : null,
+        // Existing draft (only populated when status is email_followup_pending)
+        draft_subject: meta.draft_followup_subject || null,
+        draft_body: meta.draft_followup_body || null,
+        draft_case_id: meta.draft_followup_case_id || null,
+        draft_generated_at: meta.draft_followup_generated_at || null,
       };
     });
 
