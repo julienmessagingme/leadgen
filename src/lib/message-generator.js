@@ -171,6 +171,20 @@ async function callClaude(systemPrompt, userPrompt, maxTokens, prefill) {
   return JSON.parse(raw);
 }
 
+// SYSTEM_PITCH — mode active when an attached case_study has mode='override_pitch'
+// (e.g. case "MessagingMe — hard"). Lifts the 2-3 phrase / no-pitch / no-CTA
+// constraints so Sonnet can follow the 6-block directive in the case description.
+var SYSTEM_PITCH = "Tu es Julien Dumas. Tu diriges MessagingMe, cabinet de conseil en strategie conversationnelle (WhatsApp, RCS, SMS, chatbots IA)." +
+" MODE ACTIF : PITCH CABINET ASSUME. Applique la DIRECTIVE DE POSITIONNEMENT fournie dans la section 'Cas clients supplementaires a citer' du contexte. Structure le message en 6 blocs (hook si possible, qui-on-est, posture, preuve sociale avec 2-3 clients prestigieux, CTA). Taille 5-6 phrases, pas 2-3." +
+" CONTRAINTES TOUJOURS ACTIVES :" +
+" - Vouvoiement TOUJOURS en France." +
+" - JAMAIS citer la source du signal LinkedIn (' j ai vu que vous avez like/commente', 'vos interactions recentes', etc. => INTERDIT)." +
+" - JAMAIS ecrire le mot 'MessagingMe' dans le corps — on dit 'cabinet de conseil conversationnel'." +
+" - JAMAIS inventer un chiffre client ou un nom d auteur de post. Le name-drop reste purement nominatif." +
+" - NE PAS commencer par 'Bonjour [prenom]' ni 'Merci pour la connexion' — le greeting est ajoute automatiquement. Commence directement sur le hook ou le pivot." +
+" - ZONE GCC (Dubai, KSA, Qatar, UAE...) : en anglais, meme structure 6 blocs." +
+" Reponds UNIQUEMENT en JSON valide, sans markdown, sans code block.";
+
 var SYSTEM = "Tu es Julien Dumas, expert en strategie conversationnelle et messaging (WhatsApp, RCS, SMS). Tu diriges MessagingMe (messagingme.fr), cabinet de conseil et plateforme techno." +
 
 " TON : Naturel, direct, pair a pair. Pas corporate, pas commercial. Vouvoiement TOUJOURS en France. 2-3 phrases max. Se termine par une question ouverte. JAMAIS de signature. JAMAIS de 'je me permets', 'n hesitez pas', 'serait-il possible'. JAMAIS de 'En tant que', 'Chez MessagingMe nous', 'en tant que specialistes'. Pas de bullet points. Tu parles a une PERSONNE, pas a une marque ou une entreprise. Jamais 'pour des marques comme X', 'pour une entreprise comme X', 'pour X'. Tu t adresses a elle directement : son poste, ses enjeux, son quotidien." +
@@ -336,10 +350,19 @@ async function generateInvitationNote(lead, templates) {
 async function generateFollowUpMessage(lead, templates) {
   try {
     var tpl = templates || (await loadTemplates());
-    var instructions = tpl.template_followup || DEFAULT_FOLLOWUP_TEMPLATE;
     var lang = detectLanguage(lead);
 
     var firstName = (lead.full_name || "").split(" ")[0];
+
+    // Pitch mode: activated when Julien attaches a case_studies row with
+    // mode='override_pitch' (e.g. 'MessagingMe — hard'). Backend sets this
+    // flag on metadata before calling us.
+    var isPitchMode = lead.metadata && lead.metadata._pitch_mode_active === true;
+
+    var system = isPitchMode ? SYSTEM_PITCH : SYSTEM;
+    var instructions = isPitchMode
+      ? "Redige le message LinkedIn en mode PITCH CABINET ASSUME. Applique strictement la structure 6 blocs decrite dans la DIRECTIVE DE POSITIONNEMENT fournie dans le contexte (cas clients supplementaires). Taille 5-6 phrases, termine par 'On se trouve un moment pour en discuter ?' (ou equivalent anglais si zone GCC)."
+      : (tpl.template_followup || DEFAULT_FOLLOWUP_TEMPLATE);
 
     // Adapt instructions based on detected language
     var langInstruction = lang === "en"
@@ -347,13 +370,16 @@ async function generateFollowUpMessage(lead, templates) {
       : "";
 
     var jsonInstruction = lang === "en"
-      ? 'Reply in JSON: {"message": "..."}\nIMPORTANT: the message field does NOT start with "Hi", "Hey", "Thanks for connecting" or any greeting. It starts DIRECTLY with the substance (observation, question, insight about their work). The "Hi [firstname], " will be added automatically before your text.'
-      : "Reponds en JSON: {\"message\": \"...\"}\nIMPORTANT : le champ message NE COMMENCE PAS par 'Bonjour', 'Merci' ou une formule d intro. Il commence DIRECTEMENT par le fond (observation, question, constat sur leur metier). Le 'Bonjour [prenom]' sera ajoute automatiquement avant ton texte.";
+      ? 'Reply in JSON: {"message": "..."}\nIMPORTANT: the message field does NOT start with "Hi", "Hey", "Thanks for connecting" or any greeting. It starts DIRECTLY with the substance. The "Hi [firstname], " will be added automatically before your text.'
+      : "Reponds en JSON: {\"message\": \"...\"}\nIMPORTANT : le champ message NE COMMENCE PAS par 'Bonjour', 'Merci' ou une formule d intro. Il commence DIRECTEMENT par le fond. Le 'Bonjour [prenom]' sera ajoute automatiquement avant ton texte.";
 
-    var result = await callClaude(SYSTEM,
+    // Pitch mode needs more tokens (5-6 phrases structured pitch)
+    var maxTokens = isPitchMode ? 900 : 512;
+
+    var result = await callClaude(system,
       instructions + langInstruction + "\n\n" +
       buildLeadContext(lead) + "\n\n" +
-      jsonInstruction, 512);
+      jsonInstruction, maxTokens);
 
     var core = (result.message || "").trim();
     // Strip any opener Sonnet might have added anyway (French or English)

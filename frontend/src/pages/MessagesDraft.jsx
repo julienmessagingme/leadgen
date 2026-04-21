@@ -615,6 +615,14 @@ export default function MessagesDraft() {
                     >
                       Rejeter
                     </button>
+                    <RegenerateWithCases
+                      leadId={lead.id}
+                      apiPath="regenerate-message"
+                      onSuccess={() => {
+                        setEditedMessages((prev) => { const n = { ...prev }; delete n[lead.id]; return n; });
+                        refetchLinkedin();
+                      }}
+                    />
                     <div className="ml-auto flex items-center gap-1">
                       {["fr", "en"].map((lang) => {
                         // Detect current language: "Bonjour" = fr, "Hi " = en

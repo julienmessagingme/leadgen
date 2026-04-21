@@ -595,8 +595,12 @@ router.post("/:id/approve-email", async (req, res) => {
 });
 
 /**
- * POST /:id/regenerate-message -- Regenerate LinkedIn follow-up draft with forced language
- * Body: { lang: "fr" | "en" }
+ * POST /:id/regenerate-message -- Regenerate LinkedIn follow-up draft.
+ * Body: { lang?: "fr" | "en", case_study_ids?: [1, 22, ...] }
+ *
+ * If any attached case has mode='override_pitch' (e.g. 'MessagingMe — hard'),
+ * the generator switches to SYSTEM_PITCH (cabinet pitch, 5-6 phrases, CTA)
+ * instead of the default short peer-to-peer tone.
  */
 router.post("/:id/regenerate-message", async (req, res) => {
   try {
@@ -611,11 +615,34 @@ router.post("/:id/regenerate-message", async (req, res) => {
     if (fetchErr || !lead) return res.status(404).json({ error: "Lead not found" });
     if (lead.status !== "message_pending") return res.status(400).json({ error: "Lead is not in message_pending status" });
 
-    const lang = req.body.lang === "en" ? "en" : "fr";
+    const lang = req.body.lang === "en" ? "en" : (req.body.lang === "fr" ? "fr" : "fr");
 
     // Override language detection by temporarily injecting a location hint
     const originalLocation = lead.location;
     lead.location = lang === "en" ? "New York, US" : "Paris, France";
+
+    // Attach selected case studies — detect pitch-mode override
+    const rawIds = req.body && req.body.case_study_ids;
+    let pitchModeActive = false;
+    if (Array.isArray(rawIds) && rawIds.length > 0) {
+      const { data: allCases } = await supabase
+        .from("case_studies")
+        .select("*")
+        .eq("is_active", true);
+      const selectedCases = (allCases || []).filter((c) =>
+        rawIds.includes(c.id) || rawIds.includes(String(c.id))
+      );
+      if (selectedCases.length > 0) {
+        pitchModeActive = selectedCases.some((c) => c.mode === "override_pitch");
+        lead.metadata = Object.assign({}, lead.metadata || {}, {
+          _additional_case_studies: selectedCases.map((c) =>
+            c.client_name + " (" + c.sector + ") — " + c.metric_label + " : " + c.metric_value +
+            (c.description ? ". " + c.description.slice(0, 2000) : "")
+          ),
+          _pitch_mode_active: pitchModeActive,
+        });
+      }
+    }
 
     const templates = await loadTemplates();
     const message = await generateFollowUpMessage(lead, templates);
@@ -628,14 +655,19 @@ router.post("/:id/regenerate-message", async (req, res) => {
       draft_message: message,
       draft_generated_at: new Date().toISOString(),
       forced_lang: lang,
+      regenerated_with_cases: Array.isArray(rawIds) ? rawIds : undefined,
+      pitch_mode_used: pitchModeActive || undefined,
     });
+    // Clean temp injection flags
+    delete updatedMetadata._additional_case_studies;
+    delete updatedMetadata._pitch_mode_active;
 
     await supabase
       .from("leads")
       .update({ metadata: updatedMetadata })
       .eq("id", lead.id);
 
-    res.json({ ok: true, lang, message });
+    res.json({ ok: true, lang, message, pitch_mode: pitchModeActive });
   } catch (err) {
     console.error("POST /leads/:id/regenerate-message error:", err.message);
     res.status(500).json({ error: err.message });
