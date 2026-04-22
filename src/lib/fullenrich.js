@@ -13,8 +13,11 @@ const FULLENRICH_BASE = "https://app.fullenrich.com/api/v1";
 /** Polling interval in milliseconds (30 seconds). */
 const POLL_INTERVAL_MS = 30000;
 
-/** Maximum number of polling attempts (6 attempts = 3 minutes max). */
-const MAX_POLL_ATTEMPTS = 6;
+/** Maximum number of polling attempts (4 attempts = 2 minutes max).
+ *  Kept under 120s so the UI request fits within common reverse-proxy
+ *  read timeouts (nginx default 60s, Cloudflare 100s). The autonomous
+ *  Task D tolerates occasional late-returns via its own retry logic. */
+const MAX_POLL_ATTEMPTS = 4;
 
 /**
  * Enrich a lead's contact info (email) via FullEnrich.
