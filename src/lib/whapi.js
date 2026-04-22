@@ -45,6 +45,9 @@ async function sendWhapiText(phone, text) {
   if (!e164) throw new Error("invalid_phone: " + phone);
   if (!text || !String(text).trim()) throw new Error("empty_text");
 
+  // Whapi requires digits-only (no '+' prefix) — regex ^[\d-]{9,31}(@...)?
+  var whapiTo = e164.replace(/^\+/, "");
+
   var res = await fetch(getBase() + "/messages/text", {
     method: "POST",
     headers: {
@@ -53,7 +56,7 @@ async function sendWhapiText(phone, text) {
       "Accept": "application/json",
     },
     body: JSON.stringify({
-      to: e164,
+      to: whapiTo,
       body: String(text).trim(),
     }),
   });
