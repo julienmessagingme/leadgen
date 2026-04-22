@@ -101,11 +101,22 @@ Task C Phase 1 compare les connexions recentes avec les leads `invitation_sent` 
 - **FULLENRICH_API_KEY configuree** (07/04) — Task D operationnelle
 - **FullEnrich API** : `app.fullenrich.com/api/v1/contact/enrich/bulk` — async (submit + poll)
   - Input = juste `linkedin_url` (pas besoin nom/entreprise)
-  - `enrich_fields: ["contact.emails"]` = **1 credit/lead** (phones = 10 credits, DESACTIVE)
+  - `enrich_fields: ["contact.emails"]` = **1 credit/lead** (phones = 10 credits, DESACTIVE par defaut, activable a la demande via /find-phone, voir ci-dessous)
   - Retourne email seulement si `most_probable_email_status === "DELIVERABLE"`
 - Skip si `metadata.skip_email = true` (leads ayant recu un mauvais message le 01/04)
 - 4 checks pre-send : FullEnrich email, HubSpot dedup, LinkedIn inbox reply, suppression list
+- **GATE 22/04** : si ni HubSpot ni FullEnrich ne trouvent d'email → **skip Sonnet** (0 tokens) + `status = 'email_not_found'` → le lead apparait dans l'onglet « Sans email » de /messages-draft pour decision manuelle (lookup WhatsApp 10 credits ou archive)
 - Leads avec bad messages 01/04 → `skip_email` flag mis manuellement en SQL
+
+### WhatsApp — 2 points d'entree manuels uniquement (pas d'auto)
+Plus de Task E automatique J+14, plus de creation de template Meta a la volee, plus de `generateWhatsAppBody` Sonnet. **Un seul template Meta pre-approuve** envoye via uChat (env var `WHATSAPP_DEFAULT_SUB_FLOW`) par l'endpoint `POST /leads/:id/send-whatsapp`. Deux chemins d'entree manuels :
+
+1. **Depuis `/email-tracking`** — bouton WhatsApp par lead (existant). Flow : cherche phone (lead.phone → FullEnrich enrichPhone 10 credits en fallback) → send template.
+2. **Depuis `/messages-draft` > onglet « Sans email »** (22/04) — les leads `email_not_found` y apparaissent avec contexte riche (post inducteur, secteur, tier). Flow split en 2 clics :
+   - `POST /leads/:id/find-phone` (10 credits) → trouve → `status='whatsapp_ready'` / pas trouve → `status='disqualified'` (sort de la liste)
+   - `POST /leads/:id/send-whatsapp` (meme endpoint que /email-tracking) → send le template
+
+Les 2 chemins ecrivent `whatsapp_sent_at` + mettent a jour `/email-tracking` en live (webhook uChat).
 
 ## Contacts HubSpot existants
 - Inseres avec status `hubspot_existing` (pas dans la sequence auto)
