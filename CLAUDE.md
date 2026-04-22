@@ -11,7 +11,11 @@ SSH : `ssh -i ~/.ssh/id_ed25519 ubuntu@146.59.233.252`
 
 ## Deploiement — REGLES STRICTES
 
-- **TOUJOURS committer sur `main` directement.** PAS de branche `claude/*`, PAS de worktree avec sa propre branche. Sauf contre-ordre explicite du user.
+- **COMMITS UNIQUEMENT SUR `main`. ZERO BRANCHE `claude/*`, ZERO WORKTREE.** Le user a ete explicite : « arrete les branches pourries ». Process obligatoire :
+  - Si Claude Code t'a demarre dans un worktree (`.claude/worktrees/claude-*`), **tu n'edites PAS les fichiers du worktree** — tu edites directement `C:\Users\julie\leadgen\<fichier>` (repo principal, branche `main`)
+  - Tu commit depuis `C:\Users\julie\leadgen` sur `main`, tu push `origin main`, point final
+  - Si le worktree branch residuel traine (claude/charming-...), le user peut le dropper a la fin de session — c'est pas a toi d'aller merger a chaque fois
+  - **SEULE exception** : le user te dit explicitement « cree une branche feature X pour isoler ce test »
 - **JAMAIS de scp** — toujours git push
 - **JAMAIS modifier un fichier sur le VPS** sauf pour un hotfix 1-ligne urgent que le user a demande de regler immediatement — sinon modifier en local, commit, push
 - Git root = `C:\Users\julie\leadgen` (pas C:\Users\julie — CLAUDE.md etait obsolete)
@@ -129,6 +133,7 @@ Task C Phase 1 compare les connexions recentes avec les leads `invitation_sent` 
 - **Partoo = concurrent** : ajouter en competitor_page dans la watchlist
 - **BeReach cold outreach** : tester endpoint People Search pour cold prospection par criteres ICP — doc https://registry.scalar.com/@bereach/apis/bereach-api/latest (verifier domaine api.bereach.ai vs api.berea.ch)
 - **BeReach /invitations/linkedin/sent** : signaler le bug a BeReach (toujours total:0 malgre 15+ invit pendantes)
+- **FullEnrich V1 → V2 migration avant septembre 2026** : on est sur `/api/v1/` (ligne 11 de `src/lib/fullenrich.js`). FullEnrich a annonce que V1 sera coupe en septembre 2026. Migration V2 = changer `FULLENRICH_BASE` en `/api/v2/` + ligne 71 `enrich_fields: ["contact.emails"]` → `["contact.work_emails"]`. Le reste de notre parsing (`most_probable_email*`, `most_probable_phone*`, `contact.phones`) n'est pas impacte par les renommages linkedin → professional_network (on ne lit pas ces champs). Les breaking changes du 23 avril 2026 ne nous concernent PAS (V2 only).
 
 ## Doc detaillee
 - Pipeline complet : `docs/PIPELINE.md`
