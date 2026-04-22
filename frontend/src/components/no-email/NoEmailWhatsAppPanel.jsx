@@ -57,6 +57,8 @@ export default function NoEmailWhatsAppPanel() {
 
 function Card({ candidate: c, qc }) {
   const [feedback, setFeedback] = useState(null);
+  const [whapiMode, setWhapiMode] = useState(false); // toggled when user clicks "Message perso"
+  const [whapiDraft, setWhapiDraft] = useState("");
 
   const findPhone = useMutation({
     mutationFn: () => api.post(`/leads/${c.id}/find-phone`, {}),
@@ -65,6 +67,15 @@ function Card({ candidate: c, qc }) {
 
   const sendWhatsApp = useMutation({
     mutationFn: () => api.post(`/leads/${c.id}/send-whatsapp`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["no-email-candidates"] }),
+  });
+
+  const genWhapiDraft = useMutation({
+    mutationFn: () => api.post(`/leads/${c.id}/generate-whapi-draft`, {}),
+  });
+
+  const sendWhapi = useMutation({
+    mutationFn: (text) => api.post(`/leads/${c.id}/send-whapi-text`, { text }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["no-email-candidates"] }),
   });
 
@@ -94,13 +105,43 @@ function Card({ candidate: c, qc }) {
     }
   };
 
+  const onOpenWhapi = async () => {
+    setFeedback(null);
+    setWhapiMode(true);
+    try {
+      const res = await genWhapiDraft.mutateAsync();
+      setWhapiDraft(res.text || "");
+    } catch (err) {
+      setFeedback({ ok: false, msg: err?.response?.data?.error || err?.message || "Erreur" });
+    }
+  };
+
+  const onSendWhapi = async () => {
+    if (!whapiDraft.trim()) return;
+    if (!window.confirm(`Envoyer ce message depuis TON WhatsApp perso a ${c.full_name || "ce lead"} ?`)) return;
+    setFeedback(null);
+    try {
+      await sendWhapi.mutateAsync(whapiDraft);
+      setFeedback({ ok: true, msg: "Envoye via ton WhatsApp perso" });
+      setWhapiMode(false);
+      setWhapiDraft("");
+    } catch (err) {
+      const code = err?.response?.data?.error;
+      if (code === "daily_cap_reached") {
+        setFeedback({ ok: false, msg: "Cap quotidien atteint (15 msg/jour via Whapi)" });
+      } else {
+        setFeedback({ ok: false, msg: code || err?.message || "Erreur" });
+      }
+    }
+  };
+
   const tierBadge = {
     hot: "bg-red-100 text-red-800",
     warm: "bg-yellow-100 text-yellow-800",
     cold: "bg-gray-100 text-gray-600",
   }[c.tier] || "bg-gray-100 text-gray-600";
 
-  const isBusy = findPhone.isPending || sendWhatsApp.isPending;
+  const isBusy = findPhone.isPending || sendWhatsApp.isPending || genWhapiDraft.isPending || sendWhapi.isPending;
   const isReady = c.status === "whatsapp_ready";
   const isSent = Boolean(c.whatsapp_sent_at);
 
@@ -170,14 +211,64 @@ function Card({ candidate: c, qc }) {
             {findPhone.isPending ? "Recherche…" : "Chercher numero (10 credits)"}
           </button>
         )}
-        {isReady && !isSent && (
-          <button
-            onClick={onSendWhatsApp}
-            disabled={isBusy}
-            className="px-3 py-2 text-sm rounded-md bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
-          >
-            {sendWhatsApp.isPending ? "Envoi…" : "Envoyer le template WhatsApp"}
-          </button>
+        {isReady && !isSent && !whapiMode && (
+          <>
+            <button
+              onClick={onSendWhatsApp}
+              disabled={isBusy}
+              className="px-3 py-2 text-sm rounded-md bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
+              title="Template Meta pro via uChat — pointe vers MessagingMe"
+            >
+              {sendWhatsApp.isPending ? "Envoi…" : "📱 Template pro (uChat)"}
+            </button>
+            <button
+              onClick={onOpenWhapi}
+              disabled={isBusy}
+              className="px-3 py-2 text-sm rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+              title="Message perso via ton numero WhatsApp — Sonnet te prepare un brouillon a editer"
+            >
+              {genWhapiDraft.isPending ? "Generation…" : "💬 Message perso (Whapi)"}
+            </button>
+          </>
+        )}
+        {isReady && !isSent && whapiMode && (
+          <div className="w-full">
+            <div className="text-xs text-emerald-700 font-medium mb-1">
+              Brouillon Whapi — edite et envoie depuis ton WhatsApp perso (+33 6 33 92 15 77) :
+            </div>
+            <textarea
+              value={whapiDraft}
+              onChange={(e) => setWhapiDraft(e.target.value)}
+              rows={5}
+              disabled={sendWhapi.isPending}
+              className="w-full border border-emerald-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
+              placeholder={genWhapiDraft.isPending ? "Generation du brouillon…" : ""}
+            />
+            <div className="flex items-center gap-2 mt-2">
+              <button
+                onClick={onSendWhapi}
+                disabled={sendWhapi.isPending || !whapiDraft.trim()}
+                className="px-3 py-2 text-sm rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {sendWhapi.isPending ? "Envoi…" : "Envoyer via mon WhatsApp"}
+              </button>
+              <button
+                onClick={() => { setWhapiMode(false); setWhapiDraft(""); setFeedback(null); }}
+                disabled={sendWhapi.isPending}
+                className="px-3 py-2 text-sm rounded-md border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={onOpenWhapi}
+                disabled={isBusy}
+                className="text-xs text-emerald-600 hover:text-emerald-800 ml-auto"
+                title="Regenere le brouillon avec Sonnet"
+              >
+                {genWhapiDraft.isPending ? "…" : "🔄 regenerer"}
+              </button>
+            </div>
+          </div>
         )}
         {isSent && (
           <span className="text-xs text-gray-500">

@@ -239,6 +239,24 @@ async function callClaude(systemPrompt, userPrompt, maxTokens, prefill) {
   return JSON.parse(raw);
 }
 
+// SYSTEM_WHAPI — tone for personal-WhatsApp sends via Whapi Cloud.
+// Different constraints than SYSTEM : self-introduction ALLOWED (the prospect
+// has no idea who's writing from an unknown number), MessagingMe mention
+// ALLOWED, short DM-style (2-3 phrases), vouvoiement. Keeps anti-stalking +
+// anti-fake-reflection hard rules.
+var SYSTEM_WHAPI = "Tu es Julien Dumas, dirigeant de MessagingMe, cabinet de conseil conversationnel (WhatsApp, RCS, chatbots IA). Tu ecris depuis ton WhatsApp personnel a un prospect chaud qu on a detecte sur LinkedIn." +
+" TON : Direct, chaleureux, pair a pair, vouvoiement. 2 a 3 phrases MAX (c est du WhatsApp perso, pas un email). Pas de formule de politesse lourde. Pas d emoji." +
+" STRUCTURE : (1) Bonjour + prenom + courte auto-presentation (\"je suis Julien de MessagingMe\"). (2) Ce qu on fait en une phrase concrete + pourquoi on contacte. (3) Question ouverte personnalisee liee a son metier / secteur / signal detecte." +
+" AUTO-PRESENTATION AUTORISEE : contrairement aux messages LinkedIn, tu PEUX et DOIS dire \"je suis Julien de MessagingMe\" — le prospect recoit un message d un numero inconnu, il faut qu il comprenne en 1 seconde qui ecrit." +
+" ZERO FLATTERIE : pas de \"votre parcours impressionnant\", \"votre vision\". On va droit au sujet." +
+" INTERDICTIONS ABSOLUES :" +
+" - Stalking : \"j ai vu que vous avez like/commente\", \"votre activite recente\", \"je suis tombe sur votre profil\"." +
+" - Fake reflexion : \"m a fait reflechir\", \"ca m a fait penser\", \"m a rappele\", \"en lisant\"." +
+" - Liens (bit.ly, UTM, Calendly) — interdit dans ce canal, Meta ban sur les liens suspects." +
+" - Emoji et anglicismes type \"leverager\", \"actionner\"." +
+" ANTI-HALLUCINATION : jamais de chiffre invente, jamais de nom de client non fourni, jamais d auteur de post non fourni." +
+" Reponds UNIQUEMENT en JSON valide, sans markdown, sans code block.";
+
 // SYSTEM_PITCH — mode active when an attached case_study has mode='override_pitch'
 // (e.g. case "MessagingMe — hard"). Lifts the 2-3 phrase / no-pitch / no-CTA
 // constraints so Sonnet can follow the 6-block directive in the case description.
@@ -648,6 +666,51 @@ async function generateFollowupEmail(lead, templates, caseStudy) {
 }
 
 /**
+ * Generate a personal-WhatsApp message text for Whapi Cloud sends.
+ * Uses SYSTEM_WHAPI (pair à pair, self-introduction allowed, 2-3 phrases).
+ * Few-shot style examples seeded from sent_messages_archive with
+ * channel='whapi_text'.
+ *
+ * @param {object} lead - Lead data
+ * @returns {Promise<string|null>} WhatsApp message text or null on error
+ */
+async function generateWhapiMessage(lead) {
+  try {
+    var lang = detectLanguage(lead);
+    var firstName = (lead.full_name || "").split(" ")[0] || "";
+
+    var instructions =
+      "Redige un message WhatsApp personnel pour ce prospect — c est un DM depuis le numero perso de Julien, pas un template pro." +
+      " Format : 2 a 3 phrases. (1) Bonjour + prenom + \"je suis Julien, de MessagingMe\". (2) Ce qu on fait + angle conversationnel pertinent pour le secteur/metier du prospect. (3) Question ouverte personnalisee qui invite a un echange.";
+
+    var langInstruction = lang === "en"
+      ? "\n\nIMPORTANT: This prospect is NOT French-speaking. Write the ENTIRE message IN ENGLISH. Same short structure (2-3 sentences). Use 'Hi [firstname]' + self-intro."
+      : "";
+
+    // Few-shot examples — seeded with Julien's style, grows as he edits more
+    var styleExamples = await loadStyleExamples("whapi_text", lang, false);
+    var styleBlock = buildStyleExamplesBlock(styleExamples);
+
+    var jsonInstruction = lang === "en"
+      ? 'Reply in JSON: {"text": "..."}\nThe text MUST start with "Hi [firstname], I\'m Julien, from MessagingMe" or similar. 2-3 sentences total.'
+      : 'Reponds en JSON: {"text": "..."}\nLe texte DOIT commencer par "Bonjour ' + firstName + ', je suis Julien, de MessagingMe" ou une formulation proche. 2 a 3 phrases au total.';
+
+    var result = await callClaude(SYSTEM_WHAPI,
+      styleBlock +
+      instructions + langInstruction + "\n\n" +
+      buildLeadContext(lead) + "\n\n" +
+      jsonInstruction, 400);
+
+    var text = (result && result.text ? String(result.text) : "").trim();
+    if (!text) return null;
+    return text;
+  } catch (err) {
+    console.warn("generateWhapiMessage failed:", err.message);
+    return null;
+  }
+}
+
+/**
  * Generate a WhatsApp message body.
  * @param {object} lead - Lead data
  * @returns {Promise<string|null>} WhatsApp body text or null on error
@@ -844,6 +907,7 @@ module.exports = {
   generateFollowupEmail,
   generateColdEmail,
   generateWhatsAppBody,
+  generateWhapiMessage,
   generateInMail,
   isColdLead,
   DEFAULT_TEMPLATES,

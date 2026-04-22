@@ -1051,6 +1051,124 @@ router.get("/:id/hubspot-email", async (req, res) => {
 });
 
 /**
+ * POST /:id/generate-whapi-draft — generate a personal-WhatsApp draft via
+ * Sonnet using SYSTEM_WHAPI (short, self-introduction allowed). Stored in
+ * metadata.draft_whapi_text for the UI to pre-fill the editor.
+ *
+ * Response: 200 { ok: true, text }
+ */
+router.post("/:id/generate-whapi-draft", async (req, res) => {
+  try {
+    const { generateWhapiMessage } = require("../lib/message-generator");
+    const { data: lead, error: fetchErr } = await supabase
+      .from("leads")
+      .select("*")
+      .eq("id", req.params.id)
+      .single();
+    if (fetchErr || !lead) return res.status(404).json({ error: "lead_not_found" });
+
+    const text = await generateWhapiMessage(lead);
+    if (!text) return res.status(502).json({ error: "generation_failed" });
+
+    const updatedMeta = Object.assign({}, lead.metadata || {}, {
+      draft_whapi_text: text,
+      draft_whapi_generated_at: new Date().toISOString(),
+    });
+    await supabase.from("leads").update({ metadata: updatedMeta }).eq("id", lead.id);
+
+    res.json({ ok: true, text });
+  } catch (err) {
+    console.error("POST /leads/:id/generate-whapi-draft error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /:id/send-whapi-text — envoi personnel via Whapi Cloud.
+ *
+ * Body: { text: string }
+ *
+ * - Daily cap : 15 envois/jour (Whapi Starter trial = 150/5j, marge de securite
+ *   + evite le ban Meta sur volume). Compteur base sur sent_messages_archive.
+ * - Archive l envoi dans sent_messages_archive (channel='whapi_text') pour
+ *   que le prochain draft Sonnet apprenne du ton de Julien (few-shot).
+ *
+ * Responses :
+ *   200 { ok: true, message_id, phone_used }
+ *   400 { error: 'missing_text' | 'missing_phone' }
+ *   429 { error: 'daily_cap_reached', cap: 15 }
+ *   502 { error: 'whapi_send_failed', detail }
+ */
+router.post("/:id/send-whapi-text", async (req, res) => {
+  try {
+    const { sendWhapiText, normalizePhone } = require("../lib/whapi");
+
+    const text = (req.body && req.body.text ? String(req.body.text) : "").trim();
+    if (!text) return res.status(400).json({ error: "missing_text" });
+
+    const { data: lead, error: fetchErr } = await supabase
+      .from("leads")
+      .select("*")
+      .eq("id", req.params.id)
+      .single();
+    if (fetchErr || !lead) return res.status(404).json({ error: "lead_not_found" });
+
+    const e164 = normalizePhone(lead.phone);
+    if (!e164) return res.status(400).json({ error: "missing_phone" });
+
+    // Daily cap check
+    const DAILY_CAP = 15;
+    const todayIso = new Date(new Date().setHours(0, 0, 0, 0)).toISOString();
+    const { count: sentToday } = await supabase
+      .from("sent_messages_archive")
+      .select("*", { count: "exact", head: true })
+      .eq("channel", "whapi_text")
+      .gte("sent_at", todayIso);
+    if ((sentToday || 0) >= DAILY_CAP) {
+      return res.status(429).json({ error: "daily_cap_reached", cap: DAILY_CAP, sent_today: sentToday });
+    }
+
+    // Send
+    const result = await sendWhapiText(e164, text);
+
+    // Archive (always — whatever edit state, we want the learning signal)
+    const aiDraft = lead.metadata && lead.metadata.draft_whapi_text;
+    try {
+      await supabase.from("sent_messages_archive").insert({
+        lead_id: lead.id,
+        channel: "whapi_text",
+        final_text: text,
+        ai_draft: aiDraft || null,
+        lead_sector: lead.company_sector || null,
+        lead_tier: lead.tier || null,
+        lead_signal_category: lead.signal_category || null,
+        pitch_mode_used: false,
+        lang: "fr",
+      });
+    } catch (archErr) {
+      console.warn("[archive] whapi_text insert failed:", archErr.message);
+    }
+
+    // Update lead metadata
+    const updatedMeta = Object.assign({}, lead.metadata || {}, {
+      whapi_sent_at: new Date().toISOString(),
+      whapi_message_id: result.messageId,
+      draft_whapi_text: null,
+      draft_whapi_generated_at: null,
+    });
+    await supabase.from("leads").update({ metadata: updatedMeta }).eq("id", lead.id);
+
+    res.json({ ok: true, message_id: result.messageId, phone_used: e164 });
+  } catch (err) {
+    console.error("POST /leads/:id/send-whapi-text error:", err.message);
+    if (err.status) {
+      return res.status(502).json({ error: "whapi_send_failed", detail: err.message });
+    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
  * POST /:id/find-phone — recherche le numero WhatsApp via FullEnrich (10 credits).
  * Utilise dans l'onglet "Sans email" : Julien clique par lead pour decider en
  * connaissance de cause si ca vaut la depense, puis clique "Envoyer WhatsApp"
