@@ -195,7 +195,11 @@ async function logEmailToHubspot(lead, opts) {
     var contactId = search.contactId;
     var createdContact = false;
 
-    // ── Step 2A: contact NOT found → create
+    // ── Step 2A: contact NOT found → create (with last-contact date)
+    //   HubSpot expects notes_last_contacted as an ISO-8601 timestamp string
+    //   (or epoch ms). We use ISO for readability.
+    var nowIso = new Date().toISOString();
+
     if (!search.found) {
       var createProps = { email: lead.email };
       if (firstName) createProps.firstname = firstName;
@@ -203,6 +207,7 @@ async function logEmailToHubspot(lead, opts) {
       if (lead.company_name) createProps.company = lead.company_name;
       if (lead.headline) createProps.jobtitle = lead.headline;
       if (ownerId) createProps.hubspot_owner_id = ownerId;
+      createProps.notes_last_contacted = nowIso;
 
       var created = await withHubspotRetry(() => client.crm.contacts.basicApi.create({
         properties: createProps,
@@ -210,7 +215,7 @@ async function logEmailToHubspot(lead, opts) {
       contactId = created.id;
       createdContact = true;
     } else {
-      // ── Step 2B: contact exists → enrich missing props only
+      // ── Step 2B: contact exists → enrich missing props + bump last-contact date
       var currentProps = search.props || {};
       var toUpdate = {};
 
@@ -224,16 +229,17 @@ async function logEmailToHubspot(lead, opts) {
       if (!currentProps.jobtitle && lead.headline) {
         toUpdate.jobtitle = lead.headline;
       }
+      // ALWAYS bump last-contact date on every logged email (overwriting is
+      // the whole point — we want the latest outbound timestamp to surface).
+      toUpdate.notes_last_contacted = nowIso;
 
-      if (Object.keys(toUpdate).length > 0) {
-        try {
-          await withHubspotRetry(() => client.crm.contacts.basicApi.update(contactId, {
-            properties: toUpdate,
-          }));
-        } catch (updErr) {
-          console.warn("[hubspot-log] contact update failed:", updErr.message);
-          // Continue — we still want to log the email engagement.
-        }
+      try {
+        await withHubspotRetry(() => client.crm.contacts.basicApi.update(contactId, {
+          properties: toUpdate,
+        }));
+      } catch (updErr) {
+        console.warn("[hubspot-log] contact update failed:", updErr.message);
+        // Continue — we still want to log the email engagement.
       }
     }
 
