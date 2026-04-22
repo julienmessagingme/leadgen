@@ -1051,6 +1051,70 @@ router.get("/:id/hubspot-email", async (req, res) => {
 });
 
 /**
+ * POST /:id/find-phone — recherche le numero WhatsApp via FullEnrich (10 credits).
+ * Utilise dans l'onglet "Sans email" : Julien clique par lead pour decider en
+ * connaissance de cause si ca vaut la depense, puis clique "Envoyer WhatsApp"
+ * (endpoint /send-whatsapp standard) si le numero est trouve.
+ *
+ * - Trouve → update leads.phone + status = 'whatsapp_ready' + metadata.phone_found_at
+ * - Non trouve → status = 'disqualified' + metadata.disqualified_reason = 'no_phone'
+ *
+ * Response:
+ *   200 { ok: true, phone, status: 'whatsapp_ready' }
+ *   200 { ok: false, status: 'disqualified', reason: 'no_phone' }
+ *   404 { error: 'lead_not_found' }
+ *   400 { error: 'missing_linkedin_url' }
+ *   503 { error: 'fullenrich_not_configured' }
+ */
+router.post("/:id/find-phone", async (req, res) => {
+  try {
+    const { enrichPhone } = require("../lib/fullenrich");
+
+    if (!process.env.FULLENRICH_API_KEY) {
+      return res.status(503).json({ error: "fullenrich_not_configured" });
+    }
+
+    const { data: lead, error: fetchErr } = await supabase
+      .from("leads")
+      .select("*")
+      .eq("id", req.params.id)
+      .single();
+    if (fetchErr || !lead) return res.status(404).json({ error: "lead_not_found" });
+    if (!lead.linkedin_url) return res.status(400).json({ error: "missing_linkedin_url" });
+
+    const result = await enrichPhone(lead.linkedin_url, null);
+    const phone = result && result.phone ? result.phone : null;
+
+    if (phone) {
+      const updatedMeta = Object.assign({}, lead.metadata || {}, {
+        phone_found_at: new Date().toISOString(),
+        phone_lookup_credits: (result && result.credits) || 10,
+        phone_source: "fullenrich",
+      });
+      await supabase
+        .from("leads")
+        .update({ phone: phone, status: "whatsapp_ready", metadata: updatedMeta })
+        .eq("id", lead.id);
+      return res.json({ ok: true, phone: phone, status: "whatsapp_ready", credits: (result && result.credits) || 10 });
+    }
+
+    // Not found — archive lead so it stops polluting the list
+    const deadMeta = Object.assign({}, lead.metadata || {}, {
+      phone_lookup_failed_at: new Date().toISOString(),
+      disqualified_reason: "no_phone",
+    });
+    await supabase
+      .from("leads")
+      .update({ status: "disqualified", metadata: deadMeta })
+      .eq("id", lead.id);
+    return res.json({ ok: false, status: "disqualified", reason: "no_phone" });
+  } catch (err) {
+    console.error("POST /leads/:id/find-phone error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
  * POST /:id/send-whatsapp — trigger the WhatsApp sub-flow for this lead.
  *
  * Flow:

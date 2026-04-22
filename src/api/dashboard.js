@@ -336,6 +336,54 @@ router.get("/email-tracking", async (req, res) => {
 });
 
 // ────────────────────────────────────────────────────────────
+// GET /no-email-candidates -- leads ou FullEnrich n'a pas trouve d'email
+// ────────────────────────────────────────────────────────────
+router.get("/no-email-candidates", async (req, res) => {
+  try {
+    const { data: leads, error } = await supabase
+      .from("leads")
+      .select("id, full_name, first_name, last_name, linkedin_url, headline, company_name, company_sector, tier, icp_score, signal_type, signal_category, signal_source, metadata, status, created_at")
+      .in("status", ["email_not_found", "whatsapp_ready"])
+      .order("icp_score", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (error) return res.status(500).json({ error: error.message });
+
+    const candidates = (leads || []).map((l) => {
+      const meta = l.metadata || {};
+      return {
+        id: l.id,
+        full_name: l.full_name,
+        first_name: l.first_name,
+        last_name: l.last_name,
+        linkedin_url: l.linkedin_url,
+        headline: l.headline,
+        company_name: l.company_name,
+        company_sector: l.company_sector,
+        tier: l.tier,
+        icp_score: l.icp_score,
+        signal_type: l.signal_type,
+        signal_category: l.signal_category,
+        signal_source: l.signal_source,
+        status: l.status,
+        post_text: meta.post_text || null,
+        post_url: meta.post_url || null,
+        post_author_name: meta.post_author_name || null,
+        comment_text: meta.comment_text || null,
+        phone_found_at: meta.phone_found_at || null,
+        phone_lookup_credits: meta.phone_lookup_credits || null,
+        whatsapp_sent_at: meta.whatsapp_sent_at || null,
+      };
+    });
+
+    res.json({ candidates });
+  } catch (err) {
+    console.error("Dashboard /no-email-candidates error:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
 // GET /followup-candidates -- leads eligible to a manual relance email
 // ────────────────────────────────────────────────────────────
 //

@@ -11,6 +11,7 @@ import { htmlToText, textToHtml } from "../utils/htmlText";
 import FollowupCasePicker from "../components/followups/FollowupCasePicker";
 import { useValidatedCampaigns } from "../hooks/useCampaigns";
 import HubspotSignalsPanel from "../components/hubspot/HubspotSignalsPanel";
+import NoEmailWhatsAppPanel from "../components/no-email/NoEmailWhatsAppPanel";
 
 function useApproveMessage() {
   const qc = useQueryClient();
@@ -414,6 +415,16 @@ export default function MessagesDraft() {
             )}
           </button>
           <button
+            onClick={() => setTab("no_email")}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              tab === "no_email"
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Sans email
+          </button>
+          <button
             onClick={() => setTab("reinvite")}
             className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
               tab === "reinvite"
@@ -453,6 +464,7 @@ export default function MessagesDraft() {
 
         {/* HubSpot signals tab */}
         {tab === "hubspot" && <HubspotSignalsPanel />}
+        {tab === "no_email" && <NoEmailWhatsAppPanel />}
 
         {/* Campagne tab: list of validated campaigns (drill-down into drafts on click) */}
         {tab === "campagne" && !selectedCampaignId && (
@@ -540,7 +552,7 @@ export default function MessagesDraft() {
           <div className="text-center py-12 text-gray-400">Chargement...</div>
         )}
 
-        {!isLoading && leads.length === 0 && tab !== "campagne" && tab !== "hubspot" && tab !== "followup_email" && (
+        {!isLoading && leads.length === 0 && tab !== "campagne" && tab !== "hubspot" && tab !== "followup_email" && tab !== "no_email" && (
           <div className="text-center py-12 text-gray-400">
             {tab === "linkedin" ? "Aucun message LinkedIn en attente."
              : tab === "email" ? "Aucun email en attente. Task D n'a pas encore tourné ou tous les emails ont été traités."

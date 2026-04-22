@@ -276,7 +276,27 @@ module.exports = async function taskDEmail(runId) {
         continue;
       }
 
-      // Step 3: Generate email draft (even without email address)
+      // GATE : pas d'email apres HubSpot + FullEnrich → on skip la generation
+      // Sonnet (economise tokens) et on met le lead en 'email_not_found' pour
+      // qu'il apparaisse dans l'onglet "Sans email" ou Julien decidera s'il
+      // cherche un numero WhatsApp (10 credits) ou archive.
+      if (!email) {
+        var nefMetadata = Object.assign({}, lead.metadata || {}, {
+          email_lookup_failed_at: new Date().toISOString(),
+          pre_email_status: lead.status,
+        });
+        await supabase
+          .from("leads")
+          .update({ status: "email_not_found", metadata: nefMetadata })
+          .eq("id", lead.id);
+        skipped.no_email++;
+        await log(runId, TASK_NAME, "info",
+          "No email found for " + (lead.full_name || lead.id) + " — status=email_not_found, skipping Sonnet",
+          { lead_id: lead.id });
+        continue;
+      }
+
+      // Step 3: Generate email draft (only when email resolved)
       var emailContent = await generateEmail(lead, templates);
       if (!emailContent) {
         skipped.gen_failed++;
