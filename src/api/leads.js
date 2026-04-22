@@ -19,6 +19,54 @@ const PII_NULLS = {
 const VALID_SORTS = ["icp_score", "created_at", "signal_date", "status", "scored_at", "invitation_sent_at"];
 
 /**
+ * Fetch case_studies by IDs, separate pitch directives (mode='override_pitch')
+ * from regular client cases, mutate lead.metadata to inject them properly:
+ *   - _pitch_directive: full description of the first override_pitch case (not truncated)
+ *   - _pitch_mode_active: true if any override_pitch case selected
+ *   - _additional_case_studies: formatted strings for regular cases (truncated 500 chars)
+ *
+ * The directive block is consumed by buildLeadContext as a top-level prompt
+ * section. The case studies list is consumed by rule 3 of email templates.
+ *
+ * @returns {Promise<{pitchModeActive: boolean, rawIds: Array, selectedCount: number}>}
+ */
+async function injectSelectedCases(lead, rawIds) {
+  const { data: allCases } = await supabase
+    .from("case_studies")
+    .select("*")
+    .eq("is_active", true);
+  const selectedCases = (allCases || []).filter((c) =>
+    rawIds.includes(c.id) || rawIds.includes(String(c.id))
+  );
+  if (selectedCases.length === 0) return { pitchModeActive: false, selectedCount: 0 };
+
+  const pitchCases = selectedCases.filter((c) => c.mode === "override_pitch");
+  const regularCases = selectedCases.filter((c) => c.mode !== "override_pitch");
+  const pitchModeActive = pitchCases.length > 0;
+
+  lead.metadata = Object.assign({}, lead.metadata || {}, {
+    _pitch_mode_active: pitchModeActive,
+    _pitch_directive: pitchModeActive ? pitchCases[0].description : null,
+    _additional_case_studies: regularCases.map((c) =>
+      c.client_name + " (" + c.sector + ") — " + c.metric_label + " : " + c.metric_value +
+      (c.description ? ". " + c.description.slice(0, 500) : "")
+    ),
+  });
+
+  return { pitchModeActive, selectedCount: selectedCases.length };
+}
+
+/**
+ * Strip the temporary prompt-injection fields from a metadata object before
+ * persisting it to Supabase. These are only useful at generation time.
+ */
+function cleanCaseInjection(metadata) {
+  delete metadata._additional_case_studies;
+  delete metadata._pitch_mode_active;
+  delete metadata._pitch_directive;
+}
+
+/**
  * ISO-8601 date validation helper.
  */
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d+)?Z?)?$/;
@@ -621,27 +669,12 @@ router.post("/:id/regenerate-message", async (req, res) => {
     const originalLocation = lead.location;
     lead.location = lang === "en" ? "New York, US" : "Paris, France";
 
-    // Attach selected case studies — detect pitch-mode override
+    // Attach selected case studies — separate pitch directives from client cases
     const rawIds = req.body && req.body.case_study_ids;
     let pitchModeActive = false;
     if (Array.isArray(rawIds) && rawIds.length > 0) {
-      const { data: allCases } = await supabase
-        .from("case_studies")
-        .select("*")
-        .eq("is_active", true);
-      const selectedCases = (allCases || []).filter((c) =>
-        rawIds.includes(c.id) || rawIds.includes(String(c.id))
-      );
-      if (selectedCases.length > 0) {
-        pitchModeActive = selectedCases.some((c) => c.mode === "override_pitch");
-        lead.metadata = Object.assign({}, lead.metadata || {}, {
-          _additional_case_studies: selectedCases.map((c) =>
-            c.client_name + " (" + c.sector + ") — " + c.metric_label + " : " + c.metric_value +
-            (c.description ? ". " + c.description.slice(0, 2000) : "")
-          ),
-          _pitch_mode_active: pitchModeActive,
-        });
-      }
+      const injected = await injectSelectedCases(lead, rawIds);
+      pitchModeActive = injected.pitchModeActive;
     }
 
     const templates = await loadTemplates();
@@ -658,9 +691,7 @@ router.post("/:id/regenerate-message", async (req, res) => {
       regenerated_with_cases: Array.isArray(rawIds) ? rawIds : undefined,
       pitch_mode_used: pitchModeActive || undefined,
     });
-    // Clean temp injection flags
-    delete updatedMetadata._additional_case_studies;
-    delete updatedMetadata._pitch_mode_active;
+    cleanCaseInjection(updatedMetadata);
 
     await supabase
       .from("leads")
@@ -700,24 +731,12 @@ router.post("/:id/regenerate-email", async (req, res) => {
       lead.location = lang === "en" ? "New York, US" : "Paris, France";
     }
 
-    // Inject case studies into lead context if provided
+    // Inject case studies (separate pitch directive from regular cases)
     const rawIds = req.body && req.body.case_study_ids;
+    let pitchModeActive = false;
     if (Array.isArray(rawIds) && rawIds.length > 0) {
-      const { data: allCases } = await supabase
-        .from("case_studies")
-        .select("*")
-        .eq("is_active", true);
-      const selectedCases = (allCases || []).filter((c) =>
-        rawIds.includes(c.id) || rawIds.includes(String(c.id))
-      );
-      if (selectedCases.length > 0) {
-        lead.metadata = Object.assign({}, lead.metadata || {}, {
-          _additional_case_studies: selectedCases.map((c) =>
-            c.client_name + " (" + c.sector + ") — " + c.metric_label + " : " + c.metric_value +
-            (c.description ? ". " + c.description.slice(0, 500) : "")
-          ),
-        });
-      }
+      const injected = await injectSelectedCases(lead, rawIds);
+      pitchModeActive = injected.pitchModeActive;
     }
 
     const templates = await loadTemplates();
@@ -733,9 +752,9 @@ router.post("/:id/regenerate-email", async (req, res) => {
       draft_email_generated_at: new Date().toISOString(),
       forced_lang: lang || undefined,
       regenerated_with_cases: Array.isArray(rawIds) ? rawIds : undefined,
+      pitch_mode_used: pitchModeActive || undefined,
     });
-    // Clean the temp injection field
-    delete updatedMetadata._additional_case_studies;
+    cleanCaseInjection(updatedMetadata);
 
     await supabase
       .from("leads")
@@ -1446,19 +1465,23 @@ router.post("/:id/generate-followup-now", async (req, res) => {
     const rawIds = req.body && req.body.case_study_ids;
     const rawCaseId = req.body && req.body.case_study_id;
 
+    let pitchModeActive = false;
+
     if (Array.isArray(rawIds) && rawIds.length > 0) {
-      // Multi-select mode: load all requested case studies
-      const selectedCases = [];
-      for (const rid of rawIds) {
-        if (rid === "none" || rid === null) continue;
-        const parsed = Number.parseInt(rid, 10);
-        if (!Number.isInteger(parsed)) continue;
-        const found = caseStudies.find((c) => c.id === parsed);
-        if (found) selectedCases.push(found);
-      }
-      if (selectedCases.length > 0) {
-        caseStudy = selectedCases[0]; // primary
-        additionalCases = selectedCases.slice(1); // extras
+      // Multi-select mode — delegate to injectSelectedCases which handles
+      // pitch-mode override (directive vs. regular cases).
+      const validIds = rawIds.filter((rid) => rid !== "none" && rid !== null && Number.isInteger(Number.parseInt(rid, 10)));
+      if (validIds.length > 0) {
+        const injected = await injectSelectedCases(lead, validIds);
+        pitchModeActive = injected.pitchModeActive;
+        // In pitch mode, caseStudy stays null (directive drives the pitch).
+        // In regular mode, pick the 1st regular case as the primary.
+        if (!pitchModeActive) {
+          const regularCases = caseStudies.filter((c) =>
+            validIds.includes(c.id) || validIds.includes(String(c.id))
+          ).filter((c) => c.mode !== "override_pitch");
+          if (regularCases.length > 0) caseStudy = regularCases[0];
+        }
       }
     } else if (rawCaseId === null || rawCaseId === "none") {
       caseStudy = null;
@@ -1475,17 +1498,6 @@ router.post("/:id/generate-followup-now", async (req, res) => {
       caseStudy = pickCaseStudyForLead(lead, caseStudies);
     }
 
-    // If multiple case studies selected, inject the extras into the lead
-    // context so Sonnet sees them all in the prompt alongside the primary.
-    if (additionalCases.length > 0) {
-      lead.metadata = Object.assign({}, lead.metadata || {}, {
-        _additional_case_studies: additionalCases.map((c) =>
-          c.client_name + " (" + c.sector + ") — " + c.metric_label + " : " + c.metric_value +
-          (c.description ? ". " + c.description.slice(0, 200) : "")
-        ),
-      });
-    }
-
     const emailContent = await generateFollowupEmail(lead, templates, caseStudy);
     if (!emailContent || !emailContent.subject || !emailContent.body) {
       return res.status(502).json({ error: "Follow-up generation failed (Sonnet returned empty)" });
@@ -1498,7 +1510,9 @@ router.post("/:id/generate-followup-now", async (req, res) => {
       draft_followup_generated_at: new Date().toISOString(),
       draft_followup_case_id: caseStudy ? caseStudy.id : null,
       draft_followup_source: "manual_fast",
+      pitch_mode_used: pitchModeActive || undefined,
     });
+    cleanCaseInjection(updatedMetadata);
 
     const { error: updErr } = await supabase
       .from("leads")
@@ -1676,29 +1690,32 @@ router.post("/:id/regenerate-email-followup", async (req, res) => {
     const originalLocation = lead.location;
     lead.location = lang === "en" ? "New York, US" : "Paris, France";
 
-    // Pick the case study to cite + any extras for Sonnet's context.
+    // Case injection with pitch-mode detection.
+    // - override_pitch case → populated via injectSelectedCases as
+    //   _pitch_directive (full description) + _pitch_mode_active flag.
+    // - regular cases → 1st one used as primary caseStudy parameter,
+    //   extras fall into _additional_case_studies.
+    // - No case_study_ids → fall back to the lead's original case.
     let caseStudy = null;
     const rawIds = req.body && req.body.case_study_ids;
     const hasOverride = Array.isArray(rawIds) && rawIds.length > 0;
+    let pitchModeActive = false;
 
     if (hasOverride) {
-      const { data: allCases } = await supabase
-        .from("case_studies")
-        .select("*")
-        .eq("is_active", true);
-      const selectedCases = (allCases || []).filter((c) =>
-        rawIds.includes(c.id) || rawIds.includes(String(c.id))
-      );
-      if (selectedCases.length > 0) {
-        caseStudy = selectedCases[0]; // primary
-        if (selectedCases.length > 1) {
-          lead.metadata = Object.assign({}, lead.metadata || {}, {
-            _additional_case_studies: selectedCases.slice(1).map((c) =>
-              c.client_name + " (" + c.sector + ") — " + c.metric_label + " : " + c.metric_value +
-              (c.description ? ". " + c.description.slice(0, 500) : "")
-            ),
-          });
-        }
+      const injected = await injectSelectedCases(lead, rawIds);
+      pitchModeActive = injected.pitchModeActive;
+      // If any regular case was selected, re-fetch to pick the primary caseStudy
+      // (the 1st regular case). In pitch mode, caseStudy stays null — the
+      // directive handles the entire pitch.
+      if (!pitchModeActive) {
+        const { data: allCases } = await supabase
+          .from("case_studies")
+          .select("*")
+          .eq("is_active", true);
+        const regularCases = (allCases || []).filter((c) =>
+          (rawIds.includes(c.id) || rawIds.includes(String(c.id))) && c.mode !== "override_pitch"
+        );
+        if (regularCases.length > 0) caseStudy = regularCases[0];
       }
     } else {
       // Fall back to the originally-picked case
@@ -1723,9 +1740,9 @@ router.post("/:id/regenerate-email-followup", async (req, res) => {
       forced_lang: lang,
       draft_followup_case_id: hasOverride && caseStudy ? caseStudy.id : (lead.metadata?.draft_followup_case_id || null),
       regenerated_with_cases: hasOverride ? rawIds : undefined,
+      pitch_mode_used: pitchModeActive || undefined,
     });
-    // Clean the temp injection field
-    delete updatedMetadata._additional_case_studies;
+    cleanCaseInjection(updatedMetadata);
 
     await supabase.from("leads").update({ metadata: updatedMetadata }).eq("id", lead.id);
     res.json({

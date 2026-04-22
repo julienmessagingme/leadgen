@@ -298,11 +298,23 @@ function buildLeadContext(lead) {
     }
   }
 
+  // PITCH DIRECTIVE — separate block, full description (not truncated).
+  // Activated when an override_pitch case (e.g. "MessagingMe — hard") is
+  // attached. The full description carries the 6-block template + the list
+  // of prestigious clients to name-drop (BNP, SNCF, DPD, ...). Rendered
+  // first and flagged strongly so Sonnet treats it as a directive, not as
+  // a client to cite by name.
+  if (meta._pitch_directive) {
+    lines.push("");
+    lines.push("=== DIRECTIVE DE POSITIONNEMENT — MODE PITCH CABINET ASSUME (PRIORITAIRE) ===");
+    lines.push(sanitizeForPrompt(meta._pitch_directive, 5000));
+    lines.push("=== FIN DIRECTIVE — applique la STRUCTURE decrite ci-dessus. Les clients cites dans la directive sont les SEULS name-droppables. N'invente aucun autre nom de client. ===");
+  }
+
   // Additional case studies (when Julien selected multiple in the UI).
-  // Note: the case study "MessagingMe — Conseil conversationnel de stratégie"
-  // (id #20) acts as a positioning/angle directive rather than a client to
-  // cite — its description tells the LLM to adopt the agnostic consulting
-  // stance instead of name-dropping a client.
+  // Note: these are REGULAR client cases (not positioning directives).
+  // Positioning case studies with mode='override_pitch' are handled above
+  // via _pitch_directive and are NOT included here.
   if (meta._additional_case_studies && meta._additional_case_studies.length > 0) {
     lines.push("");
     lines.push("Cas clients supplementaires a citer si pertinents :");
@@ -407,18 +419,25 @@ async function generateEmail(lead, templates) {
   try {
     var calendlyUrl = process.env.CALENDLY_URL || "https://calendly.com/julien-messagingme/30min";
     var tpl = templates || (await loadTemplates());
-    var instructions = (tpl.template_email || DEFAULT_EMAIL_TEMPLATE).replace("{calendlyUrl}", calendlyUrl);
     var lang = detectLanguage(lead);
+
+    var isPitchMode = lead.metadata && lead.metadata._pitch_mode_active === true;
+
+    var instructions = isPitchMode
+      ? "Redige un email en mode PITCH CABINET ASSUME. Applique la DIRECTIVE DE POSITIONNEMENT fournie dans le contexte (structure 6 blocs : hook conditionnel, qui-on-est, posture, name-drop 2-3 clients PARMI CEUX LISTES DANS LA DIRECTIVE uniquement, CTA). Format email : objet court et direct (pas 'Relance' ni 'Suite a'), corps HTML simple, 5-6 phrases. Objet = theme conversationnel + nom entreprise. Termine par 'On se trouve un moment pour en discuter ?' (ou equivalent anglais). NE CITE AUCUN CLIENT ABSENT DE LA DIRECTIVE. Politesse email : questions en inversion sujet-verbe obligatoire ('Explorez-vous ... ?' pas 'vous explorez ... ?'). PAS de signature (ajoutee automatiquement)."
+      : (tpl.template_email || DEFAULT_EMAIL_TEMPLATE).replace("{calendlyUrl}", calendlyUrl);
+
+    var system = isPitchMode ? SYSTEM_PITCH : SYSTEM;
 
     var langInstruction = lang === "en"
       ? "\n\nIMPORTANT: This prospect is NOT French-speaking. Write the ENTIRE email (subject + body) IN ENGLISH. Professional but warm tone."
       : "";
 
-    var result = await callClaude(SYSTEM,
+    var result = await callClaude(system,
       instructions + langInstruction + "\n\n" +
       buildLeadContext(lead) + "\n" +
       "Email: " + sanitizeForPrompt(lead.email) + "\n\n" +
-      'Reponds en JSON: {"subject": "...", "body": "<html>...</html>"}', 1024);
+      'Reponds en JSON: {"subject": "...", "body": "<html>...</html>"}', isPitchMode ? 1500 : 1024);
 
     if (!result.subject || !result.body) return null;
 
@@ -476,29 +495,39 @@ async function generateFollowupEmail(lead, templates, caseStudy) {
   try {
     var calendlyUrl = process.env.CALENDLY_URL || "https://calendly.com/julien-messagingme/30min";
     var tpl = templates || (await loadTemplates());
-    var instructions = (tpl.template_email_followup || DEFAULT_EMAIL_FOLLOWUP_TEMPLATE);
     var lang = detectLanguage(lead);
 
-    // Build case study context block
+    var isPitchMode = lead.metadata && lead.metadata._pitch_mode_active === true;
+
+    var instructions = isPitchMode
+      ? "Redige un EMAIL de relance en mode PITCH CABINET ASSUME. Applique la DIRECTIVE DE POSITIONNEMENT fournie dans le contexte (structure 6 blocs : hook conditionnel, qui-on-est, posture, name-drop 2-3 clients PARMI CEUX LISTES DANS LA DIRECTIVE uniquement, CTA). Format email : objet court et direct DIFFERENT du 1er email (pas 'Re:'), corps HTML simple, 5-6 phrases. Termine par 'On se trouve un moment pour en discuter ?' (ou equivalent anglais). NE CITE AUCUN CLIENT ABSENT DE LA DIRECTIVE. Politesse : questions en inversion ('Explorez-vous...?' pas 'vous explorez...?'). PAS de signature (ajoutee auto)."
+      : (tpl.template_email_followup || DEFAULT_EMAIL_FOLLOWUP_TEMPLATE);
+
+    var system = isPitchMode ? SYSTEM_PITCH : SYSTEM;
+
+    // Build case study context block (only in non-pitch mode — pitch mode uses
+    // its directive for name-drops and ignores the caseStudy parameter).
     var caseContext = "";
-    if (caseStudy && caseStudy.client_name) {
-      caseContext = "\n\nCas client a citer : " + sanitizeForPrompt(caseStudy.client_name) +
-        " (secteur " + sanitizeForPrompt(caseStudy.sector || "") + ") — " +
-        sanitizeForPrompt(caseStudy.metric_label || "") + " : " +
-        sanitizeForPrompt(caseStudy.metric_value || "") +
-        (caseStudy.description ? ". " + sanitizeForPrompt(caseStudy.description, 300) : "");
-    } else {
-      caseContext = "\n\nAUCUN cas client fourni — applique la REGLE 10 (pas de chiffre invente).";
+    if (!isPitchMode) {
+      if (caseStudy && caseStudy.client_name) {
+        caseContext = "\n\nCas client a citer : " + sanitizeForPrompt(caseStudy.client_name) +
+          " (secteur " + sanitizeForPrompt(caseStudy.sector || "") + ") — " +
+          sanitizeForPrompt(caseStudy.metric_label || "") + " : " +
+          sanitizeForPrompt(caseStudy.metric_value || "") +
+          (caseStudy.description ? ". " + sanitizeForPrompt(caseStudy.description, 300) : "");
+      } else {
+        caseContext = "\n\nAUCUN cas client fourni — applique la REGLE 10 (pas de chiffre invente).";
+      }
     }
 
     var langInstruction = lang === "en"
       ? "\n\nIMPORTANT: This prospect is NOT French-speaking. Write the ENTIRE email (subject + body) IN ENGLISH. Professional but warm tone."
       : "";
 
-    var result = await callClaude(SYSTEM,
+    var result = await callClaude(system,
       instructions + langInstruction + "\n\n" +
       buildLeadContext(lead) + caseContext + "\n\n" +
-      'Reponds en JSON: {"subject": "...", "body": "<html>...</html>"}', 1024);
+      'Reponds en JSON: {"subject": "...", "body": "<html>...</html>"}', isPitchMode ? 1500 : 1024);
 
     if (!result.subject || !result.body) return null;
 
