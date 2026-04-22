@@ -137,6 +137,56 @@ var DEFAULT_WHATSAPP_TEMPLATE =
  * Fail-open: returns empty object on error (hardcoded defaults will be used).
  * @returns {Promise<object>} Map of template key to value
  */
+/**
+ * Load 3 recent "edited then sent" messages from sent_messages_archive,
+ * filtered by channel + language + pitch mode, to inject as few-shot
+ * style examples. Only messages Julien edited relative to the AI draft
+ * are in the archive (see src/api/leads.js archiveIfEdited).
+ *
+ * Returns an empty array if nothing matches — the caller should simply
+ * skip the few-shot block in that case (cold-start safe).
+ *
+ * @param {string} channel — 'linkedin_message' | 'email_first' | 'email_followup'
+ * @param {string} lang — 'fr' | 'en'
+ * @param {boolean} isPitchMode — whether the current generation is pitch mode
+ * @returns {Promise<string[]>} array of final_text strings (most recent first)
+ */
+async function loadStyleExamples(channel, lang, isPitchMode) {
+  try {
+    var { data, error } = await supabase
+      .from("sent_messages_archive")
+      .select("final_text")
+      .eq("channel", channel)
+      .eq("lang", lang || "fr")
+      .eq("pitch_mode_used", Boolean(isPitchMode))
+      .order("sent_at", { ascending: false })
+      .limit(3);
+    if (error || !data) return [];
+    return data.map(function (r) { return r.final_text; }).filter(Boolean);
+  } catch (e) {
+    console.warn("loadStyleExamples failed:", e.message);
+    return [];
+  }
+}
+
+/**
+ * Build the few-shot style block injected at the top of the user prompt.
+ * Frames the examples as TONE references — not content. Explicitly forbids
+ * copying proper nouns (company/people names) or signal references.
+ */
+function buildStyleExamplesBlock(examples) {
+  if (!examples || examples.length === 0) return "";
+  var header = "=== EXEMPLES DE TON STYLE (messages que tu as edites puis envoyes) ===\n";
+  var body = examples.map(function (t, i) {
+    return "--- Exemple " + (i + 1) + " ---\n" + sanitizeForPrompt(t, 1200);
+  }).join("\n\n");
+  var footer =
+    "\n=== FIN EXEMPLES ===\n" +
+    "REGLE CRITIQUE : inspire-toi UNIQUEMENT du TON, du registre, des formulations, de la structure de phrases et du niveau de formalite de ces exemples. " +
+    "NE REUTILISE JAMAIS les elements de contenu : noms de boites, noms de personnes, secteurs, metriques, references a des signaux LinkedIn, noms de clients. Tout le contenu doit venir du contexte du prospect actuel, pas des exemples.\n";
+  return header + body + footer + "\n";
+}
+
 async function loadTemplates() {
   try {
     var { data, error } = await supabase
@@ -388,7 +438,12 @@ async function generateFollowUpMessage(lead, templates) {
     // Pitch mode needs more tokens (5-6 phrases structured pitch)
     var maxTokens = isPitchMode ? 900 : 512;
 
+    // Few-shot style examples from Julien's edited past sends
+    var styleExamples = await loadStyleExamples("linkedin_message", lang, isPitchMode);
+    var styleBlock = buildStyleExamplesBlock(styleExamples);
+
     var result = await callClaude(system,
+      styleBlock +
       instructions + langInstruction + "\n\n" +
       buildLeadContext(lead) + "\n\n" +
       jsonInstruction, maxTokens);
@@ -433,7 +488,12 @@ async function generateEmail(lead, templates) {
       ? "\n\nIMPORTANT: This prospect is NOT French-speaking. Write the ENTIRE email (subject + body) IN ENGLISH. Professional but warm tone."
       : "";
 
+    // Few-shot style examples (Julien's edited sends)
+    var styleExamples = await loadStyleExamples("email_first", lang, isPitchMode);
+    var styleBlock = buildStyleExamplesBlock(styleExamples);
+
     var result = await callClaude(system,
+      styleBlock +
       instructions + langInstruction + "\n\n" +
       buildLeadContext(lead) + "\n" +
       "Email: " + sanitizeForPrompt(lead.email) + "\n\n" +
@@ -524,7 +584,12 @@ async function generateFollowupEmail(lead, templates, caseStudy) {
       ? "\n\nIMPORTANT: This prospect is NOT French-speaking. Write the ENTIRE email (subject + body) IN ENGLISH. Professional but warm tone."
       : "";
 
+    // Few-shot style examples (Julien's edited relance sends)
+    var styleExamples = await loadStyleExamples("email_followup", lang, isPitchMode);
+    var styleBlock = buildStyleExamplesBlock(styleExamples);
+
     var result = await callClaude(system,
+      styleBlock +
       instructions + langInstruction + "\n\n" +
       buildLeadContext(lead) + caseContext + "\n\n" +
       'Reponds en JSON: {"subject": "...", "body": "<html>...</html>"}', isPitchMode ? 1500 : 1024);

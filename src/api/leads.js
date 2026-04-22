@@ -67,6 +67,60 @@ function cleanCaseInjection(metadata) {
 }
 
 /**
+ * Strip HTML tags and normalize whitespace — used to convert email HTML
+ * bodies to the plain-text representation we archive for few-shot prompts.
+ */
+function htmlToPlain(html) {
+  if (!html) return "";
+  return String(html)
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>\s*<p[^>]*>/gi, "\n\n")
+    .replace(/<\/?[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/**
+ * Archive a sent message to sent_messages_archive if Julien edited it
+ * relative to the AI draft. Unedited sends carry no learning signal and
+ * are skipped. Non-fatal — a failure here does NOT break the send flow.
+ *
+ * @param {object} lead   — full lead row (needs company_sector, tier, signal_category)
+ * @param {string} channel — 'linkedin_message' | 'email_first' | 'email_followup'
+ * @param {string} finalText — plain-text version of what was actually sent
+ * @param {string} aiDraft — plain-text version of the original AI draft
+ * @param {string} lang — 'fr' | 'en'
+ */
+async function archiveIfEdited(lead, channel, finalText, aiDraft, lang) {
+  try {
+    if (!finalText || !aiDraft) return;
+    const cleanFinal = String(finalText).trim();
+    const cleanDraft = String(aiDraft).trim();
+    if (!cleanFinal || cleanFinal === cleanDraft) return; // unedited, skip
+
+    const meta = lead.metadata || {};
+    await supabase.from("sent_messages_archive").insert({
+      lead_id: lead.id,
+      channel: channel,
+      final_text: cleanFinal,
+      ai_draft: cleanDraft,
+      lead_sector: lead.company_sector || null,
+      lead_tier: lead.tier || null,
+      lead_signal_category: lead.signal_category || null,
+      pitch_mode_used: meta.pitch_mode_used === true,
+      lang: lang || "fr",
+    });
+  } catch (err) {
+    console.warn("[archive] sent_messages_archive insert failed:", err.message);
+  }
+}
+
+/**
  * ISO-8601 date validation helper.
  */
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d+)?Z?)?$/;
@@ -514,6 +568,11 @@ router.post("/:id/approve-message", async (req, res) => {
     const message = (req.body.message || "").trim() || lead.metadata?.draft_message;
     if (!message) return res.status(400).json({ error: "No message to send" });
 
+    // Archive BEFORE we send + null-out the draft (we need draft for the diff)
+    const aiDraft = lead.metadata?.draft_message;
+    const archiveLang = (lead.metadata?.forced_lang || (message.startsWith("Hi ") ? "en" : "fr"));
+    await archiveIfEdited(lead, "linkedin_message", message, aiDraft, archiveLang);
+
     await sendMessage(lead.linkedin_url, message);
 
     const updatedMetadata = Object.assign({}, lead.metadata || {}, {
@@ -596,6 +655,16 @@ router.post("/:id/approve-email", async (req, res) => {
     const subject = (req.body.subject || "").trim() || lead.metadata?.draft_email_subject;
     const body = (req.body.body || "").trim() || lead.metadata?.draft_email_body;
     if (!subject || !body) return res.status(400).json({ error: "No email content to send" });
+
+    // Archive BEFORE send + draft nullification (we need the draft for diff)
+    const aiBodyDraft = lead.metadata?.draft_email_body;
+    if (aiBodyDraft) {
+      const archiveLang = (lead.metadata?.forced_lang || "fr");
+      await archiveIfEdited(
+        lead, "email_first",
+        htmlToPlain(body), htmlToPlain(aiBodyDraft), archiveLang
+      );
+    }
 
     // Inject click + open tracking before sending (1st email)
     const { injectTracking } = require("../lib/tracking");
@@ -1566,6 +1635,16 @@ router.post("/:id/approve-email-followup", async (req, res) => {
     let subject = (req.body.subject || "").trim() || lead.metadata?.draft_followup_subject;
     const body = (req.body.body || "").trim() || lead.metadata?.draft_followup_body;
     if (!subject || !body) return res.status(400).json({ error: "No email content to send" });
+
+    // Archive BEFORE the send — captures Julien's edits vs. the AI draft
+    const aiBodyDraft = lead.metadata?.draft_followup_body;
+    if (aiBodyDraft) {
+      const archiveLang = (lead.metadata?.forced_lang || "fr");
+      await archiveIfEdited(
+        lead, "email_followup",
+        htmlToPlain(body), htmlToPlain(aiBodyDraft), archiveLang
+      );
+    }
 
     // Prefix with "Re: " if not already present — Gmail will thread it with the original
     if (!/^re\s*:/i.test(subject)) {
