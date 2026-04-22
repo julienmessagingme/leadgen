@@ -705,11 +705,44 @@ router.post("/:id/approve-email", async (req, res) => {
     }
 
     res.json({ ok: true, email, subject });
+
+    // ── Fire-and-forget : log to HubSpot AFTER the HTTP response.
+    // Non-blocking — the send is already done, HubSpot failure must not
+    // surface to the user. Result is written back to lead.metadata async.
+    logEmailToHubspotAsync(lead, { subject, body }, email);
   } catch (err) {
     console.error("POST /leads/:id/approve-email error:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
+
+/**
+ * Internal helper — run HubSpot logging asynchronously after an email send,
+ * then persist the resulting contact_id + logged_at flags into lead.metadata.
+ * All errors are swallowed (non-fatal).
+ */
+async function logEmailToHubspotAsync(lead, opts, emailTo) {
+  try {
+    const { logEmailToHubspot } = require("../lib/hubspot");
+    // Make sure the logger has the up-to-date recipient email (may not be on lead row yet)
+    const leadForLog = Object.assign({}, lead, emailTo ? { email: emailTo } : {});
+    const result = await logEmailToHubspot(leadForLog, opts);
+    if (!result) return;
+
+    // Refetch current metadata to avoid overwriting fields set in parallel
+    const { data: fresh } = await supabase.from("leads").select("metadata").eq("id", lead.id).single();
+    const curMeta = (fresh && fresh.metadata) || {};
+    const newMeta = Object.assign({}, curMeta, {
+      hubspot_contact_id: result.contactId,
+      hubspot_email_id: result.emailId,
+      hubspot_logged_at: new Date().toISOString(),
+      hubspot_contact_created: result.createdContact || false,
+    });
+    await supabase.from("leads").update({ metadata: newMeta }).eq("id", lead.id);
+  } catch (err) {
+    console.warn("[hubspot-log-async] failed for lead " + lead.id + ":", err.message);
+  }
+}
 
 /**
  * POST /:id/regenerate-message -- Regenerate LinkedIn follow-up draft.
@@ -1879,6 +1912,9 @@ router.post("/:id/approve-email-followup", async (req, res) => {
     }
 
     res.json({ ok: true, email, subject });
+
+    // ── Fire-and-forget HubSpot logging (same pattern as approve-email)
+    logEmailToHubspotAsync(lead, { subject, body }, email);
   } catch (err) {
     console.error("POST /leads/:id/approve-email-followup error:", err.message);
     res.status(500).json({ error: err.message });

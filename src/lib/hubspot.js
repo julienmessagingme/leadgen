@@ -117,32 +117,167 @@ async function existsInHubspot(firstName, lastName, companyName) {
  * @returns {Promise<{found: boolean, contactId: string|null}>}
  */
 async function existsInHubspotByEmail(email) {
-  if (!email) return { found: false, contactId: null };
+  if (!email) return { found: false, contactId: null, props: {} };
 
   try {
     const client = getClient();
-    if (!client) return { found: false, contactId: null };
+    if (!client) return { found: false, contactId: null, props: {} };
 
     // Same reasoning as findPhoneInHubspot: retry on 429 so a burst doesn't
     // push us into wrong decisions (e.g. "contact doesn't exist, create it"
     // when it actually does).
+    // Props returned are enough to drive the merge logic in
+    // logEmailToHubspot (no extra getById call needed).
     const response = await withHubspotRetry(() => client.crm.contacts.searchApi.doSearch({
       filterGroups: [{
         filters: [
           { propertyName: "email", operator: "EQ", value: email },
         ],
       }],
-      properties: ["email", "firstname", "lastname"],
+      properties: ["email", "firstname", "lastname", "company", "jobtitle", "hubspot_owner_id"],
       limit: 1,
     }));
 
     if (response.total > 0) {
-      return { found: true, contactId: response.results[0].id };
+      return {
+        found: true,
+        contactId: response.results[0].id,
+        props: response.results[0].properties || {},
+      };
     }
-    return { found: false, contactId: null };
+    return { found: false, contactId: null, props: {} };
   } catch (err) {
     console.error("HubSpot email check failed (after retries):", err.message);
-    return { found: false, contactId: null };
+    return { found: false, contactId: null, props: {} };
+  }
+}
+
+/**
+ * Log an outbound email to HubSpot as a CRM "emails" engagement associated
+ * with the recipient contact. If the contact does not exist, it is created
+ * with the lead's info (firstname, lastname, company, jobtitle, owner=Julien).
+ * If it exists, missing props are enriched (company, jobtitle, owner — but
+ * NEVER overwrites an existing owner per Julien's rule).
+ *
+ * Non-blocking from the caller's point of view : wrap in try/catch at the
+ * call site and discard the promise. Failure here must not block the send.
+ *
+ * @param {object} lead - full lead row (needs email, first_name/last_name/full_name, company_name, headline)
+ * @param {object} opts - { subject, body }
+ * @returns {Promise<{contactId, emailId, createdContact}|null>}
+ */
+async function logEmailToHubspot(lead, opts) {
+  if (!lead || !lead.email) {
+    console.warn("[hubspot-log] skipped — no email on lead", lead && lead.id);
+    return null;
+  }
+  var subject = (opts && opts.subject) || "";
+  var body = (opts && opts.body) || "";
+
+  try {
+    var client = getClient();
+    if (!client) return null;
+
+    var ownerId = process.env.HUBSPOT_DEFAULT_OWNER_ID || null;
+    var fromEmail = process.env.GMAIL_USER || "";
+
+    // Derive firstname/lastname from full_name if first_name/last_name missing
+    var firstName = lead.first_name || "";
+    var lastName = lead.last_name || "";
+    if ((!firstName || !lastName) && lead.full_name) {
+      var parts = String(lead.full_name).trim().split(/\s+/);
+      if (!firstName) firstName = parts[0] || "";
+      if (!lastName) lastName = parts.slice(1).join(" ") || "";
+    }
+
+    // ── Step 1: search by email (enhanced — also returns props)
+    var search = await existsInHubspotByEmail(lead.email);
+    var contactId = search.contactId;
+    var createdContact = false;
+
+    // ── Step 2A: contact NOT found → create
+    if (!search.found) {
+      var createProps = { email: lead.email };
+      if (firstName) createProps.firstname = firstName;
+      if (lastName) createProps.lastname = lastName;
+      if (lead.company_name) createProps.company = lead.company_name;
+      if (lead.headline) createProps.jobtitle = lead.headline;
+      if (ownerId) createProps.hubspot_owner_id = ownerId;
+
+      var created = await withHubspotRetry(() => client.crm.contacts.basicApi.create({
+        properties: createProps,
+      }));
+      contactId = created.id;
+      createdContact = true;
+    } else {
+      // ── Step 2B: contact exists → enrich missing props only
+      var currentProps = search.props || {};
+      var toUpdate = {};
+
+      // Owner: set Julien ONLY if no owner at all. Never overwrite.
+      if (!currentProps.hubspot_owner_id && ownerId) {
+        toUpdate.hubspot_owner_id = ownerId;
+      }
+      if (!currentProps.company && lead.company_name) {
+        toUpdate.company = lead.company_name;
+      }
+      if (!currentProps.jobtitle && lead.headline) {
+        toUpdate.jobtitle = lead.headline;
+      }
+
+      if (Object.keys(toUpdate).length > 0) {
+        try {
+          await withHubspotRetry(() => client.crm.contacts.basicApi.update(contactId, {
+            properties: toUpdate,
+          }));
+        } catch (updErr) {
+          console.warn("[hubspot-log] contact update failed:", updErr.message);
+          // Continue — we still want to log the email engagement.
+        }
+      }
+    }
+
+    if (!contactId) {
+      console.warn("[hubspot-log] no contactId after create/search — aborting");
+      return null;
+    }
+
+    // ── Step 3: create the email engagement
+    var emailProps = {
+      hs_timestamp: Date.now().toString(),
+      hs_email_subject: subject,
+      hs_email_html: body,
+      hs_email_status: "SENT",
+      hs_email_direction: "EMAIL", // outbound sent from us
+    };
+    if (fromEmail) emailProps.hs_email_from_email = fromEmail;
+    if (lead.email) emailProps.hs_email_to_email = lead.email;
+    if (ownerId) emailProps.hubspot_owner_id = ownerId;
+
+    var emailObj = await withHubspotRetry(() => client.crm.objects.emails.basicApi.create({
+      properties: emailProps,
+    }));
+
+    // ── Step 4: associate email ↔ contact (HubSpot-defined: email→contact = 198)
+    try {
+      await withHubspotRetry(() => client.crm.associations.v4.basicApi.create(
+        "emails", emailObj.id,
+        "contacts", contactId,
+        [{ associationCategory: "HUBSPOT_DEFINED", associationTypeId: 198 }]
+      ));
+    } catch (assocErr) {
+      console.warn("[hubspot-log] association email→contact failed:", assocErr.message);
+      // Engagement exists but floats — Julien can still see it in HubSpot activity.
+    }
+
+    return {
+      contactId: contactId,
+      emailId: emailObj.id,
+      createdContact: createdContact,
+    };
+  } catch (err) {
+    console.warn("[hubspot-log] failed for lead " + lead.id + ":", err.message);
+    return null;
   }
 }
 
@@ -446,4 +581,5 @@ module.exports = {
   setPhoneInHubspot,
   createContactInHubspot,
   getLastEmail,
+  logEmailToHubspot,
 };
