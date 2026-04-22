@@ -163,8 +163,13 @@ async function existsInHubspotByEmail(email) {
  * call site and discard the promise. Failure here must not block the send.
  *
  * @param {object} lead - full lead row (needs email, first_name/last_name/full_name, company_name, headline)
- * @param {object} opts - { subject, body }
- * @returns {Promise<{contactId, emailId, createdContact}|null>}
+ * @param {object} opts - { subject, body, timestamp? }
+ *   timestamp: optional ms-epoch or ISO date for historical sends (backfill).
+ *     Defaults to now. Used as hs_timestamp on the engagement.
+ *   body empty/omitted: skip the email-engagement step (contact is still
+ *     created/enriched). Useful for backfilling old sends where body was
+ *     never archived — still surfaces the contact with owner/company/poste.
+ * @returns {Promise<{contactId, emailId|null, createdContact}|null>}
  */
 async function logEmailToHubspot(lead, opts) {
   if (!lead || !lead.email) {
@@ -173,6 +178,10 @@ async function logEmailToHubspot(lead, opts) {
   }
   var subject = (opts && opts.subject) || "";
   var body = (opts && opts.body) || "";
+  var historicalTs = opts && opts.timestamp;
+  if (historicalTs && typeof historicalTs === "string") {
+    historicalTs = new Date(historicalTs).getTime();
+  }
 
   try {
     var client = getClient();
@@ -247,12 +256,21 @@ async function logEmailToHubspot(lead, opts) {
       return null;
     }
 
+    // If body is empty, skip the engagement step — contact enrichment was
+    // the point. Used for old sends where body was never archived.
+    if (!body || !String(body).trim()) {
+      return {
+        contactId: contactId,
+        emailId: null,
+        createdContact: createdContact,
+      };
+    }
+
     // ── Step 3: create the email engagement
     //   HubSpot requires from/to to go through hs_email_headers (JSON string),
     //   NOT as individual hs_email_from_email / hs_email_to_email props
     //   (which are derived from hs_email_headers and rejected as "invalid"
     //   if set directly).
-    var headerFromName = "Julien Dumas";
     var headerToFirstName = firstName || "";
     var headerToLastName = lastName || "";
     var hsHeaders = {
@@ -268,8 +286,10 @@ async function logEmailToHubspot(lead, opts) {
       }],
     };
 
+    var tsMs = historicalTs && !Number.isNaN(historicalTs) ? historicalTs : Date.now();
+
     var emailProps = {
-      hs_timestamp: Date.now().toString(),
+      hs_timestamp: tsMs.toString(),
       hs_email_subject: subject,
       hs_email_html: body,
       hs_email_status: "SENT",
