@@ -195,11 +195,11 @@ async function logEmailToHubspot(lead, opts) {
     var contactId = search.contactId;
     var createdContact = false;
 
-    // ── Step 2A: contact NOT found → create (with last-contact date)
-    //   HubSpot expects notes_last_contacted as an ISO-8601 timestamp string
-    //   (or epoch ms). We use ISO for readability.
-    var nowIso = new Date().toISOString();
-
+    // ── Step 2A: contact NOT found → create
+    //   NOTE: notes_last_contacted is a READ-ONLY property in HubSpot — it's
+    //   auto-managed and updated whenever we log an engagement (email/call/
+    //   meeting). Trying to set it returns READ_ONLY_VALUE 400. We rely on
+    //   HubSpot's auto-update when we create the email engagement at step 3.
     if (!search.found) {
       var createProps = { email: lead.email };
       if (firstName) createProps.firstname = firstName;
@@ -207,7 +207,6 @@ async function logEmailToHubspot(lead, opts) {
       if (lead.company_name) createProps.company = lead.company_name;
       if (lead.headline) createProps.jobtitle = lead.headline;
       if (ownerId) createProps.hubspot_owner_id = ownerId;
-      createProps.notes_last_contacted = nowIso;
 
       var created = await withHubspotRetry(() => client.crm.contacts.basicApi.create({
         properties: createProps,
@@ -215,7 +214,8 @@ async function logEmailToHubspot(lead, opts) {
       contactId = created.id;
       createdContact = true;
     } else {
-      // ── Step 2B: contact exists → enrich missing props + bump last-contact date
+      // ── Step 2B: contact exists → enrich missing props only.
+      //   (last-contact date is auto-bumped by HubSpot when engagement is logged)
       var currentProps = search.props || {};
       var toUpdate = {};
 
@@ -229,17 +229,16 @@ async function logEmailToHubspot(lead, opts) {
       if (!currentProps.jobtitle && lead.headline) {
         toUpdate.jobtitle = lead.headline;
       }
-      // ALWAYS bump last-contact date on every logged email (overwriting is
-      // the whole point — we want the latest outbound timestamp to surface).
-      toUpdate.notes_last_contacted = nowIso;
 
-      try {
-        await withHubspotRetry(() => client.crm.contacts.basicApi.update(contactId, {
-          properties: toUpdate,
-        }));
-      } catch (updErr) {
-        console.warn("[hubspot-log] contact update failed:", updErr.message);
-        // Continue — we still want to log the email engagement.
+      if (Object.keys(toUpdate).length > 0) {
+        try {
+          await withHubspotRetry(() => client.crm.contacts.basicApi.update(contactId, {
+            properties: toUpdate,
+          }));
+        } catch (updErr) {
+          console.warn("[hubspot-log] contact update failed:", updErr.message);
+          // Continue — we still want to log the email engagement.
+        }
       }
     }
 
@@ -249,15 +248,34 @@ async function logEmailToHubspot(lead, opts) {
     }
 
     // ── Step 3: create the email engagement
+    //   HubSpot requires from/to to go through hs_email_headers (JSON string),
+    //   NOT as individual hs_email_from_email / hs_email_to_email props
+    //   (which are derived from hs_email_headers and rejected as "invalid"
+    //   if set directly).
+    var headerFromName = "Julien Dumas";
+    var headerToFirstName = firstName || "";
+    var headerToLastName = lastName || "";
+    var hsHeaders = {
+      from: {
+        email: fromEmail || "",
+        firstName: "Julien",
+        lastName: "Dumas",
+      },
+      to: [{
+        email: lead.email,
+        firstName: headerToFirstName,
+        lastName: headerToLastName,
+      }],
+    };
+
     var emailProps = {
       hs_timestamp: Date.now().toString(),
       hs_email_subject: subject,
       hs_email_html: body,
       hs_email_status: "SENT",
       hs_email_direction: "EMAIL", // outbound sent from us
+      hs_email_headers: JSON.stringify(hsHeaders),
     };
-    if (fromEmail) emailProps.hs_email_from_email = fromEmail;
-    if (lead.email) emailProps.hs_email_to_email = lead.email;
     if (ownerId) emailProps.hubspot_owner_id = ownerId;
 
     var emailObj = await withHubspotRetry(() => client.crm.objects.emails.basicApi.create({
