@@ -4,6 +4,8 @@
  * Uses Node 20 built-in fetch (no extra dependency).
  */
 
+const pLimit = require("p-limit");
+
 const BEREACH_BASE = "https://api.berea.ch";
 
 /**
@@ -14,6 +16,23 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Global serialization of BeReach HTTP calls + 350ms min spacing to stay
+// under the secondly rate limit. BeReach enforces something like 3-5 req/s;
+// without this, the agent-cold pipeline (which bursts 15-30 searches x 3
+// parameter resolutions each) hits 429 on half the calls, Gemini sees
+// empty results everywhere and returns 0 candidates.
+const bereachLimit = pLimit(1);
+const MIN_CALL_SPACING_MS = 350;
+let _lastBereachCallAt = 0;
+
+async function bereachThrottle() {
+  const elapsed = Date.now() - _lastBereachCallAt;
+  if (elapsed < MIN_CALL_SPACING_MS) {
+    await sleep(MIN_CALL_SPACING_MS - elapsed);
+  }
+  _lastBereachCallAt = Date.now();
+}
+
 /**
  * Internal function: POST to BeReach API with Bearer auth.
  * @param {string} endpoint - API endpoint path (e.g. /collect/linkedin/likes)
@@ -21,10 +40,16 @@ function sleep(ms) {
  * @returns {Promise<object>} Parsed JSON response
  */
 async function bereach(endpoint, body = {}) {
+  return bereachLimit(() => _bereachPost(endpoint, body));
+}
+
+async function _bereachPost(endpoint, body) {
   const apiKey = process.env.BEREACH_API_KEY;
   if (!apiKey) {
     throw new Error("BEREACH_API_KEY is not set in environment");
   }
+
+  await bereachThrottle();
 
   const res = await fetch(BEREACH_BASE + endpoint, {
     method: "POST",
@@ -74,10 +99,16 @@ async function bereach(endpoint, body = {}) {
  * @returns {Promise<object>} Parsed JSON response
  */
 async function bereachGet(endpoint) {
+  return bereachLimit(() => _bereachGet(endpoint));
+}
+
+async function _bereachGet(endpoint) {
   const apiKey = process.env.BEREACH_API_KEY;
   if (!apiKey) {
     throw new Error("BEREACH_API_KEY is not set in environment");
   }
+
+  await bereachThrottle();
 
   const res = await fetch(BEREACH_BASE + endpoint, {
     method: "GET",
@@ -289,13 +320,26 @@ async function resolveLinkedInParam(query, type) {
     if (Array.isArray(items) && items.length > 0) {
       id = String(items[0].id || items[0].value || items[0].urn || "");
     }
+    // Only cache SUCCESSFUL resolutions (whether found or legitimately null).
+    // NEVER cache failures (429, timeout, etc) — a transient error would
+    // poison the cache indefinitely and starve subsequent operations of
+    // needed resolutions (bug observed 23/04: Task G at 13h00 got 429 on
+    // "Insurance", cache null → user's cold outbound at 15h45 got null
+    // instantly without even calling BeReach → 0 candidates everywhere).
     _resolveCache.set(key, id);
     return id;
   } catch (err) {
     console.error("resolveLinkedInParam error (" + type + ", " + query + "):", err.message);
-    _resolveCache.set(key, null); // cache the failure too
     return null;
   }
+}
+
+/**
+ * Clear the in-process resolveLinkedInParam cache. Useful if the cache
+ * was poisoned or if you need a fresh pass at the same resolutions.
+ */
+function clearResolveCache() {
+  _resolveCache.clear();
 }
 
 /**
