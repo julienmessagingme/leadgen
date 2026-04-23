@@ -11,6 +11,7 @@ const taskDEmail = require("./tasks/task-d-email");
 const taskEWhatsapp = require("./tasks/task-e-whatsapp");
 const taskFBriefing = require("./tasks/task-f-briefing");
 const taskFEmailFollowup = require("./tasks/task-f-email-followup");
+const taskGHubspotEnrich = require("./tasks/task-g-hubspot-enrich");
 const whatsappPoll = require("./tasks/whatsapp-poll");
 const { supabase } = require("./lib/supabase");
 
@@ -55,6 +56,7 @@ function registerTask(name, cronExpression, taskFn) {
 registerTask("task-c-followup",   "20 7 * * 1-6",      taskCFollowup);    // 07h20
 registerTask("task-b-invitations","25 7 * * 1-6",      taskBInvitations); // 07h25
 registerTask("task-a-signals",    "30 7 * * 1-6",      taskASignals);     // 07h30
+registerTask("task-g-hubspot-enrich", "40 7 * * 1-6",  taskGHubspotEnrich); // 07h40 — HubSpot enrichment, 200 cr BeReach/j
 // Task F (morning InMail brief) DISABLED — replaced by 10-day InMail validation queue (à implémenter)
 // registerTask("task-f-briefing",   "30 8 * * 1-6",      taskFBriefing);    // 08h30
 registerTask("task-d-email",            "0 10 * * 1-6",      taskDEmail);         // 10h00

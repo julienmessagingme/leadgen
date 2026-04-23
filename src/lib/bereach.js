@@ -255,24 +255,45 @@ async function withdrawInvitation(invitationUrn) {
 }
 
 /**
- * Resolve a human-readable name to a LinkedIn numeric ID.
+ * In-process cache for resolveLinkedInParam.
+ * BeReach rate-limits the /search/linkedin/parameters endpoint silently;
+ * without caching, same-domain contacts in a Task G run re-resolve and hit
+ * the limit (observed 22/04 : @majorel worked at cr 168 then 0/0 at cr 188+
+ * within the same run). Cache is keyed by "type:normalized_query".
+ * TTL: indefinite per process — PM2 restart clears it, which is fine.
+ * The cached null also spares us retry cycles on genuinely unknown queries.
+ */
+var _resolveCache = new Map();
+function cacheKey(query, type) {
+  return type + ":" + String(query || "").toLowerCase().trim();
+}
+
+/**
+ * Resolve a human-readable name to a LinkedIn numeric ID (with cache).
  * @param {string} query - Human text (e.g. "Carrefour", "France", "SaaS")
  * @param {string} type - One of: COMPANY, GEO, INDUSTRY, SCHOOL
  * @returns {Promise<string|null>} LinkedIn numeric ID or null
  */
 async function resolveLinkedInParam(query, type) {
+  var key = cacheKey(query, type);
+  if (_resolveCache.has(key)) {
+    return _resolveCache.get(key);
+  }
   try {
     var resp = await bereachGet(
       "/search/linkedin/parameters?type=" + encodeURIComponent(type) +
       "&keywords=" + encodeURIComponent(query)
     );
     var items = resp.items || resp.results || resp.data || [];
+    var id = null;
     if (Array.isArray(items) && items.length > 0) {
-      return String(items[0].id || items[0].value || items[0].urn || "");
+      id = String(items[0].id || items[0].value || items[0].urn || "");
     }
-    return null;
+    _resolveCache.set(key, id);
+    return id;
   } catch (err) {
     console.error("resolveLinkedInParam error (" + type + ", " + query + "):", err.message);
+    _resolveCache.set(key, null); // cache the failure too
     return null;
   }
 }

@@ -26,7 +26,7 @@ SSH : `ssh -i ~/.ssh/id_ed25519 ubuntu@146.59.233.252`
 
 ## BeReach API — ATTENTION PARAMETRES
 
-Domaine = **api.berea.ch** (PAS bereach.io). Budget = **300 credits/jour** (reset a minuit).
+Domaine = **api.berea.ch** (PAS bereach.io). Budget = **900 credits/jour** (plan up 22/04 ; `_meta.credits.isUnlimited=true` en pratique — reset a minuit).
 **NE PAS utiliser `url` comme nom de parametre** :
 - `/collect/linkedin/likes` : `{ postUrl }` | `/collect/linkedin/comments` : `{ postUrl }`
 - `/collect/linkedin/posts` : `{ profileUrl }` (uniquement /in/, pas /company/)
@@ -41,6 +41,7 @@ Domaine = **api.berea.ch** (PAS bereach.io). Budget = **300 credits/jour** (rese
 | 07h20 | C | Enrichit leads connected + genere drafts message (validation manuelle) | ~2/lead |
 | 07h25 | B | Invitations LinkedIn sans note (hot/warm, >=50, max 15/j, slug-first) | ~1/invit |
 | 07h30 | A | Collecte → dedup → scoring brut Haiku → enrichit top 30 → re-score → insert | ~225+60 |
+| 07h40 | G | Enrichit fiches HubSpot (company/jobtitle/LinkedIn URL) via BeReach | 200/j (config) |
 
 **Detection connexions = AUTOMATIQUE** (07/04) via `/me/linkedin/connections` (0 credits, 40 connexions/page triees par date).
 Task C Phase 1 compare les connexions recentes avec les leads `invitation_sent` → marque `connected` → Phase 2 enrichit + genere draft message → `message_pending` → validation /messages-draft.
@@ -107,6 +108,17 @@ Task C Phase 1 compare les connexions recentes avec les leads `invitation_sent` 
 - 4 checks pre-send : FullEnrich email, HubSpot dedup, LinkedIn inbox reply, suppression list
 - **GATE 22/04** : si ni HubSpot ni FullEnrich ne trouvent d'email → **skip Sonnet** (0 tokens) + `status = 'email_not_found'` → le lead apparait dans l'onglet « Sans email » de /messages-draft pour decision manuelle (lookup WhatsApp 10 credits ou archive)
 - Leads avec bad messages 01/04 → `skip_email` flag mis manuellement en SQL
+
+### Task G — Enrichment HubSpot quotidien (22/04)
+- Cron lun-sam **07h40** (apres Task A 07h30). Budget 200 cr BeReach/jour (`global_settings.task_g_daily_budget`, editable).
+- Scanne les contacts HubSpot avec **company OU jobtitle manquant**, skip ceux deja tentes recemment (table `hubspot_enrichment_attempts`).
+- Pour chaque candidat : `searchPeople({ currentCompany: <hint>, keywords: firstname })` = 1 credit. Filtrage sur `name` qui contient firstname + lastname.
+- `companyHint` : company HubSpot si deja set, sinon base du domaine email (gmail/hotmail → skip).
+- Ecrit uniquement les props manquantes : `company`, `jobtitle`, `hs_linkedin_url`. **Jamais d'ecrasement.**
+- Retry policy dans `hubspot_enrichment_attempts` : matched=jamais, no_match=30j, ambiguous/skipped=7j.
+- Optim : cache `resolveLinkedInParam` in-process dans `bereach.js` (fix 0/0 streaks dus au rate-limit silencieux sur l'endpoint de resolution company-name → ID).
+- Taux de match observe sur run test : **~30%** (61/200 cr).
+- Design : `docs/plans/2026-04-22-hubspot-enrichment-cron-design.md`
 
 ### WhatsApp — 2 points d'entree manuels uniquement (pas d'auto)
 Plus de Task E automatique J+14, plus de creation de template Meta a la volee, plus de `generateWhatsAppBody` Sonnet. **Un seul template Meta pre-approuve** envoye via uChat (env var `WHATSAPP_DEFAULT_SUB_FLOW`) par l'endpoint `POST /leads/:id/send-whatsapp`. Deux chemins d'entree manuels :
