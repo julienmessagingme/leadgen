@@ -110,4 +110,4 @@ registerTask("log-cleanup", "0 2 * * *", async (runId) => {
   console.log("Log cleanup completed: deleted " + (count || 0) + " logs older than 30 days");
 });
 
-console.log("Scheduler started: 9 tasks registered (lun-sam pipeline, daily log/lead-cleanup, Europe/Paris)");
+console.log("Scheduler started: 10 tasks registered (lun-sam pipeline, daily log/lead-cleanup, Europe/Paris)");
