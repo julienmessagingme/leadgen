@@ -41,7 +41,7 @@ Domaine = **api.berea.ch** (PAS bereach.io). Budget = **900 credits/jour** (plan
 | 07h20 | C | Enrichit leads connected + genere drafts message (validation manuelle) | ~2/lead |
 | 07h25 | B | Invitations LinkedIn sans note (hot/warm, >=50, max 15/j, slug-first) | ~1/invit |
 | 07h30 | A | Collecte → dedup → scoring brut Haiku → enrichit top 30 → re-score → insert | ~225+60 |
-| 07h40 | G | Enrichit fiches HubSpot (company/jobtitle/LinkedIn URL) via BeReach | 200/j (config) |
+| 13h00 | G | Enrichit fiches HubSpot (company/jobtitle/LinkedIn URL) via BeReach | 200/j (config) |
 
 **Detection connexions = AUTOMATIQUE** (07/04) via `/me/linkedin/connections` (0 credits, 40 connexions/page triees par date).
 Task C Phase 1 compare les connexions recentes avec les leads `invitation_sent` → marque `connected` → Phase 2 enrichit + genere draft message → `message_pending` → validation /messages-draft.
@@ -110,7 +110,7 @@ Task C Phase 1 compare les connexions recentes avec les leads `invitation_sent` 
 - Leads avec bad messages 01/04 → `skip_email` flag mis manuellement en SQL
 
 ### Task G — Enrichment HubSpot quotidien (22/04)
-- Cron lun-sam **07h40** (apres Task A 07h30). Budget 200 cr BeReach/jour (`global_settings.task_g_daily_budget`, editable).
+- Cron lun-sam **13h00** (midi-apres-midi, hors fenetre matinale chargee). Budget 200 cr BeReach/jour (`global_settings.task_g_daily_budget`, editable).
 - Scanne les contacts HubSpot avec **company OU jobtitle manquant**, skip ceux deja tentes recemment (table `hubspot_enrichment_attempts`).
 - Pour chaque candidat : `searchPeople({ currentCompany: <hint>, keywords: firstname })` = 1 credit. Filtrage sur `name` qui contient firstname + lastname.
 - `companyHint` : company HubSpot si deja set, sinon base du domaine email (gmail/hotmail → skip).
