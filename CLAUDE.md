@@ -1,11 +1,25 @@
 # Projet Lead Gen MessagingMe — CLAUDE.md
 
-> **Pointers doc** :
-> - `docs/ARCHITECTURE.md` — stack, DB, APIs, conventions code (stable)
+> **Doc associee** :
+> - `docs/ARCHITECTURE.md` — stack, DB, APIs externes, conventions code (stable)
 > - `docs/FEATURES.md` — catalogue exhaustif des features
 > - `docs/PIPELINE.md` — timeline cron etape par etape
->
-> **REGLE DE SYNCHRO DOC** : a chaque modif metier / feature / cron, MAJ les 3 docs (FEATURES + PIPELINE + ARCHITECTURE si tech change), pas seulement CLAUDE.md.
+
+## REGLE DE SYNCHRO DOC — matrice de triggers
+
+A chaque session ou je modifie du code metier, je verifie cette matrice avant de commit. Si je fais X → je MAJ Y. Pas le choix.
+
+| Si tu fais... | MAJ obligatoire |
+|---------------|-----------------|
+| Ajoute / modifie / desactive un cron, ou change une etape d'une task | `docs/PIPELINE.md` + `docs/FEATURES.md` + `CLAUDE.md` (tableau cron) |
+| Ajoute / modifie / desactive une feature visible utilisateur | `docs/FEATURES.md` + `CLAUDE.md` (si pipeline ou disabled) |
+| Change un quirk API externe (BeReach param, FullEnrich, HubSpot, Whapi) | `docs/ARCHITECTURE.md` |
+| Ajoute une env var, une table, une migration, un enum, une convention code | `docs/ARCHITECTURE.md` |
+| Decouvre un bug, desactive un composant, change un known issue | `CLAUDE.md` (Problemes connus / Composants DESACTIVES) |
+| Change les TODO ou le statut de la session | `CLAUDE.md` (TODO) |
+| **Fin de session : doute** | Invoque la skill `update-docs` |
+
+**Skill `update-docs`** (`.claude/skills/update-docs.md`) : checklist invocable a la fin de session pour passer en revue chaque doc et confirmer si MAJ necessaire. A invoquer si tu as touche du code ou des regles metier.
 
 ---
 
