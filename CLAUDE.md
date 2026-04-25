@@ -41,7 +41,7 @@ Domaine = **api.berea.ch** (PAS bereach.io). Budget = **900 credits/jour** (plan
 | 07h20 | C | Enrichit leads connected + genere drafts message (validation manuelle) | ~2/lead |
 | 07h25 | B | Invitations LinkedIn sans note (hot/warm, >=50, max 15/j, slug-first) | ~1/invit |
 | 07h30 | A | Collecte → dedup → scoring brut Haiku → enrichit top 30 → re-score → insert | ~225+60 |
-| 13h00 | G | Enrichit fiches HubSpot (company/jobtitle/LinkedIn URL) via BeReach | 200/j (config) |
+| ~~13h00~~ | ~~G~~ | **DESACTIVEE 25/04** — soupcon saturation `/search/linkedin/people`, en observation | — |
 
 **Detection connexions = AUTOMATIQUE** (07/04) via `/me/linkedin/connections` (0 credits, 40 connexions/page triees par date).
 Task C Phase 1 compare les connexions recentes avec les leads `invitation_sent` → marque `connected` → Phase 2 enrichit + genere draft message → `message_pending` → validation /messages-draft.
@@ -109,7 +109,10 @@ Task C Phase 1 compare les connexions recentes avec les leads `invitation_sent` 
 - **GATE 22/04** : si ni HubSpot ni FullEnrich ne trouvent d'email → **skip Sonnet** (0 tokens) + `status = 'email_not_found'` → le lead apparait dans l'onglet « Sans email » de /messages-draft pour decision manuelle (lookup WhatsApp 10 credits ou archive)
 - Leads avec bad messages 01/04 → `skip_email` flag mis manuellement en SQL
 
-### Task G — Enrichment HubSpot quotidien (22/04)
+### Task G — Enrichment HubSpot quotidien (22/04) — **DESACTIVEE 25/04**
+**Statut actuel** : `registerTask("task-g-hubspot-enrich", ...)` commente dans `src/scheduler.js` (commit `f335420`). Soupcon que les 200 cr/j de search ont sature `/search/linkedin/people` (HS 22-25/04, recovery 25/04 matin coincide avec disable). En observation. Reactivation = decommenter la ligne + bumper compteur log 9 → 10. Manual run dispo via `node scripts/enrich-hubspot-contacts.js`.
+
+Specs (quand reactivee) :
 - Cron lun-sam **13h00** (midi-apres-midi, hors fenetre matinale chargee). Budget 200 cr BeReach/jour (`global_settings.task_g_daily_budget`, editable).
 - Scanne les contacts HubSpot avec **company OU jobtitle manquant**, skip ceux deja tentes recemment (table `hubspot_enrichment_attempts`).
 - Pour chaque candidat : `searchPeople({ currentCompany: <hint>, keywords: firstname })` = 1 credit. Filtrage sur `name` qui contient firstname + lastname.
@@ -159,8 +162,18 @@ Les 2 chemins ecrivent `whatsapp_sent_at` + mettent a jour `/email-tracking` en 
 - **FullEnrich V1 → V2 migration avant septembre 2026** : on est sur `/api/v1/` (ligne 11 de `src/lib/fullenrich.js`). FullEnrich a annonce que V1 sera coupe en septembre 2026. Migration V2 = changer `FULLENRICH_BASE` en `/api/v2/` + ligne 71 `enrich_fields: ["contact.emails"]` → `["contact.work_emails"]`. Le reste de notre parsing (`most_probable_email*`, `most_probable_phone*`, `contact.phones`) n'est pas impacte par les renommages linkedin → professional_network (on ne lit pas ces champs). Les breaking changes du 23 avril 2026 ne nous concernent PAS (V2 only).
 
 ## Doc detaillee
-- Pipeline complet : `docs/PIPELINE.md`
+- **Liste des features** : `docs/FEATURES.md`
+- **Pipeline cron detaille** : `docs/PIPELINE.md`
 - Plans et historique : `.planning/milestones/` (v1.0 a v1.3)
+
+### REGLE DE SYNCHRO DOC — IMPORTANT
+
+**A chaque modification de `CLAUDE.md`, mettre aussi a jour `docs/FEATURES.md` ET `docs/PIPELINE.md`.** Les 3 docs doivent vivre en parallele :
+- `CLAUDE.md` = regles operationnelles + TODO + problemes connus (vu a chaque session)
+- `docs/FEATURES.md` = liste exhaustive des features avec localisation code (reference produit)
+- `docs/PIPELINE.md` = timeline cron etape par etape (detail technique)
+
+Si tu ajoutes une feature, modifies un cron, desactives une task, change une regle metier : update les 3. Pas le choix.
 
 ## Nettoyage watchlist — semaine du 07/04
 Bilan qualite/prix fait le 01/04. Sources a 0% sur 4 jours confirmeees :
