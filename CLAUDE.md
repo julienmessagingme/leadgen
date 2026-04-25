@@ -1,182 +1,104 @@
-# Projet Lead Gen MessagingMe
+# Projet Lead Gen MessagingMe — CLAUDE.md
+
+> **Pointers doc** :
+> - `docs/ARCHITECTURE.md` — stack, DB, APIs, conventions code (stable)
+> - `docs/FEATURES.md` — catalogue exhaustif des features
+> - `docs/PIPELINE.md` — timeline cron etape par etape
+>
+> **REGLE DE SYNCHRO DOC** : a chaque modif metier / feature / cron, MAJ les 3 docs (FEATURES + PIPELINE + ARCHITECTURE si tech change), pas seulement CLAUDE.md.
+
+---
+
+## Regles git — STRICTES
+
+- **COMMITS UNIQUEMENT SUR `main`. ZERO BRANCHE `claude/*`, ZERO WORKTREE.**
+  - Si Claude Code te lance dans un worktree (`.claude/worktrees/claude-*`), tu **n'edites PAS le worktree** — tu edites directement `C:\Users\julie\leadgen\<fichier>` (repo principal, branche `main`).
+  - Commit depuis `C:\Users\julie\leadgen` sur `main`, push `origin main`, point final.
+  - SEULE exception : le user dit explicitement « cree une branche feature X ».
+- **JAMAIS de scp** — toujours `git push`.
+- **JAMAIS modifier un fichier sur le VPS** sauf hotfix 1-ligne urgent que le user demande explicitement.
+- Git root = `C:\Users\julie\leadgen`. Remote = `origin` (pas de remote `vps`).
 
 ## Connexion VPS
 
-SSH : `ssh -i ~/.ssh/id_ed25519 ubuntu@146.59.233.252`
-- Node.js : prefixer avec `export PATH=/home/ubuntu/.nvm/versions/node/v20.20.1/bin:$PATH`
-- PostgreSQL : `PGPASSWORD=xZoR3L9eks5UEzSS psql -h db.dmfrabplvlfgdxvuzjhj.supabase.co -p 5432 -U postgres -d postgres`
-- Repertoire projet : /home/openclaw/leadgen/
-- Process : PM2 (nom: leadgen)
-- **NE PAS TOUCHER** : /home/keolis/, /home/educnat/
+```bash
+ssh -i ~/.ssh/id_ed25519 ubuntu@146.59.233.252
+export PATH=/home/ubuntu/.nvm/versions/node/v20.20.1/bin:$PATH
+```
 
-## Deploiement — REGLES STRICTES
+- Projet : `/home/openclaw/leadgen/` — process PM2 `leadgen`.
+- DB : `PGPASSWORD=xZoR3L9eks5UEzSS psql -h db.dmfrabplvlfgdxvuzjhj.supabase.co -p 5432 -U postgres -d postgres`
+- **NE PAS TOUCHER** : `/home/keolis/`, `/home/educnat/`.
 
-- **COMMITS UNIQUEMENT SUR `main`. ZERO BRANCHE `claude/*`, ZERO WORKTREE.** Le user a ete explicite : « arrete les branches pourries ». Process obligatoire :
-  - Si Claude Code t'a demarre dans un worktree (`.claude/worktrees/claude-*`), **tu n'edites PAS les fichiers du worktree** — tu edites directement `C:\Users\julie\leadgen\<fichier>` (repo principal, branche `main`)
-  - Tu commit depuis `C:\Users\julie\leadgen` sur `main`, tu push `origin main`, point final
-  - Si le worktree branch residuel traine (claude/charming-...), le user peut le dropper a la fin de session — c'est pas a toi d'aller merger a chaque fois
-  - **SEULE exception** : le user te dit explicitement « cree une branche feature X pour isoler ce test »
-- **JAMAIS de scp** — toujours git push
-- **JAMAIS modifier un fichier sur le VPS** sauf pour un hotfix 1-ligne urgent que le user a demande de regler immediatement — sinon modifier en local, commit, push
-- Git root = `C:\Users\julie\leadgen` (pas C:\Users\julie — CLAUDE.md etait obsolete)
-- Remote GitHub : `origin` (pas de remote `vps` configure). Deploy : `git push origin main` puis **appliquer/pull manuellement sur le VPS** (le VPS git n'a pas de remote, les fichiers sont intentionnellement untracked)
-- **Apres modif frontend** : `ssh ... "export PATH=/home/ubuntu/.nvm/versions/node/v20.20.1/bin:\$PATH && cd /home/openclaw/leadgen/frontend && npm run build"`
-- **TOUJOURS verifier les logs** : `pm2 logs leadgen --lines 30 --nostream`
-- **Flusher vieux logs PM2** : `pm2 flush leadgen`
+### Deploiement
+1. Push `origin main`
+2. SSH VPS → `cd /home/openclaw/leadgen && git pull`
+3. Si frontend touche : `cd frontend && npm run build`
+4. `pm2 restart leadgen` si backend touche
+5. Verif : `pm2 logs leadgen --lines 30 --nostream` (flush : `pm2 flush leadgen`)
 
-## BeReach API — ATTENTION PARAMETRES
+---
 
-Domaine = **api.berea.ch** (PAS bereach.io). Budget = **900 credits/jour** (plan up 22/04 ; `_meta.credits.isUnlimited=true` en pratique — reset a minuit).
-**NE PAS utiliser `url` comme nom de parametre** :
-- `/collect/linkedin/likes` : `{ postUrl }` | `/collect/linkedin/comments` : `{ postUrl }`
-- `/collect/linkedin/posts` : `{ profileUrl }` (uniquement /in/, pas /company/)
-- `/connect/linkedin/profile` : `{ profile }` | `/message/linkedin` : `{ profile, message }`
-- `/visit/linkedin/profile` : `{ profile }` | `/visit/linkedin/company` : `{ companyUrl }`
-- `/search/linkedin/posts` : `{ keywords }` | `/search/linkedin/jobs` : `{ keywords }`
+## Pipeline cron — vue d'ensemble (lun-sam, Europe/Paris)
 
-## Pipeline quotidien (lun-sam, Europe/Paris)
+| Heure | Task | Etat |
+|------:|------|:----:|
+| 07h20 | C — followup (detection acceptation + draft Sonnet) | ✅ |
+| 07h25 | B — invitations LinkedIn (slug-first, hot/warm ≥50, max 15/j) | ✅ |
+| 07h30 | A — signals (collecte → score → enrich top 30 → insert) | ✅ |
+| 10h00 | D — email J+3 (gate "sans email" si FullEnrich miss) | ✅ |
+| 10h15 | F-followup — relance email J+14 | ✅ |
+| 10h30 | E — slot reserve (flow WhatsApp principal manuel) | ✅ |
+| ~~13h00~~ | ~~G — HubSpot enrich~~ | ❌ DESACTIVEE 25/04 |
+| */15min 9-18h | whatsapp-poll | ✅ |
+| 02h00 / 02h30 | log-cleanup / lead-cleanup | ✅ |
 
-| Heure | Task | Action | Credits |
-|-------|------|--------|---------|
-| 07h20 | C | Enrichit leads connected + genere drafts message (validation manuelle) | ~2/lead |
-| 07h25 | B | Invitations LinkedIn sans note (hot/warm, >=50, max 15/j, slug-first) | ~1/invit |
-| 07h30 | A | Collecte → dedup → scoring brut Haiku → enrichit top 30 → re-score → insert | ~225+60 |
-| ~~13h00~~ | ~~G~~ | **DESACTIVEE 25/04** — soupcon saturation `/search/linkedin/people`, en observation | — |
+Detail complet de chaque task : `docs/PIPELINE.md`.
 
-**Detection connexions = AUTOMATIQUE** (07/04) via `/me/linkedin/connections` (0 credits, 40 connexions/page triees par date).
-Task C Phase 1 compare les connexions recentes avec les leads `invitation_sent` → marque `connected` → Phase 2 enrichit + genere draft message → `message_pending` → validation /messages-draft.
-**Flow manuel toujours dispo** : page /invitations → bouton "✓ A accepté" → `POST /api/leads/:id/mark-connected`
+**Validation manuelle** : Task C ne envoie plus auto depuis 01/04. Page `/messages-draft` pour approuver/rejeter. Pareil pour relances email + flow "Sans email" / WhatsApp.
 
-**Budget dynamique Task A** = 300 - credits_C - credits_B - markConnectedCredits - 60 (reserve enrichissement top 30)
-- markConnectedCredits = nb connexions manuelles du jour × 2 (via `connected_at` >= today)
+---
 
-### Task A — score d'abord, enrichit apres
-1. Collecte P1/P2/P3 via BeReach (budget dynamique)
-2. Persiste raw_signals (re-scoring possible sans BeReach)
-3. Dedup 3 etapes (canonical URL, in-batch, Supabase re-engagement +5pts/signal cap +20)
-4. **Score brut Haiku** sur TOUS les signaux (0 credit BeReach)
-5. **Top 30** warm/hot → enrichit (visitProfile+visitCompany = 60 credits)
-6. **Re-score Haiku** avec donnees enrichies
-7. **HubSpot check** → status "new" ou "hubspot_existing"
-8. Insert leads
+## Composants DESACTIVES — ne pas reimplementer
 
-### Priorites P1/P2/P3 (table watchlist, colonne priority)
-- **P1** : keywords (plus de job_keywords — supprimes 01/04, 0 signaux), tous les jours, ~1 credit/source
-- **P2** : influenceurs/concurrents FR, rotation oldest-first, ~3 credits/source
-- **P3** : secondaire, variable d'ajustement, ~3 credits/source
-- P2 likers/commenteurs = les LEADS (pas l'influenceur lui-meme)
+- **Task G HubSpot enrich** (DESACTIVEE 25/04) : soupcon saturation `/search/linkedin/people`. Reactivation = decommenter `registerTask("task-g-hubspot-enrich"...)` dans `src/scheduler.js` + bumper compteur log 9 → 10. Manual run dispo via `node scripts/enrich-hubspot-contacts.js`.
+- **Task F (InMail brief matin)** : desactivee 01/04. Replacement prevu = queue InMail J+10 (TODO).
+- **Task E auto WhatsApp J+14** : remplacee par 2 entry points manuels (`/email-tracking` + onglet "Sans email").
+- **Browser Collector (Playwright)** : cookies expirees.
+- **OpenClaw / Sales Navigator** : bug #25920.
+- **Whitelist ICP** : supprimee 01/04, blacklist uniquement.
 
-### Scoring ICP (Haiku claude-haiku-4-5-20251001)
-- Prompt dynamique depuis table `icp_rules` + concurrents depuis `watchlist`
-- **Blacklist uniquement** (whitelist supprimee 01/04) : doute → conservateur, exclure si blacklisté
-- 5 regles : concurrents=cold, geo FR/GCC/Afrique du Nord OK, taille 10+, pertinence metier, doute=conservateur
-- Score final = Haiku + signal_bonus + news + activite - fraicheur
-- Unicode sanitize global sur le prompt
-- **BATCH SCORING confirme** (01/04) : 5 signaux par appel Haiku → $1.50/jour (725K tokens vs 7.3M avant)
-  - Fonction `scoreLeadsBatch()` dans `icp-scorer.js`, appelee depuis `task-a-signals.js`
-  - Schema JSON force : `{ results: [{ index, icp_score, tier, reasoning }] }`
-  - Fallback : si batch echoue → throw err → rawErrors += batch.length, pipeline continue
-- **Scores persistes dans raw_signals** : colonnes icp_score, tier, reasoning
-  - Requete analyse : `SELECT signal_source, COUNT(*), AVG(icp_score), COUNT(*) FILTER (WHERE tier='hot') FROM raw_signals WHERE run_id = '...' GROUP BY signal_source ORDER BY AVG(icp_score) DESC`
+---
 
-### Messages (Sonnet claude-sonnet-4-20250514) — mode validation depuis 01/04
-- Task C genere un DRAFT (status `message_pending`), ne pas envoyer automatiquement
-- Page frontend "À valider" (/messages-draft) : Julien approuve/rejette avant envoi BeReach
-- Approve → `POST /api/leads/:id/approve-message` → sendMessage() BeReach → status "messaged"
-- Reject → `POST /api/leads/:id/reject-message` → status "disqualified", draft efface (lead sorti de toutes les sequences)
-- **Generation 2-step** : Sonnet genere le CORE sans opener → prepend "Bonjour [prénom], " programmatiquement
-- **INTERDICTIONS ABSOLUES dans prompt** : "j'ai vu que vous avez liké", "Merci pour la connexion", "MessagingMe", citer la source du signal
-- **Strip programmatique** : opener Bonjour/Merci, "MessagingMe", "chez/via/avec MessagingMe", "Je dirige [fragment]", espaces doubles
-- `buildLeadContext()` ne passe PAS signalSource/signalDetail a Sonnet (evite "via WAX")
-- `post_text` passe dans le contexte lead si disponible (backfill depuis raw_signals fait 01/04)
-- Invitation = PAS de note. Follow-up = apres acceptation, reagir au contenu du post like.
+## Problemes connus
 
-### Task B — Invitations LinkedIn (protections 06/04)
-- **Slug-first** : URLs slug (non-ACoA) passent avant les ACoA dans l'ordre d'invitation
-- **Failure tracking** : `metadata.invitation_failures` incremente a chaque echec, `metadata.last_invitation_error` stocke le message
-- **Skip 3+ echecs** : leads ayant echoue 3 fois sont filtres automatiquement
-- **Sleep apres erreur** : 5-10s au lieu de 0 (evite de mitrailler BeReach)
-- **Fix retry 429** : variable shadowing corrigee dans `bereach.js` (retry envoyait le body d'erreur au lieu de la requete)
+### BeReach
+- **Session ACoA cassee** depuis 04/04 : `/visit/linkedin/profile` et `/connect/linkedin/profile` retournent 404/403 sur toutes les URLs ACoA. Les slug marchent. Mail support 06/04, en attente.
+- **`/invitations/linkedin/sent`** retourne `total: 0` toujours — inutilisable. Bug a signaler.
+- **`/search/linkedin/people` outage 22-25/04** : 0 candidats sur tous criteres. Recovery 25/04 matin coincide avec disable Task G.
+- **`resolveLinkedInParam` cache** : doit etre **success-only**. Cacher des nulls (= 429-induced) empoisonne le cache et casse cold outbound (bug 23/04).
 
-### Task D — Email J+3 (change de J+7 le 21/04 — J+7 rechauffait trop le signal HOT)
-- **FULLENRICH_API_KEY configuree** (07/04) — Task D operationnelle
-- **FullEnrich API** : `app.fullenrich.com/api/v1/contact/enrich/bulk` — async (submit + poll)
-  - Input = juste `linkedin_url` (pas besoin nom/entreprise)
-  - `enrich_fields: ["contact.emails"]` = **1 credit/lead** (phones = 10 credits, DESACTIVE par defaut, activable a la demande via /find-phone, voir ci-dessous)
-  - Retourne email seulement si `most_probable_email_status === "DELIVERABLE"`
-- Skip si `metadata.skip_email = true` (leads ayant recu un mauvais message le 01/04)
-- 4 checks pre-send : FullEnrich email, HubSpot dedup, LinkedIn inbox reply, suppression list
-- **GATE 22/04** : si ni HubSpot ni FullEnrich ne trouvent d'email → **skip Sonnet** (0 tokens) + `status = 'email_not_found'` → le lead apparait dans l'onglet « Sans email » de /messages-draft pour decision manuelle (lookup WhatsApp 10 credits ou archive)
-- Leads avec bad messages 01/04 → `skip_email` flag mis manuellement en SQL
-
-### Task G — Enrichment HubSpot quotidien (22/04) — **DESACTIVEE 25/04**
-**Statut actuel** : `registerTask("task-g-hubspot-enrich", ...)` commente dans `src/scheduler.js` (commit `f335420`). Soupcon que les 200 cr/j de search ont sature `/search/linkedin/people` (HS 22-25/04, recovery 25/04 matin coincide avec disable). En observation. Reactivation = decommenter la ligne + bumper compteur log 9 → 10. Manual run dispo via `node scripts/enrich-hubspot-contacts.js`.
-
-Specs (quand reactivee) :
-- Cron lun-sam **13h00** (midi-apres-midi, hors fenetre matinale chargee). Budget 200 cr BeReach/jour (`global_settings.task_g_daily_budget`, editable).
-- Scanne les contacts HubSpot avec **company OU jobtitle manquant**, skip ceux deja tentes recemment (table `hubspot_enrichment_attempts`).
-- Pour chaque candidat : `searchPeople({ currentCompany: <hint>, keywords: firstname })` = 1 credit. Filtrage sur `name` qui contient firstname + lastname.
-- `companyHint` : company HubSpot si deja set, sinon base du domaine email (gmail/hotmail → skip).
-- Ecrit uniquement les props manquantes : `company`, `jobtitle`, `hs_linkedin_url`. **Jamais d'ecrasement.**
-- Retry policy dans `hubspot_enrichment_attempts` : matched=jamais, no_match=30j, ambiguous/skipped=7j.
-- Optim : cache `resolveLinkedInParam` in-process dans `bereach.js` (fix 0/0 streaks dus au rate-limit silencieux sur l'endpoint de resolution company-name → ID).
-- Taux de match observe sur run test : **~30%** (61/200 cr).
-- Design : `docs/plans/2026-04-22-hubspot-enrichment-cron-design.md`
-
-### WhatsApp — 2 points d'entree manuels uniquement (pas d'auto)
-Plus de Task E automatique J+14, plus de creation de template Meta a la volee, plus de `generateWhatsAppBody` Sonnet. **Un seul template Meta pre-approuve** envoye via uChat (env var `WHATSAPP_DEFAULT_SUB_FLOW`) par l'endpoint `POST /leads/:id/send-whatsapp`. Deux chemins d'entree manuels :
-
-1. **Depuis `/email-tracking`** — bouton WhatsApp par lead (existant). Flow : cherche phone (lead.phone → FullEnrich enrichPhone 10 credits en fallback) → send template.
-2. **Depuis `/messages-draft` > onglet « Sans email »** (22/04) — les leads `email_not_found` y apparaissent avec contexte riche (post inducteur, secteur, tier). Flow split en 2 clics :
-   - `POST /leads/:id/find-phone` (10 credits) → trouve → `status='whatsapp_ready'` / pas trouve → `status='disqualified'` (sort de la liste)
-   - `POST /leads/:id/send-whatsapp` (meme endpoint que /email-tracking) → send le template
-
-Les 2 chemins ecrivent `whatsapp_sent_at` + mettent a jour `/email-tracking` en live (webhook uChat).
-
-## Contacts HubSpot existants
-- Inseres avec status `hubspot_existing` (pas dans la sequence auto)
-- Page dediee "Signaux HubSpot" avec boutons Convertir/Ignorer
-- Convertir → passe en "new" → entre dans la sequence
-- **TODO** : stocker `hubspot_contact_id` dans metadata → lien direct `https://app-eu1.hubspot.com/contacts/139615673/contact/{id}`
-
-## BeReach — Problemes connus
-- **Session ACoA cassee (depuis 04/04)** : `/visit/linkedin/profile` et `/connect/linkedin/profile` retournent 404/403 sur TOUTES les URLs ACoA. Les slug marchent. Confirmé sur des URLs qui marchaient jeudi 02/04. Mail envoyé au support BeReach le 06/04 — en attente de réponse.
-- `/invitations/linkedin/sent` : retourne toujours `{ success:true, invitations:[], total:0 }` — inutilisable. Task C ne l'appelle plus. Bug pas encore signalé à BeReach.
-- Jauge credits dans Parametres : fonctionnelle depuis 02/04 — parse le log "Budget: X - ... = Y for collection"
-
-## Composants DESACTIVES — NE PAS TOUCHER
-- **Browser Collector (Playwright)** : cookies expirees, code desactive. NE PAS reimplementer.
-- **OpenClaw/Sales Nav** : bug #25920, code commente dans enrichment.js. NE PAS re-essayer.
-- **Task F (InMail brief matin)** : desactivee 01/04. Remplacee a terme par queue validation InMail J+10.
-- ~~**Detection auto connexions Task C**~~ : REACTIVEE 07/04 via `/me/linkedin/connections` (0 credits). Flow automatique.
+---
 
 ## TODO — prochaine session
+
 - **Reponse BeReach support ACoA** : checker si la session est reparee, reset `invitation_failures` si oui
-- ~~**Configurer FULLENRICH_API_KEY**~~ : FAIT 07/04
-- **Nettoyage watchlist semaine 07/04** — liste complete ci-dessous
-- **InMail J+10** : si invitation_sent depuis 10j sans reponse → generer draft InMail → page validation (meme flow que message_pending)
-- **Lien HubSpot** : modifier `existsInHubspot()` pour retourner `contact_id`, stocker dans `metadata.hubspot_contact_id`, construire URL `https://app-eu1.hubspot.com/contacts/139615673/contact/{id}`
-- **Partoo = concurrent** : ajouter en competitor_page dans la watchlist
-- **BeReach cold outreach** : tester endpoint People Search pour cold prospection par criteres ICP — doc https://registry.scalar.com/@bereach/apis/bereach-api/latest (verifier domaine api.bereach.ai vs api.berea.ch)
-- **BeReach /invitations/linkedin/sent** : signaler le bug a BeReach (toujours total:0 malgre 15+ invit pendantes)
-- **FullEnrich V1 → V2 migration avant septembre 2026** : on est sur `/api/v1/` (ligne 11 de `src/lib/fullenrich.js`). FullEnrich a annonce que V1 sera coupe en septembre 2026. Migration V2 = changer `FULLENRICH_BASE` en `/api/v2/` + ligne 71 `enrich_fields: ["contact.emails"]` → `["contact.work_emails"]`. Le reste de notre parsing (`most_probable_email*`, `most_probable_phone*`, `contact.phones`) n'est pas impacte par les renommages linkedin → professional_network (on ne lit pas ces champs). Les breaking changes du 23 avril 2026 ne nous concernent PAS (V2 only).
+- **Observer si BeReach search reste healthy sans Task G** — si stable quelques jours, evaluer reactivation
+- **Nettoyage watchlist semaine 07/04** (liste sources 0% en bas du fichier)
+- **InMail J+10** : si `invitation_sent` depuis 10j sans reponse → generer draft InMail → page validation (meme flow que `message_pending`)
+- **Lien HubSpot UI** : `existsInHubspot()` doit retourner `contact_id`, stocker dans `metadata.hubspot_contact_id`, construire URL `https://app-eu1.hubspot.com/contacts/139615673/contact/{id}`
+- **Partoo = concurrent** : ajouter en `competitor_page` dans la watchlist
+- **BeReach `/invitations/linkedin/sent`** : signaler le bug a BeReach
+- **FullEnrich V1 → V2** avant septembre 2026 : `FULLENRICH_BASE` `/api/v1/` → `/api/v2/` + `enrich_fields: ["contact.emails"]` → `["contact.work_emails"]`. Voir details dans `docs/ARCHITECTURE.md` section FullEnrich.
+- **ICP strategy revamp** (en attente, demande user) : broader/narrower, prompt-based, fuzzy keyword match
+- **Better error surfacing** : distinguer "BeReach rate-limit" de "no result genuine" dans l'UI
 
-## Doc detaillee
-- **Liste des features** : `docs/FEATURES.md`
-- **Pipeline cron detaille** : `docs/PIPELINE.md`
-- Plans et historique : `.planning/milestones/` (v1.0 a v1.3)
+---
 
-### REGLE DE SYNCHRO DOC — IMPORTANT
+## Nettoyage watchlist — semaine du 07/04 (TODO)
 
-**A chaque modification de `CLAUDE.md`, mettre aussi a jour `docs/FEATURES.md` ET `docs/PIPELINE.md`.** Les 3 docs doivent vivre en parallele :
-- `CLAUDE.md` = regles operationnelles + TODO + problemes connus (vu a chaque session)
-- `docs/FEATURES.md` = liste exhaustive des features avec localisation code (reference produit)
-- `docs/PIPELINE.md` = timeline cron etape par etape (detail technique)
+Bilan qualite/prix fait le 01/04. Sources a 0% sur 4 jours confirmees :
 
-Si tu ajoutes une feature, modifies un cron, desactives une task, change une regle metier : update les 3. Pas le choix.
-
-## Nettoyage watchlist — semaine du 07/04
-Bilan qualite/prix fait le 01/04. Sources a 0% sur 4 jours confirmeees :
 - **Concurrents** : WATI, sinch, GETKANAL, MESSAGE+, Spoki, ceo/coo respond.io, CM.com, Trengo, WAX, Green Bureau, Brevo, SIMIO, Superchat
 - **Influenceurs** : doxuan/navarro/rommi/alcmeon/stella gay/smsmodeinflu1-3/vonageinflu1-2/mtargetinflu1-3/isarel/Simon Lagadec/Raphael Batlle/aimee wax/Beguier CRM/mtagetinflu3/greenbureau tamalet
 - **Mots cles** : quasi tous a 0% sauf `messaging` (2%) et `omnichannel customer` (1%). Supprimer le reste.
