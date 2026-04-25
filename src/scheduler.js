@@ -56,7 +56,10 @@ function registerTask(name, cronExpression, taskFn) {
 registerTask("task-c-followup",   "20 7 * * 1-6",      taskCFollowup);    // 07h20
 registerTask("task-b-invitations","25 7 * * 1-6",      taskBInvitations); // 07h25
 registerTask("task-a-signals",    "30 7 * * 1-6",      taskASignals);     // 07h30
-registerTask("task-g-hubspot-enrich", "0 13 * * 1-6",  taskGHubspotEnrich); // 13h00 — HubSpot enrichment, 200 cr BeReach/j
+// DISABLED 25/04 — Julien suspecte que les 200 cr/j de Task G ont sature
+// la capacite search de BeReach (endpoint /search/linkedin/people HS du
+// 22/04 au 25/04). On la garde off jusqu'a confirmation.
+// registerTask("task-g-hubspot-enrich", "0 13 * * 1-6",  taskGHubspotEnrich); // 13h00 — HubSpot enrichment, 200 cr BeReach/j
 // Task F (morning InMail brief) DISABLED — replaced by 10-day InMail validation queue (à implémenter)
 // registerTask("task-f-briefing",   "30 8 * * 1-6",      taskFBriefing);    // 08h30
 registerTask("task-d-email",            "0 10 * * 1-6",      taskDEmail);         // 10h00
@@ -110,4 +113,4 @@ registerTask("log-cleanup", "0 2 * * *", async (runId) => {
   console.log("Log cleanup completed: deleted " + (count || 0) + " logs older than 30 days");
 });
 
-console.log("Scheduler started: 10 tasks registered (lun-sam pipeline, daily log/lead-cleanup, Europe/Paris)");
+console.log("Scheduler started: 9 tasks registered (lun-sam pipeline, daily log/lead-cleanup, Europe/Paris) — task-g DISABLED");
