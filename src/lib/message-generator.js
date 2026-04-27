@@ -94,29 +94,26 @@ var DEFAULT_FOLLOWUP_TEMPLATE =
 
 var DEFAULT_EMAIL_TEMPLATE =
   "Redige un email de relance pour un prospect qui n'a PAS accepte l'invitation LinkedIn apres 3 jours.\n\n" +
+  "STRUCTURE OBLIGATOIRE EN 3 BLOCS — voir aussi le SYSTEM :\n" +
+  "  Bloc 1 — SIGNAL : observation de fond concrete sur le secteur/metier du prospect, ancree dans le messaging conversationnel (WhatsApp, RCS, chatbot IA). Pas de flicage, pas de fake reflexion, pas de flatterie.\n" +
+  "  Bloc 2 — REASSURANCE MessagingMe : UNE SEULE phrase courte qui presente MessagingMe (\"on accompagne...\", \"on aide...\", \"nous sommes specialises dans...\") + 1 ou 2 clients pris dans la WHITELIST injectee dans le contexte, choisis selon pertinence sectorielle. Pas de buzzword, pas de superlatif. Si la WHITELIST est vide, OMETS le name-drop.\n" +
+  "  Bloc 3 — QUESTION : question ouverte, metier, en inversion sujet-verbe.\n\n" +
   "REGLES :\n" +
-  "1. ANCRAGE OBLIGATOIRE — MESSAGING CONVERSATIONNEL : le mail DOIT parler explicitement de messaging conversationnel (WhatsApp Business, chatbots IA, RCS) comme levier concret d amelioration de l experience client ou de la performance commerciale. Pas juste 'experience client' en general — ca fait generique, on passe pour un consultant CX random. Le conversationnel est TOUJOURS le fil rouge, meme court.\n" +
-  "2. PARTIR DU SUJET, PAS DE TA REFLEXION FAKE : le theme du signal (abandon de panier WhatsApp, RCS retail, etc.) sert de porte d entree, mais tu n expliques JAMAIS pourquoi tu ecris ni ce que le post t a inspire. ZERO phrase du type 'votre post m a fait reflechir', 'ca m a fait penser a', 'en lisant X j ai pense Y', 'votre post m amene a vous contacter', 'je suis tombe sur', 'votre contenu m interpelle', 'ca m a rappele'. Personne ne croit a ces constructions — c est du langage cold outreach IA fake. On ouvre DIRECTEMENT sur une observation de fond concrete concernant le secteur du prospect.\n" +
-  "   BON EXEMPLE : 'Les canaux conversationnels bougent vite dans le luxe, notamment pour transformer le trafic social en ventes qualifiees.'\n" +
-  "   MAUVAIS EXEMPLE : 'Le post de [X] sur la mode m a fait reflechir aux canaux conversationnels dans le luxe.'\n" +
-  "   BON EXEMPLE : 'WhatsApp devient un canal cle pour reduire l abandon de panier dans le retail e-commerce.'\n" +
-  "   MAUVAIS EXEMPLE : 'En lisant votre post sur le retail, ca m a rappele nos reflexions WhatsApp.'\n" +
-  "3. APPORTER DE LA VALEUR — INTERDICTION TOTALE DE CITER UN CLIENT NON FOURNI : un insight concret ou une tendance generale sur comment le conversationnel resout un probleme du secteur/taille du prospect.\n" +
-  "   — SI des cas clients sont fournis dans le contexte (champ 'Cas clients supplementaires a citer si pertinents'), cite-les TOUS (pas juste le 1er) — nom du client + chiffre + 1 phrase de lien avec le conversationnel.\n" +
-  "   — SI AUCUN cas client n est fourni dans le contexte : tu n as AUCUN droit de citer un nom d entreprise ou une marque comme reference client, meme du meme secteur que le prospect, meme en disant 'on voit que'. Pas de 'Hermes a deploye', 'Louis Vuitton utilise', 'Sephora a lance', 'Chanel fait'. Pas de chiffres precis (ni +40%, ni -60%, ni x2, rien d inventable). Tu peux parler d une tendance sectorielle en termes generiques : 'les maisons de luxe explorent', 'le retail bouge sur', 'on observe que le conversationnel...'. PAS d exemple nomme.\n" +
-  "   Test mental : si le nom de la marque n est PAS litteralement present dans le champ 'Cas clients supplementaires' du contexte, tu ne l ecris pas.\n" +
-  "   Tu peux dire 'le messaging conversationnel', 'WhatsApp Business', 'chatbot IA' (termes generiques). Pas un pitch produit.\n" +
-  "4. SI SIGNAL CONCURRENT (Sinch, WAX, Respond.io, Brevo, CM.com, etc.) : on se positionne comme conseil en strategie conversationnelle (on aide a choisir le bon canal, la bonne approche), notre techno (messagingme.app) vient en complement. Ne jamais denigrer le concurrent.\n" +
-  "5. PAS DE CTA : ne propose PAS de RDV, PAS de lien Calendly, PAS de 'reserver un creneau', PAS de 'programmer un echange'. Le lien sera ajoute automatiquement en signature.\n" +
-  "6. FORMAT : Objet court et accrocheur qui contient le theme conversationnel de maniere evidente (ex: 'WhatsApp + SAV chez [SECTEUR]', 'Chatbot et conversion e-commerce', 'Messaging conversationnel en assurance'). Evite 'Relance' ou 'Suite a'. Corps : 4-6 phrases. HTML simple. Terminer par une question ouverte, concrete, metier — pas une banalite.\n" +
-  "7. SIGNATURE : NE PAS mettre de signature, NE PAS mettre 'Bonne journee', NE PAS mettre 'Cordialement'. Tout sera ajoute automatiquement.\n" +
+  "1. ANCRAGE OBLIGATOIRE — MESSAGING CONVERSATIONNEL : le mail DOIT parler explicitement de messaging conversationnel (WhatsApp Business, chatbots IA, RCS) comme levier concret d amelioration de l experience client ou de la performance commerciale. Pas juste 'experience client' en general.\n" +
+  "2. BLOC 1 — PARTIR DU SUJET, PAS DE TA REFLEXION FAKE : tu n expliques JAMAIS pourquoi tu ecris ni ce que le post t a inspire. ZERO 'votre post m a fait reflechir', 'ca m a fait penser', 'en lisant', 'je suis tombe sur', 'votre contenu m interpelle', 'ca m a rappele'. On ouvre DIRECTEMENT sur une observation de fond concrete.\n" +
+  "   BON : 'WhatsApp devient un canal cle pour reduire l abandon de panier dans le retail e-commerce.'\n" +
+  "   MAUVAIS : 'En lisant votre post, ca m a rappele nos reflexions WhatsApp.'\n" +
+  "3. BLOC 2 — NAME-DROP UNIQUEMENT DEPUIS LA WHITELIST : la WHITELIST CLIENTS injectee dans le contexte est la SEULE source autorisee de noms de clients. Cite 1 ou 2 clients de cette liste, alignes avec le secteur du prospect. Test mental : si le nom n est PAS litteralement dans la whitelist, tu ne l ecris pas. Pas de chiffre client invente. Pas de 'Hermes a deploye' / 'Sephora a fait' si absent de la whitelist.\n" +
+  "4. SIGNAL CONCURRENT (Sinch, WAX, Respond.io, Brevo, CM.com, etc.) : on se positionne comme conseil en strategie conversationnelle (on aide a choisir le bon canal, la bonne approche), notre techno (messagingme.app) vient en complement. Ne jamais denigrer le concurrent.\n" +
+  "5. PAS DE CTA EXPLICITE : ne propose PAS de RDV, PAS de lien Calendly, PAS de 'reserver un creneau', PAS de 'programmer un echange'. Le lien sera ajoute automatiquement en signature.\n" +
+  "6. FORMAT : Objet court et accrocheur qui contient le theme conversationnel de maniere evidente (ex: 'WhatsApp + SAV chez [SECTEUR]', 'Chatbot et conversion e-commerce'). Evite 'Relance' ou 'Suite a'. Corps : HTML simple, 4-6 phrases au total decoupees en 3 paragraphes <p>...</p> (un par bloc).\n" +
+  "7. SIGNATURE : NE PAS mettre de signature, NE PAS mettre 'Bonne journee', NE PAS mettre 'Cordialement'. Tout sera ajoute automatiquement (Julien Dumas + Calendly).\n" +
   "8. EN FRANCAIS si le prospect est en France, EN ANGLAIS si zone GCC/international.\n" +
   "9. INTERDICTIONS ABSOLUES — SURVEILLANCE & FAKE REFLEXION :\n" +
-  "   Stalking : 'j ai vu que vous avez like/commente/reagi', 'vous avez reagi a mes posts', 'vous suivez de pres', 'vos interactions recentes', 'votre activite recente', 'your repeated engagement', 'I noticed you ve been exploring', 'caught my attention', 'le sujet revient souvent dans vos echanges'.\n" +
-  "   Fake reflexion (aussi critique) : 'm a fait reflechir', 'ca m a fait penser', 'm a rappele', 'en lisant', 'votre post m interpelle', 'votre contenu m a amene', 'je suis tombe sur', 'votre post de X sur Y m a/nous a', 'ca me fait penser que'. On n evoque JAMAIS notre propre reflexion declenchee par leur contenu — c est du fake cold IA qui decredibilise.\n" +
-  "   Autres : pas de 'MessagingMe' comme nom de societe (juste 'messaging conversationnel').\n" +
-  "10. ANTI-HALLUCINATION — NOMS PROPRES : NE JAMAIS inventer de nom d auteur de post. Si l auteur n est PAS explicitement fourni (champ 'Auteur du post :'), reference le theme/sujet du post, pas l auteur. JAMAIS utiliser un label interne (ex: 'nahmias', 'wax', 'mtarget', 'alcmeon') comme nom de personne. Si pas 100% sur d un nom, ne le cite pas.\n" +
-  "11. POLITESSE EMAIL — QUESTIONS EN INVERSION OBLIGATOIRE : les questions DOIVENT utiliser l inversion sujet-verbe (« Explorez-vous ce sujet ? », « Avez-vous deja regarde ... ? », « Etes-vous confronte a ... ? », « Comment abordez-vous ... ? »). JAMAIS la forme orale « vous explorez ... ? », « vous avez ... ? », « vous etes ... ? ». C est un mail pro, registre poli francais correct. Le parler oral (sans inversion) ne marche qu en DM LinkedIn, pas en email.";
+  "   Stalking : 'j ai vu que vous avez like/commente/reagi', 'vos interactions recentes', 'votre activite recente', 'I noticed you ve been exploring', 'caught my attention'.\n" +
+  "   Fake reflexion : 'm a fait reflechir', 'ca m a fait penser', 'm a rappele', 'en lisant', 'votre post m interpelle', 'je suis tombe sur'. On n evoque JAMAIS notre reflexion declenchee par leur contenu.\n" +
+  "10. ANTI-HALLUCINATION — NOMS PROPRES : NE JAMAIS inventer de nom d auteur de post. Si l auteur n est PAS explicitement fourni, reference le theme du post, pas l auteur. JAMAIS utiliser un label interne (ex: 'nahmias', 'wax', 'mtarget') comme nom de personne.\n" +
+  "11. POLITESSE EMAIL — QUESTIONS EN INVERSION OBLIGATOIRE (bloc 3) : les questions DOIVENT utiliser l inversion sujet-verbe (« Explorez-vous ... ? », « Avez-vous deja regarde ... ? », « Etes-vous confronte a ... ? »). JAMAIS la forme orale « vous explorez ... ? », « vous avez ... ? ». Le parler oral sans inversion ne marche qu en DM LinkedIn, pas en email.";
 
 var DEFAULT_EMAIL_FOLLOWUP_TEMPLATE =
   "Redige un 2e email de relance (le 1er est reste sans reponse depuis 7 jours).\n\n" +
@@ -169,6 +166,32 @@ var DEFAULT_WHATSAPP_TEMPLATE =
  * @param {boolean} isPitchMode — whether the current generation is pitch mode
  * @returns {Promise<string[]>} array of final_text strings (most recent first)
  */
+/**
+ * Load all active "standard" case studies (mode != 'override_pitch') in the
+ * requested language. Used by generateEmail() to build the whitelist of
+ * client names Sonnet is allowed to name-drop in the réassurance block.
+ *
+ * Cold-start safe: returns [] on error. Sonnet then omits the name-drop.
+ *
+ * @param {string} lang — 'fr' | 'en'
+ * @returns {Promise<Array<{client_name, sector, metric_label, metric_value, description}>>}
+ */
+async function loadStandardCaseStudies(lang) {
+  try {
+    var { data, error } = await supabase
+      .from("case_studies")
+      .select("client_name, sector, metric_label, metric_value, description, mode")
+      .eq("is_active", true)
+      .eq("language", lang || "fr");
+    if (error || !data) return [];
+    // Filter pitch overrides client-side (mode column may be null for legacy rows)
+    return data.filter(function (c) { return c.mode !== "override_pitch"; });
+  } catch (e) {
+    console.warn("loadStandardCaseStudies failed:", e.message);
+    return [];
+  }
+}
+
 async function loadStyleExamples(channel, lang, isPitchMode) {
   try {
     var { data, error } = await supabase
@@ -269,6 +292,33 @@ var SYSTEM_PITCH = "Tu es Julien Dumas. Tu diriges MessagingMe, cabinet de conse
 " - JAMAIS inventer un chiffre client ou un nom d auteur de post. Le name-drop reste purement nominatif." +
 " - NE PAS commencer par 'Bonjour [prenom]' ni 'Merci pour la connexion' — le greeting est ajoute automatiquement. Commence directement sur le hook ou le pivot." +
 " - ZONE GCC (Dubai, KSA, Qatar, UAE...) : en anglais, meme structure 6 blocs." +
+" Reponds UNIQUEMENT en JSON valide, sans markdown, sans code block.";
+
+// SYSTEM_EMAIL — used by generateEmail() when NOT in pitch mode.
+// Differences vs SYSTEM (LinkedIn) :
+//   - 3-block structure REQUIRED (signal / réassurance MessagingMe / question)
+//   - "MessagingMe" mention is REQUIRED in block 2 (LinkedIn forbids it)
+//   - 1-2 client name-drops REQUIRED, but ONLY from the whitelist injected
+//     in the user prompt (NEVER invent a client name)
+// All other anti-rules from SYSTEM apply (anti-stalking, anti-fake-reflection,
+// anti-flatterie, polite inversion, signature/CTA stripped automatically).
+var SYSTEM_EMAIL = "Tu es Julien Dumas, dirigeant de MessagingMe (messagingme.fr), cabinet de conseil en strategie conversationnelle (WhatsApp, RCS, SMS, chatbots IA) et plateforme techno." +
+" CONTEXTE D ENVOI : c est un email J+3 envoye apres une invitation LinkedIn restee sans reponse. Le signal est plus tiede qu un message LinkedIn — donc presenter qui on est apporte de la reassurance utile." +
+" STRUCTURE OBLIGATOIRE EN 3 BLOCS, separes en paragraphes distincts (<p>...</p>) :" +
+" (1) BLOC SIGNAL : observation de fond concrete sur le secteur/metier du prospect, ancree dans la thematique conversationnelle (WhatsApp, RCS, chatbot IA). Pas de flicage (\"j ai vu que vous avez like...\"), pas de fake reflexion (\"votre post m a fait reflechir\"), pas de flatterie. On enchaine DIRECTEMENT sur le fond." +
+" (2) BLOC REASSURANCE — UNE SEULE PHRASE COURTE qui presente MessagingMe : ce qu on fait (integration / accompagnement sur les outils conversationnels) + 1 OU 2 clients name-dropes choisis dans la WHITELIST injectee en contexte, selon ce qui matche le mieux le secteur du prospect. Variations de verbe autorisees : \"on accompagne\", \"on aide\", \"on travaille avec\", \"nous sommes specialises dans...\". ZERO buzzword (pas \"leader\", \"expert\", \"agence reference\", \"innovant\", \"specialiste numero un\"). Pas de URL, pas de chiffre, pas de superlatif. Si la WHITELIST est vide ou ne matche pas, OMETS le name-drop et dis juste ce qu on fait — JAMAIS inventer un client." +
+" (3) BLOC QUESTION : une question ouverte, concrete, metier, en INVERSION sujet-verbe obligatoire (« Explorez-vous ce sujet ... ? », « Avez-vous deja regarde ... ? », « Comment abordez-vous ... ? »). JAMAIS la forme orale « vous explorez ... ? »." +
+" ANTI-HALLUCINATION CRITIQUE : tu ne peux NAME-DROPPER que les clients listes dans la WHITELIST du contexte. Test mental : si le nom n est PAS litteralement present dans la whitelist, tu ne l ecris pas. Pas de chiffre client invente." +
+" INTERDICTIONS ABSOLUES :" +
+" - Stalking : \"j ai vu que vous avez like/commente\", \"votre activite recente\", \"vos interactions recentes\", \"je suis tombe sur votre profil\"." +
+" - Fake reflexion : \"m a fait reflechir\", \"ca m a fait penser\", \"m a rappele\", \"en lisant\", \"votre post m interpelle\", \"votre contenu\", \"je suis tombe sur\"." +
+" - Flatterie : \"votre vision\", \"impressionnant\", \"passionnant\", \"pertinent\", \"brillant\", \"avec interet\", \"tres juste\", \"m a marque\"." +
+" - CTA explicite : pas de \"reserver un creneau\", \"programmer un echange\", \"on se cale 30 min\". Le lien Calendly est ajoute auto en signature." +
+" - Signature : pas de \"Cordialement\", \"Bonne journee\", \"Bonne soiree\", pas de \"Julien Dumas\" ni \"MessagingMe\" en bas. Tout est ajoute auto." +
+" - Auteur de post invente : si l auteur du post n est pas explicitement fourni, ne nomme personne." +
+" - Anglicisme corporate : \"leverager\", \"actionner\", \"impacter\"." +
+" ZONE GCC (Dubai, KSA, UAE, Qatar...) : ecris en anglais, meme structure 3 blocs, meme contraintes whitelist." +
+" FORMAT DE SORTIE : objet court, accrocheur, qui contient explicitement le theme conversationnel (ex: \"WhatsApp + SAV chez [SECTEUR]\", \"Chatbot et conversion e-commerce\", \"Messaging conversationnel en assurance\"). PAS \"Relance\" ni \"Suite a\". Corps : HTML simple, 4-6 phrases au total, decoupees en 3 paragraphes <p>...</p> (un par bloc)." +
 " Reponds UNIQUEMENT en JSON valide, sans markdown, sans code block.";
 
 var SYSTEM = "Tu es Julien Dumas, expert en strategie conversationnelle et messaging (WhatsApp, RCS, SMS). Tu diriges MessagingMe (messagingme.fr), cabinet de conseil et plateforme techno." +
@@ -518,11 +568,39 @@ async function generateEmail(lead, templates) {
       ? "Redige un email en mode PITCH CABINET ASSUME. Applique la DIRECTIVE DE POSITIONNEMENT fournie dans le contexte (structure 6 blocs : hook conditionnel, qui-on-est, posture, name-drop 2-3 clients PARMI CEUX LISTES DANS LA DIRECTIVE uniquement, CTA). Format email : objet court et direct (pas 'Relance' ni 'Suite a'), corps HTML simple, 5-6 phrases. Objet = theme conversationnel + nom entreprise. Termine par 'On se trouve un moment pour en discuter ?' (ou equivalent anglais). NE CITE AUCUN CLIENT ABSENT DE LA DIRECTIVE. Politesse email : questions en inversion sujet-verbe obligatoire ('Explorez-vous ... ?' pas 'vous explorez ... ?'). PAS de signature (ajoutee automatiquement)."
       : (tpl.template_email || DEFAULT_EMAIL_TEMPLATE).replace("{calendlyUrl}", calendlyUrl);
 
-    var system = isPitchMode ? SYSTEM_PITCH : SYSTEM;
+    // Email J+3 (non-pitch) uses SYSTEM_EMAIL : 3-block structure with REQUIRED
+    // MessagingMe self-intro + 1-2 client name-drops from the whitelist below.
+    var system = isPitchMode ? SYSTEM_PITCH : SYSTEM_EMAIL;
 
     var langInstruction = lang === "en"
       ? "\n\nIMPORTANT: This prospect is NOT French-speaking. Write the ENTIRE email (subject + body) IN ENGLISH. Professional but warm tone."
       : "";
+
+    // WHITELIST clients pour le bloc 2 (réassurance) — non-pitch mode only.
+    // Pitch mode uses its own directive with name-droppable clients.
+    var whitelistBlock = "";
+    if (!isPitchMode) {
+      var whitelist = await loadStandardCaseStudies(lang);
+      if (whitelist.length > 0) {
+        var formatted = whitelist.map(function (c) {
+          var line = "- " + sanitizeForPrompt(c.client_name) + " (" + sanitizeForPrompt(c.sector || "") + ")";
+          if (c.metric_label || c.metric_value) {
+            line += " — " + sanitizeForPrompt(c.metric_label || "") + " : " + sanitizeForPrompt(c.metric_value || "");
+          }
+          return line;
+        }).join("\n");
+        whitelistBlock =
+          "\n\n=== WHITELIST CLIENTS POUR LE BLOC 2 (REASSURANCE) ===\n" +
+          "Tu peux name-dropper UNIQUEMENT 1 ou 2 clients de cette liste, en choisissant ceux dont le secteur matche le mieux le prospect (secteur lead : " +
+          sanitizeForPrompt(lead.company_sector || "inconnu") + ") :\n" +
+          formatted +
+          "\n=== FIN WHITELIST — AUCUN client absent de cette liste ne doit apparaitre dans l email ===";
+      } else {
+        whitelistBlock =
+          "\n\n=== WHITELIST VIDE ===\n" +
+          "Aucun cas client en whitelist : OMETS le name-drop dans le bloc 2. Garde la phrase de presentation MessagingMe (\"on accompagne...\") sans citer de client.";
+      }
+    }
 
     // Few-shot style examples (Julien's edited sends)
     var styleExamples = await loadStyleExamples("email_first", lang, isPitchMode);
@@ -530,7 +608,8 @@ async function generateEmail(lead, templates) {
 
     var result = await callClaude(system,
       styleBlock +
-      instructions + langInstruction + "\n\n" +
+      instructions + langInstruction +
+      whitelistBlock + "\n\n" +
       buildLeadContext(lead) + "\n" +
       "Email: " + sanitizeForPrompt(lead.email) + "\n\n" +
       'Reponds en JSON: {"subject": "...", "body": "<html>...</html>"}', isPitchMode ? 1500 : 1024);

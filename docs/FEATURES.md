@@ -2,7 +2,7 @@
 
 Liste exhaustive des features actives du produit, avec pour chacune : ce que ça fait, où ça vit dans le code, et l'etat (actif / desactive / en attente).
 
-Derniere mise a jour : **25 avril 2026**
+Derniere mise a jour : **27 avril 2026**
 
 > **Pendant** ce document : `docs/PIPELINE.md` decrit la timeline cron quotidienne en detail (etape par etape). Quand on edite `CLAUDE.md`, **ces deux fichiers doivent etre mis a jour en parallele**.
 
@@ -97,12 +97,15 @@ Declenche dans :
 
 **Modele** : `claude-sonnet-4-20250514`. Code : `src/lib/message-generator.js`.
 
-**3 prompts SYSTEM separes** :
-- `SYSTEM` (defaut) : LinkedIn follow-up + emails. Reagir au signal, conseil/strategie en complement, jamais "MessagingMe", jamais "merci pour la connexion", jamais citer la source du signal.
+**4 prompts SYSTEM separes** :
+- `SYSTEM` (defaut) : LinkedIn follow-up. Reagir au signal, conseil/strategie en complement, jamais "MessagingMe", jamais "merci pour la connexion", jamais citer la source du signal.
+- `SYSTEM_EMAIL` (NEW 27/04) : email J+3 Task D, mode non-pitch. **Structure 3 blocs obligatoire** : (1) signal, (2) UNE phrase de reassurance MessagingMe + 1-2 clients name-dropes depuis la WHITELIST injectee, (3) question en inversion. MessagingMe inline AUTORISE (contrairement a LinkedIn).
 - `SYSTEM_PITCH` (mode hard) : declenche quand un case study `mode='override_pitch'` est selectionne. Permet "Nous sommes un cabinet de conseil", 5-6 phrases, CTA "On se trouve un moment ?".
 - `SYSTEM_WHAPI` : messages WhatsApp perso via Whapi (2-3 phrases, self-intro autorise, sans liens).
 
-**Generation 2-step** (LinkedIn) : Sonnet genere le CORE sans opener → on prepend `"Bonjour [prénom], "` programmatiquement. Strip programmatique : opener Bonjour/Merci, "MessagingMe", "chez/via/avec MessagingMe", "Je dirige [fragment]", espaces doubles.
+**Generation 2-step** (LinkedIn) : Sonnet genere le CORE sans opener → on prepend `"Bonjour [prénom], "` programmatiquement. Strip programmatique LinkedIn : opener Bonjour/Merci, "MessagingMe", "chez/via/avec MessagingMe", "Je dirige [fragment]", espaces doubles. **Email** : strip uniquement les patterns de signature (`<p>MessagingMe</p>` standalone, "Cordialement\nJulien", lignes Calendly) — les mentions inline "Chez MessagingMe, on aide..." sont preservees.
+
+**Whitelist clients (Email J+3)** : `loadStandardCaseStudies(lang)` charge tous les `case_studies` actifs dont `mode != 'override_pitch'`, dans la langue du lead. Injecte sous forme de bloc `=== WHITELIST CLIENTS POUR LE BLOC 2 ===` dans le user prompt avec le secteur du lead pour guider la selection. Sonnet pioche 1-2 clients pertinents secteur. Si whitelist vide → omet le name-drop (jamais d'invention).
 
 **Anti-fake-reflection** (rule 2 du template email + interdictions) : bannir "m'a fait reflechir", "votre post m'interpelle", etc.
 
@@ -168,8 +171,15 @@ Pour chaque `invitation_sent` non-acceptee depuis 3 jours :
 1. **FullEnrich** lookup email (`/api/v1/contact/enrich/bulk`, 1 cr/lead, async submit+poll). Garde uniquement si `most_probable_email_status === "DELIVERABLE"`.
 2. **Skip si pas d'email** (FullEnrich miss + HubSpot miss) → `status='email_not_found'`, le lead apparait dans l'onglet « Sans email » de `/messages-draft` pour decision manuelle (lookup phone WhatsApp 10 cr ou archive). **Pas de Sonnet appele = 0 token gaspille.**
 3. **4 checks pre-send** : email FullEnrich, dedup HubSpot, reply LinkedIn inbox, suppression list (RGPD).
-4. Sonnet genere le body, envoi via SMTP, `status='email_sent'`, `email_sent_at` timestamp.
+4. Sonnet genere le body via `SYSTEM_EMAIL` + WHITELIST clients, envoi via SMTP, `status='email_sent'`, `email_sent_at` timestamp.
 5. Skip si `metadata.skip_email = true` (leads ayant recu un mauvais message le 01/04).
+
+**Structure email J+3 — 3 blocs obligatoires (NEW 27/04)** : depuis le J+3 le signal est plus tiede que LinkedIn, donc on ajoute une phrase de reassurance qui presente MessagingMe.
+- **Bloc 1 — Signal** : observation de fond sur le secteur, ancree dans le messaging conversationnel. Pas de flicage, pas de fake reflexion.
+- **Bloc 2 — Reassurance** : UNE phrase courte qui presente MessagingMe + 1-2 clients name-dropes depuis la `case_studies` whitelist (mode `standard`, lang du lead), choisis selon pertinence sectorielle. Si whitelist vide → omet le name-drop (jamais d'invention).
+- **Bloc 3 — Question** : ouverte, metier, en inversion sujet-verbe (« Explorez-vous ... ? »).
+
+LinkedIn / Whapi / mode hard / relance J+14 = inchanges (le J+14 garde sa structure existante avec mention MessagingMe une fois max).
 
 ### 10b. Task F-followup — relance J+14
 `src/tasks/task-f-email-followup.js`. Pour chaque `email_sent` sans reply depuis 14j → genere une relance + envoie.

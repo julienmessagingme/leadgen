@@ -7,7 +7,7 @@ schema DB, layout fichiers, conventions code, quirks des APIs externes, deploiem
 > `docs/FEATURES.md` (catalogue features), `docs/PIPELINE.md` (timeline cron).
 > Quand on edite `CLAUDE.md`, on met aussi a jour `FEATURES.md` + `PIPELINE.md` + (si du tech change) `ARCHITECTURE.md`.
 
-Derniere maj : **25 avril 2026**
+Derniere maj : **27 avril 2026**
 
 ---
 
@@ -258,7 +258,7 @@ hubspot_existing → (Convertir) → new
 
 - Modeles fixes : `claude-haiku-4-5-20251001` (scoring) et `claude-sonnet-4-20250514` (messages).
 - Haiku batch scoring : 5 signaux par appel, schema force `{ results: [{ index, icp_score, tier, reasoning }] }`. Cout ~$1.50 / jour.
-- Sonnet : 3 SYSTEM prompts (`SYSTEM`, `SYSTEM_PITCH`, `SYSTEM_WHAPI`) — voir `FEATURES.md` feature 6.
+- Sonnet : 4 SYSTEM prompts (`SYSTEM`, `SYSTEM_EMAIL`, `SYSTEM_PITCH`, `SYSTEM_WHAPI`) — voir `FEATURES.md` feature 6. `SYSTEM_EMAIL` (NEW 27/04) impose la structure 3 blocs (signal / reassurance MessagingMe + name-drop whitelist / question) pour Task D email J+3 hors mode pitch.
 
 ---
 

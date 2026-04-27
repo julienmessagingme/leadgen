@@ -1,6 +1,6 @@
 # PIPELINE.md — Timeline cron quotidienne detaillee
 
-Derniere mise a jour : **25 avril 2026**
+Derniere mise a jour : **27 avril 2026**
 
 > Liste exhaustive des features : `docs/FEATURES.md`. Ce document detaille la timeline cron etape par etape. **Ces deux docs doivent etre mis a jour en parallele** (et en meme temps que `CLAUDE.md`).
 
@@ -208,11 +208,13 @@ Pour chaque `invitation_sent` non-acceptee depuis 3 jours :
    - HubSpot dedup (eviter contact deja contacte recemment via CRM)
    - Reply LinkedIn inbox (si le lead a deja repondu sur LinkedIn → skip)
    - Suppression list (RGPD)
-5. **Generation Sonnet** (templates dans `global_settings.email_template`, regles dans `SYSTEM` + `DEFAULT_EMAIL_TEMPLATE`) :
+5. **Generation Sonnet** via `SYSTEM_EMAIL` (NEW 27/04) + `DEFAULT_EMAIL_TEMPLATE` :
+   - **Structure 3 blocs obligatoire** : (1) signal de fond / (2) reassurance MessagingMe + 1-2 clients whitelistes / (3) question en inversion. Le J+3 etant tiede, on apporte de la reassurance que LinkedIn n'a pas besoin d'avoir.
+   - **Whitelist clients** : `loadStandardCaseStudies(lang)` charge tous les `case_studies` `is_active=true AND mode != 'override_pitch'` pour la langue du lead. Injectee comme bloc `=== WHITELIST CLIENTS ===` dans le user prompt avec le secteur du lead. Sonnet pioche 1 ou 2 clients pertinents secteur. Whitelist vide → omet le name-drop (jamais d'invention).
    - Anti-fake-reflection (rule 2 + interdictions)
    - Inversion polie francaise (rule 11) : `"Explorez-vous...?"` jamais `"vous explorez...?"`
-   - Anti-hallucination clients (jamais citer un nom absent du contexte)
-   - Style learning : few-shot depuis `sent_messages_archive` (channel=email, lang=fr, pitch_mode adapte)
+   - Anti-hallucination clients : test mental — si le nom n'est PAS litteralement dans la whitelist, jamais cite
+   - Style learning : few-shot depuis `sent_messages_archive` (channel=email_first, lang=fr, pitch_mode adapte)
 6. Envoi SMTP, `status='email_sent'`, `email_sent_at=now()`, `metadata.email_subject` + body.
 7. **Logging HubSpot** asynchrone : upsert contact + email engagement (voir feature 11c).
 
