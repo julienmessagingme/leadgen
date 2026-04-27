@@ -155,14 +155,15 @@ Code : `src/lib/signal-collector.js`.
 Tous les signaux bruts inseres dans `raw_signals` AVANT dedup/scoring. Permet **re-scoring sans recouter de credits** via `scripts/rescore-today.js`.
 
 ### Step 4 — Dedup
-Code : `src/lib/dedup.js`. 3 etapes :
-1. **Canonicalisation URL** : normalise `/in/ACoAA...` en `/in/slug`.
+Code : `src/lib/dedup.js`. 3 etapes pour les signaux + 1 safety net a l'insert :
+1. **Canonicalisation URL** : normalisation string (lower-case path, locale prefix retire). **NE RESOUT PAS slug↔ACoA** (limite connue, voir TODO `CLAUDE.md`).
 2. **In-batch** : meme URL dans le run en cours → fusionne.
-3. **Supabase check** : si lead existe deja → **re-engagement** :
+3. **Supabase check** par `linkedin_url_canonical` : si lead existe deja → **re-engagement** :
    - +5 pts par signal supplementaire (cap +20)
    - Update `metadata.previous_signals[]`, `metadata.signal_count`, `metadata.last_re_engagement`
    - Lead **non re-insere** mais peut changer de tier (warm → hot)
    - Marche pour `new` ET `hubspot_existing`
+4. **Email-level safety net** (NEW 27/04) — applique a Step 8f juste avant insert : si `scoredLead.email` matche un autre lead row avec `email_sent_at NOT NULL` → skip insert (la row existante est la source of truth, pas besoin de creer une row parallele slug/ACoA pour la meme personne deja contactee).
 
 (HubSpot dedup deplace en Step 8e — trop lent pour 7000+ signaux.)
 
@@ -194,6 +195,7 @@ Pour chaque lead du top 30 :
 
 Pour chaque `invitation_sent` non-acceptee depuis 3 jours :
 
+0. **Email-level dedup pre-filter** (NEW 27/04) — `selectLeads()` exclut tout lead dont l'email apparait avec `email_sent_at NOT NULL` sur une autre row. Garde-fou contre les paires slug/ACoA qui creent deux rows pour la meme personne.
 1. **Skip** si `metadata.skip_email = true` (leads avec mauvais messages 01/04).
 2. **Lookup email** :
    - HubSpot (gratuit) → si trouve, utilise

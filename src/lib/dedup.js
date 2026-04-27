@@ -120,4 +120,48 @@ async function dedup(signals, runId) {
   return unique;
 }
 
-module.exports = { dedup };
+/**
+ * Check which of the given emails already have a lead with email_sent_at set
+ * (= we already sent them an email). Used as a runtime safety net to catch
+ * duplicate `leads` rows for the same person that the URL canonicalisation
+ * dedup missed (slug vs ACoA pairs — see Bourge/Olfa case 27/04).
+ *
+ * Fail-open: returns an empty Set on error (better to risk one false-negative
+ * duplicate send than to block all Task D sends).
+ *
+ * @param {string[]} emails - lower-cased emails to check
+ * @param {(number|string)[]} [excludeIds] - lead ids to exclude from the lookup
+ *        (typically the current candidate's own id, so a lead doesn't dedup
+ *        against itself if it's already been sent)
+ * @returns {Promise<Set<string>>} set of emails that have at least one
+ *          OTHER lead row with email_sent_at NOT NULL
+ */
+async function findEmailsAlreadySent(emails, excludeIds) {
+  if (!emails || emails.length === 0) return new Set();
+  // Lower-case + de-duplicate input list
+  var normalized = Array.from(new Set(
+    emails.filter(function (e) { return e; }).map(function (e) { return String(e).toLowerCase().trim(); })
+  ));
+  if (normalized.length === 0) return new Set();
+  try {
+    var query = supabase
+      .from("leads")
+      .select("id, email")
+      .in("email", normalized)
+      .not("email_sent_at", "is", null);
+    if (excludeIds && excludeIds.length > 0) {
+      query = query.not("id", "in", "(" + excludeIds.join(",") + ")");
+    }
+    var { data, error } = await query;
+    if (error) {
+      console.warn("findEmailsAlreadySent query failed:", error.message);
+      return new Set();
+    }
+    return new Set((data || []).map(function (r) { return String(r.email || "").toLowerCase(); }));
+  } catch (e) {
+    console.warn("findEmailsAlreadySent failed:", e.message);
+    return new Set();
+  }
+}
+
+module.exports = { dedup, findEmailsAlreadySent };

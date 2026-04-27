@@ -94,6 +94,10 @@ Detail complet de chaque task : `docs/PIPELINE.md`.
 
 ---
 
+## TODO — root causes a creuser
+
+- **Canonicalisation slug ↔ ACoA cassee** (decouvert 27/04 sur Bourge/Olfa/Maaz/Rob). `canonicalizeLinkedInUrl()` ne fait que normalisation string : un slug et son ACoA equivalent produisent 2 canonical URLs distinctes → 2 rows leads pour la meme personne. Le hotfix 27/04 (email-level dedup dans Task D selectLeads + approve-email + Task A insert) bloque les double-envois mais NE FUSIONNE PAS les rows existants. Le vrai fix demande : a l'insert, resoudre l'ACoA via `visitProfile` (BeReach 1 cr) pour obtenir le slug puis dedupe sur le slug. Ou : faire un script de fusion one-shot qui consolide les paires existantes par email.
+
 ## TODO — prochaine session
 
 - **Reponse BeReach support ACoA** : checker si la session est reparee, reset `invitation_failures` si oui

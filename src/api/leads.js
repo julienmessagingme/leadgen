@@ -652,6 +652,29 @@ router.post("/:id/approve-email", async (req, res) => {
     const email = lead.metadata?.draft_email_to || lead.email;
     if (!email) return res.status(400).json({ error: "No email address" });
 
+    // SAFETY NET — Email-level duplicate guard (added 27/04 after Bourge/Olfa case).
+    // If another `leads` row with the same email already has email_sent_at, we
+    // would be re-emailing the same person. Auto-disqualify this lead and 409.
+    {
+      const { findEmailsAlreadySent } = require("../lib/dedup");
+      const alreadySent = await findEmailsAlreadySent([email], [lead.id]);
+      if (alreadySent.has(String(email).toLowerCase())) {
+        const dupMeta = Object.assign({}, lead.metadata || {}, {
+          disqualified_reason: "duplicate_email_already_sent",
+          disqualified_at: new Date().toISOString(),
+        });
+        await supabase
+          .from("leads")
+          .update({ status: "disqualified", metadata: dupMeta })
+          .eq("id", lead.id);
+        console.warn("approve-email blocked: duplicate email " + email + " already sent on another lead row (current id=" + lead.id + ")");
+        return res.status(409).json({
+          error: "duplicate_email_already_sent",
+          message: "Un autre lead avec l'email " + email + " a deja recu un email — ce draft a ete disqualifie automatiquement.",
+        });
+      }
+    }
+
     const subject = (req.body.subject || "").trim() || lead.metadata?.draft_email_subject;
     const body = (req.body.body || "").trim() || lead.metadata?.draft_email_body;
     if (!subject || !body) return res.status(400).json({ error: "No email content to send" });

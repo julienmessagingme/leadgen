@@ -48,10 +48,14 @@ Toutes les tasks tournent sous PM2 (`leadgen`) via `node-cron`. Chaque task a un
 
 ## 3. Dedup et re-engagement multi-jours
 
-`src/lib/dedup.js`, 3 etapes :
-1. **Canonicalisation URL** LinkedIn : normalise `/in/ACoAA...` en `/in/slug` (utilise visitProfile en cache 48h).
+`src/lib/dedup.js`, 3 etapes pour les signaux entrants + 1 garde-fou email :
+1. **Canonicalisation URL** LinkedIn : normalisation string (lower-case, locale prefix retire, query/hash retires). **LIMITATION CONNUE** (decouverte 27/04) : ne resout PAS slug ↔ ACoA — `/in/arnaud-bourge-a87a857` et `/in/ACoAAAFnl8c...` produisent 2 canonical URLs distinctes pour la meme personne. Voir TODO root cause dans `CLAUDE.md`.
 2. **In-batch** : meme URL dans le run en cours.
-3. **Supabase check** : si le lead existe deja → `+5 pts par signal supplementaire (cap +20)`, met a jour `metadata.previous_signals[]`, `metadata.signal_count`, `metadata.last_re_engagement`. Le lead n'est pas re-insere mais peut **changer de tier** (warm → hot).
+3. **Supabase check** par `linkedin_url_canonical` : si le lead existe deja → `+5 pts par signal supplementaire (cap +20)`, met a jour `metadata.previous_signals[]`, `metadata.signal_count`, `metadata.last_re_engagement`. Le lead n'est pas re-insere mais peut **changer de tier** (warm → hot).
+4. **Garde-fou email-level** (NEW 27/04, helper `findEmailsAlreadySent()`) : runtime safety net pour rattraper les doublons que la canonicalisation rate. Applique a 3 endroits :
+   - **Task A insert (Step 8f)** : avant insert, si `scoredLead.email` matche un autre lead row avec `email_sent_at IS NOT NULL` → skip insert.
+   - **Task D `selectLeads()`** : exclut les leads dont l'email apparait sur une autre row deja envoyee.
+   - **Endpoint `/approve-email`** : last-line check juste avant SMTP. Si match → auto-disqualify le lead courant + 409 Conflict + message UI.
 
 Marche pour les leads `new` ET `hubspot_existing`.
 

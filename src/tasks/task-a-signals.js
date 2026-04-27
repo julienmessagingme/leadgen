@@ -14,7 +14,7 @@
 
 const { supabase } = require("../lib/supabase");
 const { collectSignals } = require("../lib/signal-collector");
-const { dedup } = require("../lib/dedup");
+const { dedup, findEmailsAlreadySent } = require("../lib/dedup");
 const { enrichLead } = require("../lib/enrichment");
 const { existsInHubspot } = require("../lib/hubspot");
 const { gatherNewsEvidence } = require("../lib/news-evidence");
@@ -519,6 +519,21 @@ module.exports = async function taskASignals(runId) {
           // HubSpot check fails open — insert as "new"
           await log(runId, "task-a-signals", "warn",
             "HubSpot check failed: " + hubErr.message);
+        }
+
+        // 8f. Email-level dedup safety net (added 27/04 — Bourge/Olfa case).
+        // If the enriched email matches an existing leads row that was already
+        // contacted (email_sent_at set), skip insert — the existing row is
+        // the source of truth, no point in creating a parallel slug/ACoA twin.
+        if (scoredLead.email) {
+          var alreadyOnFile = await findEmailsAlreadySent([scoredLead.email]);
+          if (alreadyOnFile.has(String(scoredLead.email).toLowerCase())) {
+            await log(runId, "task-a-signals", "info",
+              "Skipped insert: email " + scoredLead.email + " already has another lead row with email_sent_at",
+              { linkedin_url: scoredLead.linkedin_url, full_name: (scoredLead.first_name || "") + " " + (scoredLead.last_name || "") });
+            errors++; // counts as skipped (not an error per se but we want it visible in summary)
+            continue;
+          }
         }
 
         // 8f. Insert lead

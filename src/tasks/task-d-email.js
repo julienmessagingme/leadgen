@@ -18,6 +18,7 @@ const { existsInHubspot, existsInHubspotByEmail, findEmailInHubspot } = require(
 const { searchInbox, sleep } = require("../lib/bereach");
 const { isSuppressed } = require("../lib/suppression");
 const { generateEmail, isColdLead, loadTemplates } = require("../lib/message-generator");
+const { findEmailsAlreadySent } = require("../lib/dedup");
 const { sendEmail } = require("../lib/gmail");
 const { log } = require("../lib/logger");
 
@@ -47,7 +48,31 @@ async function selectLeads(runId) {
     return [];
   }
 
-  return data || [];
+  var rows = data || [];
+  if (rows.length === 0) return rows;
+
+  // SAFETY NET (added 27/04 after Bourge/Olfa duplicates discovered) — exclude
+  // any lead whose email already has another row in `leads` with email_sent_at
+  // set. Catches the slug/ACoA duplicate case where canonicalizeLinkedInUrl()
+  // produced two distinct canonical URLs for the same person.
+  var emails = rows.map(function (r) { return r.email; }).filter(Boolean);
+  var ids = rows.map(function (r) { return r.id; });
+  var alreadySent = await findEmailsAlreadySent(emails, ids);
+  if (alreadySent.size > 0) {
+    var filtered = rows.filter(function (r) {
+      var emailLc = (r.email || "").toLowerCase();
+      return !emailLc || !alreadySent.has(emailLc);
+    });
+    var dropped = rows.length - filtered.length;
+    if (dropped > 0) {
+      await log(runId, TASK_NAME, "info",
+        "Email-level dedup dropped " + dropped + " lead(s) — same email already sent on another row",
+        { dropped_emails: Array.from(alreadySent) });
+    }
+    rows = filtered;
+  }
+
+  return rows;
 }
 
 /**
