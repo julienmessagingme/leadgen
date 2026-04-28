@@ -784,6 +784,27 @@ router.post("/:id/like-email-draft", async (req, res) => {
 });
 
 /**
+ * POST /:id/disqualify — Manual cleanup from tracking view.
+ * Sets status to disqualified without suppression list (lead already contacted).
+ */
+router.post("/:id/disqualify", async (req, res) => {
+  try {
+    const { data: lead, error } = await supabase
+      .from("leads").select("id, metadata").eq("id", req.params.id).single();
+    if (error || !lead) return res.status(404).json({ error: "Lead not found" });
+    const metadata = Object.assign({}, lead.metadata || {}, {
+      disqualified_reason: "manual_tracking",
+      disqualified_at: new Date().toISOString(),
+    });
+    await supabase.from("leads").update({ status: "disqualified", metadata }).eq("id", lead.id);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("POST /leads/:id/disqualify error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
  * Internal helper — run HubSpot logging asynchronously after an email send,
  * then persist the resulting contact_id + logged_at flags into lead.metadata.
  * All errors are swallowed (non-fatal).
@@ -1213,7 +1234,11 @@ router.post("/:id/send-whapi-text", async (req, res) => {
       .single();
     if (fetchErr || !lead) return res.status(404).json({ error: "lead_not_found" });
 
-    const e164 = normalizePhone(lead.phone);
+    let e164 = normalizePhone(lead.phone);
+    if (!e164 && req.body && req.body.manual_phone) {
+      e164 = normalizePhone(String(req.body.manual_phone));
+      if (e164) await supabase.from("leads").update({ phone: e164 }).eq("id", lead.id);
+    }
     if (!e164) return res.status(400).json({ error: "missing_phone" });
 
     // Daily cap check

@@ -208,6 +208,7 @@ router.get("/email-tracking", async (req, res) => {
       .from("leads")
       .select("id, full_name, company_name, email, phone, status, icp_score, tier, email_sent_at, email_followup_sent_at, whatsapp_sent_at, linkedin_url, signal_source, signal_type, signal_category, metadata")
       .not("email_sent_at", "is", null)
+      .neq("status", "disqualified")
       .order("email_sent_at", { ascending: false })
       .limit(200);
 

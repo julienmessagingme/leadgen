@@ -480,12 +480,15 @@ function EmailRow({ row, expanded, onToggle }) {
         <StatusBadge row={row} isFollowup={isFollowup} hasOpened={hasOpened} hasClicked={hasClicked} noResponse={noResponse} />
       </td>
       <td className="px-4 py-3 text-right">
-        {!isFollowup && !isWhatsapp && (
-          <div className="flex flex-col items-end gap-1.5">
-            <FollowupAction row={row} />
-            <WhatsappAction row={row} />
-          </div>
-        )}
+        <div className="flex flex-col items-end gap-1.5">
+          {!isFollowup && !isWhatsapp && (
+            <>
+              <FollowupAction row={row} />
+              <ChercherNumeroAction row={row} />
+            </>
+          )}
+          <RejectAction row={row} />
+        </div>
       </td>
     </tr>
     {expanded && <EmailContentRow row={row} />}
@@ -541,112 +544,181 @@ function EmailContentRow({ row }) {
   );
 }
 
+function PhoneModal({ title, label, onConfirm, onClose, loading, error }) {
+  const [phone, setPhone] = useState("");
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-white rounded-lg shadow-xl p-5 w-[420px] max-w-[92vw]" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-sm font-semibold text-gray-800 mb-1">{title}</h3>
+        <p className="text-xs text-gray-500 mb-3">{label}</p>
+        <form onSubmit={(e) => { e.preventDefault(); if (phone.trim()) onConfirm(phone.trim()); }}>
+          <input autoFocus type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
+            placeholder="+33612345678"
+            className="w-full px-3 py-2 text-sm rounded-md border border-gray-300 focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+          />
+          <div className="flex justify-end gap-2 mt-4">
+            <button type="button" onClick={onClose} className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800">Annuler</button>
+            <button type="submit" disabled={loading || !phone.trim()} className="px-3 py-1.5 text-sm rounded-md bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50">
+              {loading ? "Envoi…" : "Envoyer"}
+            </button>
+          </div>
+          {error && <div className="text-xs text-red-600 mt-2">{error}</div>}
+        </form>
+      </div>
+    </div>
+  );
+}
+
 /**
- * WhatsApp trigger. Click → POST /leads/:id/send-whatsapp. If the backend
- * returns 404 phone_required (FullEnrich didn't find the number and nothing
- * stored on the lead), we open a modal so Julien can type it in. Otherwise
- * the flow fires, a purple "WhatsApp envoyé" sub-row appears under the
- * lead, and the webhook is responsible for updating delivery status.
+ * "Chercher numéro" — remplace le bouton WhatsApp.
+ * Clic → choix entre Template (uChat) et Message privé (Whapi).
  */
-function WhatsappAction({ row }) {
+function ChercherNumeroAction({ row }) {
   const qc = useQueryClient();
-  const [modalOpen, setModalOpen] = useState(false);
-  const [manualPhone, setManualPhone] = useState("");
+  const [mode, setMode] = useState(null); // null | "choose" | "whapi"
+  const [whapiDraft, setWhapiDraft] = useState("");
+  const [generating, setGenerating] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [phoneModal, setPhoneModal] = useState(false);
+  const [pendingPhone, setPendingPhone] = useState(null); // "template" | "whapi"
   const [feedback, setFeedback] = useState(null);
 
-  const sendWhatsapp = useMutation({
+  const sendTemplate = useMutation({
     mutationFn: (body) => api.post(`/leads/${row.lead_id}/send-whatsapp`, body || {}),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["email-tracking"] });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["email-tracking"] }),
   });
 
-  if (row.has_whatsapp_sent) {
-    return <span className="text-[10px] text-gray-500">WhatsApp parti</span>;
-  }
+  if (row.has_whatsapp_sent) return <span className="text-[10px] text-gray-500">WhatsApp parti</span>;
   if (["replied", "meeting_booked", "disqualified"].includes(row.status)) return null;
 
-  const fire = async (body) => {
+  const fireTemplate = async (body) => {
     setFeedback(null);
     try {
-      const res = await sendWhatsapp.mutateAsync(body);
-      setFeedback({ ok: true, msg: "WhatsApp envoyé à " + res.phone_used });
-      setModalOpen(false);
-      setManualPhone("");
+      const res = await sendTemplate.mutateAsync(body);
+      setFeedback({ ok: true, msg: "✓ Template envoyé à " + res.phone_used });
+      setMode(null); setPhoneModal(false);
     } catch (err) {
-      if (err.status === 404) {
-        // Backend told us FullEnrich couldn't find the number — open modal
-        setModalOpen(true);
-        setFeedback(null);
-      } else {
-        setFeedback({ ok: false, msg: err.message || "Erreur" });
-      }
+      if (err.status === 404) { setPendingPhone("template"); setPhoneModal(true); }
+      else setFeedback({ ok: false, msg: err.message || "Erreur" });
     }
   };
 
-  const onClick = () => fire();
-  const onSubmitManual = (e) => {
-    e.preventDefault();
-    if (!manualPhone.trim()) return;
-    fire({ manual_phone: manualPhone.trim() });
+  const openWhapi = async () => {
+    setMode("whapi"); setGenerating(true); setFeedback(null);
+    try {
+      const res = await api.post(`/leads/${row.lead_id}/generate-whapi-draft`, {});
+      setWhapiDraft(res.text || "");
+    } catch { setFeedback({ ok: false, msg: "Génération échouée" }); setMode("choose"); }
+    finally { setGenerating(false); }
+  };
+
+  const fireWhapi = async (manualPhone) => {
+    setSending(true); setFeedback(null);
+    try {
+      const body = { text: whapiDraft };
+      if (manualPhone) body.manual_phone = manualPhone;
+      await api.post(`/leads/${row.lead_id}/send-whapi-text`, body);
+      setFeedback({ ok: true, msg: "✓ Message envoyé" });
+      setMode(null); setPhoneModal(false);
+      qc.invalidateQueries({ queryKey: ["email-tracking"] });
+    } catch (err) {
+      if (err.message === "missing_phone") { setPendingPhone("whapi"); setPhoneModal(true); }
+      else setFeedback({ ok: false, msg: err.message || "Erreur" });
+    } finally { setSending(false); }
+  };
+
+  const onPhoneConfirm = (phone) => {
+    if (pendingPhone === "template") fireTemplate({ manual_phone: phone });
+    else fireWhapi(phone);
   };
 
   return (
     <div className="flex flex-col items-end gap-0.5">
-      <button
-        onClick={onClick}
-        disabled={sendWhatsapp.isPending}
-        className="px-2.5 py-1 text-xs rounded-md bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50"
-        title="Envoyer le template WhatsApp (FullEnrich si pas de numéro)"
-      >
-        {sendWhatsapp.isPending ? "…" : "💬 WhatsApp"}
-      </button>
+      {mode === null && (
+        <button onClick={() => setMode("choose")}
+          className="px-2.5 py-1 text-xs rounded-md bg-purple-600 text-white hover:bg-purple-700">
+          📱 Chercher numéro
+        </button>
+      )}
+
+      {mode === "choose" && (
+        <div className="flex gap-1.5 items-center">
+          <button onClick={() => fireTemplate()} disabled={sendTemplate.isPending}
+            className="px-2.5 py-1 text-xs rounded-md bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50">
+            {sendTemplate.isPending ? "…" : "Template"}
+          </button>
+          <button onClick={openWhapi}
+            className="px-2.5 py-1 text-xs rounded-md bg-indigo-600 text-white hover:bg-indigo-700">
+            Message privé
+          </button>
+          <button onClick={() => setMode(null)} className="text-[10px] text-gray-400 hover:text-gray-600">✕</button>
+        </div>
+      )}
+
+      {mode === "whapi" && (
+        <div className="w-56 flex flex-col gap-1.5">
+          {generating ? (
+            <span className="text-[10px] text-gray-400">Génération…</span>
+          ) : (
+            <>
+              <textarea
+                className="w-full border border-indigo-200 rounded-md px-2 py-1.5 text-xs text-gray-800 resize-none focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                rows={4}
+                value={whapiDraft}
+                onChange={(e) => setWhapiDraft(e.target.value)}
+              />
+              <div className="flex gap-1.5">
+                <button onClick={() => fireWhapi(null)} disabled={sending || !whapiDraft.trim()}
+                  className="flex-1 px-2 py-1 text-xs rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50">
+                  {sending ? "Envoi…" : "Envoyer via WhatsApp"}
+                </button>
+                <button onClick={() => setMode(null)} className="px-2 py-1 text-xs rounded-md bg-gray-100 text-gray-600 hover:bg-gray-200">✕</button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {feedback && (
-        <span className={`text-[10px] ${feedback.ok ? "text-green-700" : "text-red-600"}`} title={feedback.msg}>
-          {feedback.ok ? "✓ envoyé" : feedback.msg.slice(0, 30)}
+        <span className={`text-[10px] ${feedback.ok ? "text-green-700" : "text-red-600"}`}>
+          {feedback.ok ? feedback.msg : feedback.msg.slice(0, 40)}
         </span>
       )}
 
-      {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setModalOpen(false)}>
-          <div className="bg-white rounded-lg shadow-xl p-5 w-[420px] max-w-[92vw]" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-sm font-semibold text-gray-800 mb-1">Numéro non trouvé par FullEnrich</h3>
-            <p className="text-xs text-gray-500 mb-3">
-              Saisis le numéro de <b>{row.full_name}</b> (WhatsApp attendu, format international avec +33 / +971 …) pour envoyer le template.
-            </p>
-            <form onSubmit={onSubmitManual}>
-              <input
-                autoFocus
-                type="tel"
-                value={manualPhone}
-                onChange={(e) => setManualPhone(e.target.value)}
-                placeholder="+33612345678"
-                className="w-full px-3 py-2 text-sm rounded-md border border-gray-300 focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
-              />
-              <div className="flex justify-end gap-2 mt-4">
-                <button
-                  type="button"
-                  onClick={() => { setModalOpen(false); setManualPhone(""); setFeedback(null); }}
-                  className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  disabled={sendWhatsapp.isPending || !manualPhone.trim()}
-                  className="px-3 py-1.5 text-sm rounded-md bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50"
-                >
-                  {sendWhatsapp.isPending ? "Envoi…" : "Envoyer WhatsApp"}
-                </button>
-              </div>
-              {feedback && !feedback.ok && (
-                <div className="text-xs text-red-600 mt-2">{feedback.msg}</div>
-              )}
-            </form>
-          </div>
-        </div>
+      {phoneModal && (
+        <PhoneModal
+          title="Numéro non trouvé"
+          label={`Saisis le numéro WhatsApp de ${row.full_name} (format +33 / +971…)`}
+          onConfirm={(phone) => { setPhoneModal(false); onPhoneConfirm(phone); }}
+          onClose={() => setPhoneModal(false)}
+          loading={sendTemplate.isPending || sending}
+        />
       )}
     </div>
+  );
+}
+
+function RejectAction({ row }) {
+  const qc = useQueryClient();
+  const [confirming, setConfirming] = useState(false);
+  const reject = useMutation({
+    mutationFn: () => api.post(`/leads/${row.lead_id}/disqualify`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["email-tracking"] }),
+  });
+  if (["disqualified"].includes(row.status)) return null;
+  if (confirming) return (
+    <div className="flex items-center gap-1">
+      <span className="text-[10px] text-gray-500">Confirmer ?</span>
+      <button onClick={() => reject.mutate()} disabled={reject.isPending}
+        className="text-[10px] text-red-600 hover:text-red-800 font-medium">Oui</button>
+      <button onClick={() => setConfirming(false)} className="text-[10px] text-gray-400 hover:text-gray-600">Non</button>
+    </div>
+  );
+  return (
+    <button onClick={() => setConfirming(true)}
+      className="text-[10px] text-gray-400 hover:text-red-500 transition-colors">
+      Rejeter
+    </button>
   );
 }
 
