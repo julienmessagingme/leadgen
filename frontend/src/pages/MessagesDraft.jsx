@@ -53,6 +53,12 @@ function useRegenerateEmail() {
   });
 }
 
+function useLikeEmailDraft() {
+  return useMutation({
+    mutationFn: ({ id }) => api.post(`/leads/${id}/like-email-draft`, {}),
+  });
+}
+
 function useRegenerateMessage() {
   const qc = useQueryClient();
   return useMutation({
@@ -114,6 +120,7 @@ export default function MessagesDraft() {
   const [errors, setErrors] = useState({});
   const [editingHtml, setEditingHtml] = useState({}); // { id: true } = show raw HTML editor
   const [expandedSignals, setExpandedSignals] = useState({});
+  const [likedDrafts, setLikedDrafts] = useState({});
 
   const { data: linkedinData, isLoading: linkedinLoading, refetch: refetchLinkedin } = useLeads({
     status: "message_pending",
@@ -160,6 +167,7 @@ export default function MessagesDraft() {
   const approveEmail = useApproveEmail();
   const rejectEmail = useRejectEmail();
   const regenerateEmail = useRegenerateEmail();
+  const likeEmailDraft = useLikeEmailDraft();
   const regenerateMessage = useRegenerateMessage();
   const approveReinvite = useApproveReinvite();
   const rejectReinvite = useRejectReinvite();
@@ -987,6 +995,27 @@ export default function MessagesDraft() {
                     >
                       Rejeter
                     </button>
+                    {(() => {
+                      const isLiked = likedDrafts[lead.id] || lead.metadata?.draft_email_liked;
+                      return (
+                        <button
+                          onClick={() => {
+                            if (isLiked) return;
+                            likeEmailDraft.mutate({ id: lead.id }, {
+                              onSuccess: () => setLikedDrafts(prev => ({ ...prev, [lead.id]: true })),
+                            });
+                          }}
+                          title={isLiked ? "Brouillon marqué comme bon exemple ✓" : "Ce brouillon est bien tourné — l'enregistrer comme exemple pour améliorer les prochains"}
+                          className={`p-2 rounded-lg border text-lg transition-colors ${
+                            isLiked
+                              ? "bg-green-50 border-green-300 text-green-600 cursor-default"
+                              : "bg-white border-gray-200 text-gray-400 hover:border-green-300 hover:text-green-500"
+                          }`}
+                        >
+                          👍
+                        </button>
+                      );
+                    })()}
                     <RegenerateWithCases leadId={lead.id} onSuccess={() => {
                       setEditedEmails((p) => { const n = { ...p }; delete n[lead.id]; return n; });
                       refetchEmail();

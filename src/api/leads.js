@@ -740,6 +740,50 @@ router.post("/:id/approve-email", async (req, res) => {
 });
 
 /**
+ * POST /:id/like-email-draft — Mark the AI-generated email draft as "good as-is".
+ * Saves it to sent_messages_archive with liked=true so it feeds few-shot learning
+ * even if the user sends it unedited (archiveIfEdited skips unedited drafts).
+ */
+router.post("/:id/like-email-draft", async (req, res) => {
+  try {
+    const { data: lead, error } = await supabase
+      .from("leads")
+      .select("*")
+      .eq("id", req.params.id)
+      .single();
+    if (error || !lead) return res.status(404).json({ error: "Lead not found" });
+
+    const aiDraft = lead.metadata?.draft_email_body;
+    if (!aiDraft) return res.status(400).json({ error: "No draft to like" });
+
+    const lang = lead.metadata?.forced_lang || "fr";
+    const plainDraft = htmlToPlain(aiDraft);
+
+    await supabase.from("sent_messages_archive").insert({
+      lead_id: lead.id,
+      channel: "email_first",
+      final_text: plainDraft,
+      ai_draft: plainDraft,
+      lead_sector: lead.company_sector || null,
+      lead_tier: lead.tier || null,
+      lead_signal_category: lead.signal_category || null,
+      pitch_mode_used: !!(lead.metadata?.pitch_mode_used),
+      lang: lang,
+      liked: true,
+    });
+
+    await supabase.from("leads")
+      .update({ metadata: Object.assign({}, lead.metadata, { draft_email_liked: true }) })
+      .eq("id", lead.id);
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("POST /leads/:id/like-email-draft error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
  * Internal helper — run HubSpot logging asynchronously after an email send,
  * then persist the resulting contact_id + logged_at flags into lead.metadata.
  * All errors are swallowed (non-fatal).

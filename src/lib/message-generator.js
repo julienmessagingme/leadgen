@@ -200,6 +200,7 @@ async function loadStyleExamples(channel, lang, isPitchMode) {
       .eq("channel", channel)
       .eq("lang", lang || "fr")
       .eq("pitch_mode_used", Boolean(isPitchMode))
+      .order("liked", { ascending: false })
       .order("sent_at", { ascending: false })
       .limit(3);
     if (error || !data) return [];
