@@ -859,6 +859,31 @@ export default function MessagesDraft() {
                     </div>
                   )}
 
+                  {/* Message LinkedIn envoyé */}
+                  {lead.metadata?.follow_up_message && (
+                    <div className="mb-3 bg-indigo-50 rounded-lg px-3 py-2 text-xs text-indigo-700 border border-indigo-100">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="whitespace-pre-wrap">
+                          <span className="font-medium">
+                            Message LinkedIn envoyé
+                            {lead.follow_up_sent_at ? ` (${new Date(lead.follow_up_sent_at).toLocaleDateString("fr-FR")})` : ""} :
+                          </span>{" "}
+                          {expandedSignals[`msg_${lead.id}`] || lead.metadata.follow_up_message.length <= 200
+                            ? lead.metadata.follow_up_message
+                            : lead.metadata.follow_up_message.slice(0, 200) + "…"}
+                        </div>
+                        {lead.metadata.follow_up_message.length > 200 && (
+                          <button
+                            onClick={() => setExpandedSignals(prev => ({ ...prev, [`msg_${lead.id}`]: !prev[`msg_${lead.id}`] }))}
+                            className="shrink-0 text-indigo-500 hover:text-indigo-700 font-medium text-[11px] mt-0.5"
+                          >
+                            {expandedSignals[`msg_${lead.id}`] ? "Réduire ▲" : "Voir tout ▼"}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Signal context */}
                   {lead.metadata?.post_text && (
                     <div className="mb-3 bg-blue-50 rounded-lg px-3 py-2 text-xs text-blue-700 border border-blue-100">
