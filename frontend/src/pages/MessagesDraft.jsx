@@ -113,6 +113,7 @@ export default function MessagesDraft() {
   const [pendingIds, setPendingIds] = useState({});
   const [errors, setErrors] = useState({});
   const [editingHtml, setEditingHtml] = useState({}); // { id: true } = show raw HTML editor
+  const [expandedSignals, setExpandedSignals] = useState({});
 
   const { data: linkedinData, isLoading: linkedinLoading, refetch: refetchLinkedin } = useLeads({
     status: "message_pending",
@@ -595,7 +596,22 @@ export default function MessagesDraft() {
 
                   {postText && (
                     <div className="mb-3 bg-blue-50 rounded-lg px-3 py-2 text-xs text-blue-700 border border-blue-100">
-                      <span className="font-medium">Post liké :</span> {postText.slice(0, 200)}{postText.length > 200 ? "…" : ""}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="whitespace-pre-wrap">
+                          <span className="font-medium">Post liké :</span>{" "}
+                          {expandedSignals[lead.id] || postText.length <= 200
+                            ? postText
+                            : postText.slice(0, 200) + "…"}
+                        </div>
+                        {postText.length > 200 && (
+                          <button
+                            onClick={() => setExpandedSignals(prev => ({ ...prev, [lead.id]: !prev[lead.id] }))}
+                            className="shrink-0 text-blue-500 hover:text-blue-700 font-medium text-[11px] mt-0.5"
+                          >
+                            {expandedSignals[lead.id] ? "Réduire ▲" : "Voir tout ▼"}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )}
 
@@ -845,8 +861,23 @@ export default function MessagesDraft() {
 
                   {/* Signal context */}
                   {lead.metadata?.post_text && (
-                    <div className="mb-3 bg-blue-50 rounded-lg px-3 py-2 text-xs text-blue-700 border border-blue-100 whitespace-pre-wrap">
-                      <span className="font-medium">Signal :</span> {lead.metadata.post_text}
+                    <div className="mb-3 bg-blue-50 rounded-lg px-3 py-2 text-xs text-blue-700 border border-blue-100">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="whitespace-pre-wrap">
+                          <span className="font-medium">Signal :</span>{" "}
+                          {expandedSignals[lead.id] || lead.metadata.post_text.length <= 200
+                            ? lead.metadata.post_text
+                            : lead.metadata.post_text.slice(0, 200) + "…"}
+                        </div>
+                        {lead.metadata.post_text.length > 200 && (
+                          <button
+                            onClick={() => setExpandedSignals(prev => ({ ...prev, [lead.id]: !prev[lead.id] }))}
+                            className="shrink-0 text-blue-500 hover:text-blue-700 font-medium text-[11px] mt-0.5"
+                          >
+                            {expandedSignals[lead.id] ? "Réduire ▲" : "Voir tout ▼"}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )}
                   {!lead.metadata?.post_text && lead.signal_source && (
