@@ -425,6 +425,13 @@ function buildLeadContext(lead) {
     }
   }
 
+  // LinkedIn follow-up message previously sent to this prospect
+  if (meta.follow_up_message) {
+    lines.push("");
+    lines.push("Message LinkedIn envoye au prospect avant cet email :");
+    lines.push("\"" + sanitizeForPrompt(meta.follow_up_message, 400) + "\"");
+  }
+
   // News evidence if available
   if (meta.news_titles && meta.news_titles.length > 0) {
     lines.push("");
@@ -606,9 +613,16 @@ async function generateEmail(lead, templates) {
     var styleExamples = await loadStyleExamples("email_first", lang, isPitchMode);
     var styleBlock = buildStyleExamplesBlock(styleExamples);
 
+    var linkedinMsgBlock = "";
+    if (!isPitchMode && lead.metadata && lead.metadata.follow_up_message) {
+      linkedinMsgBlock =
+        "\n\nIMPORTANT — CONTACT LINKEDIN PRECEDENT : Un message LinkedIn a deja ete envoye a ce prospect (voir contexte). Integre une reference LEGERE au fait qu on s est deja contactes via LinkedIn — une seule phrase naturelle en debut de Bloc 1 ou en ouverture, du type \"Suite a mon message LinkedIn...\", \"Je vous avais contacte via LinkedIn il y a quelques jours...\", \"Comme je vous le glissais sur LinkedIn...\". PAS de citation litterale du message. PAS de formule lourde. Juste une phrase fluide qui pose le contexte.";
+    }
+
     var result = await callClaude(system,
       styleBlock +
       instructions + langInstruction +
+      linkedinMsgBlock +
       whitelistBlock + "\n\n" +
       buildLeadContext(lead) + "\n" +
       "Email: " + sanitizeForPrompt(lead.email) + "\n\n" +
