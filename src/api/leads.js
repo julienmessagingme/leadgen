@@ -856,8 +856,11 @@ router.post("/:id/regenerate-message", async (req, res) => {
     const lang = req.body.lang === "en" ? "en" : (req.body.lang === "fr" ? "fr" : "fr");
 
     // Override language detection by temporarily injecting a location hint
+    // Must override BOTH fields — detectLanguage combines location + company_location
     const originalLocation = lead.location;
+    const originalCompanyLocation = lead.company_location;
     lead.location = lang === "en" ? "New York, US" : "Paris, France";
+    lead.company_location = lang === "en" ? "New York, US" : "Paris, France";
 
     // Attach selected case studies — separate pitch directives from client cases
     const rawIds = req.body && req.body.case_study_ids;
@@ -871,6 +874,7 @@ router.post("/:id/regenerate-message", async (req, res) => {
     const message = await generateFollowUpMessage(lead, templates);
 
     lead.location = originalLocation; // restore
+    lead.company_location = originalCompanyLocation;
 
     if (!message) return res.status(500).json({ error: "Failed to generate message" });
 
@@ -916,9 +920,12 @@ router.post("/:id/regenerate-email", async (req, res) => {
     const lang = req.body.lang === "en" ? "en" : (req.body.lang === "fr" ? "fr" : null);
 
     // Override language detection if lang is explicitly forced
+    // Must override BOTH fields — detectLanguage combines location + company_location
     const originalLocation = lead.location;
+    const originalCompanyLocation = lead.company_location;
     if (lang) {
       lead.location = lang === "en" ? "New York, US" : "Paris, France";
+      lead.company_location = lang === "en" ? "New York, US" : "Paris, France";
     }
 
     // Inject case studies (separate pitch directive from regular cases)
@@ -932,7 +939,7 @@ router.post("/:id/regenerate-email", async (req, res) => {
     const templates = await loadTemplates();
     const emailContent = await generateEmail(lead, templates);
 
-    if (lang) lead.location = originalLocation; // restore
+    if (lang) { lead.location = originalLocation; lead.company_location = originalCompanyLocation; } // restore
 
     if (!emailContent) return res.status(500).json({ error: "Failed to generate email" });
 
@@ -2076,8 +2083,11 @@ router.post("/:id/regenerate-email-followup", async (req, res) => {
     const lang = req.body.lang === "en" ? "en" : (req.body.lang === "fr" ? "fr" : "fr");
 
     // Override language detection by temporarily injecting a location hint
+    // Must override BOTH fields — detectLanguage combines location + company_location
     const originalLocation = lead.location;
+    const originalCompanyLocation = lead.company_location;
     lead.location = lang === "en" ? "New York, US" : "Paris, France";
+    lead.company_location = lang === "en" ? "New York, US" : "Paris, France";
 
     // Case injection with pitch-mode detection.
     // - override_pitch case → populated via injectSelectedCases as
@@ -2119,6 +2129,7 @@ router.post("/:id/regenerate-email-followup", async (req, res) => {
     const emailContent = await generateFollowupEmail(lead, templates, caseStudy);
 
     lead.location = originalLocation; // restore
+    lead.company_location = originalCompanyLocation;
 
     if (!emailContent) return res.status(500).json({ error: "Failed to regenerate" });
 
